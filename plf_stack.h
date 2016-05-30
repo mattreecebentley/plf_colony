@@ -105,13 +105,23 @@ template <class element_type, class element_allocator_type = std::allocator<elem
 {
 public:
 	// Standard container typedefs:
-	typedef element_type 										value_type;
-	typedef element_allocator_type								allocator_type;
-	typedef typename element_allocator_type::reference			reference;
-	typedef typename element_allocator_type::const_reference	const_reference;
-	typedef typename element_allocator_type::size_type			size_type;
-	typedef typename element_allocator_type::pointer			pointer;
-	typedef typename element_allocator_type::const_pointer		const_pointer;
+    #ifdef PLF_COLONY_ALLOCATOR_TRAITS_SUPPORT
+        typedef element_type										                        value_type;
+        typedef element_allocator_type								                        allocator_type;
+        typedef typename std::allocator_traits<element_allocator_type>::size_type           size_type;
+        typedef value_type &			                                            		reference;
+        typedef const value_type &	                                                		const_reference;
+        typedef typename std::allocator_traits<element_allocator_type>::pointer             pointer;
+        typedef typename std::allocator_traits<element_allocator_type>::const_pointer       const_pointer;
+    #else
+        typedef element_type										value_type;
+        typedef element_allocator_type								allocator_type;
+        typedef typename element_allocator_type::size_type			size_type;
+        typedef typename element_allocator_type::reference			reference;
+        typedef typename element_allocator_type::const_reference	const_reference;
+        typedef typename element_allocator_type::pointer			pointer;
+        typedef typename element_allocator_type::const_pointer		const_pointer;
+    #endif
 
 private:
 	struct group; // Forward declaration for typedefs below
@@ -723,13 +733,18 @@ public:
 
 	size_type capacity() const PLF_STACK_NOEXCEPT
 	{
-		size_type total_size = total_number_of_elements + static_cast<size_type>((end_element + 1) - current_element);
-		group_pointer_type temp_group = current_group->next_group;
-		
-		while (temp_group != NULL)
-		{
-			total_size += static_cast<size_type>((temp_group->end + 1) - temp_group->elements);
-		}
+		size_type total_size = total_number_of_elements;
+
+        if (current_group != NULL)
+        {
+            total_size += static_cast<size_type>((end_element + 1) - current_element);
+            group_pointer_type temp_group = current_group->next_group;
+            
+            while (temp_group != NULL)
+            {
+                total_size += static_cast<size_type>((temp_group->end + 1) - temp_group->elements);
+            }
+        }
 
 		return total_size;
 	}
@@ -849,6 +864,11 @@ public:
 	{
 		assert(initial_allocation_amount > 2);
 
+        if (capacity() >= initial_allocation_amount)
+        {
+            return;
+        }
+
 		if (initial_allocation_amount > group_allocator_pair.max_elements_per_group)
 		{
 			initial_allocation_amount = group_allocator_pair.max_elements_per_group;
@@ -906,27 +926,33 @@ public:
 
 	void swap(stack &source) PLF_STACK_NOEXCEPT
 	{
-		group_pointer_type		swap_current_group = current_group, swap_first_group = first_group;
-		element_pointer_type	swap_current_element = current_element, swap_start_element = start_element, swap_end_element = end_element;
-		size_type				swap_total_number_of_elements = total_number_of_elements, swap_min_elements_per_group = min_elements_per_group, swap_max_elements_per_group = group_allocator_pair.max_elements_per_group;
+        #ifdef PLF_STACK_MOVE_SEMANTICS_SUPPORT
+            stack temp(std::move(source));
+            source = std::move(*this);
+            *this = std::move(temp);
+        #else
+            group_pointer_type		swap_current_group = current_group, swap_first_group = first_group;
+            element_pointer_type	swap_current_element = current_element, swap_start_element = start_element, swap_end_element = end_element;
+            size_type				swap_total_number_of_elements = total_number_of_elements, swap_min_elements_per_group = min_elements_per_group, swap_max_elements_per_group = group_allocator_pair.max_elements_per_group;
 
-		current_group = source.current_group;
-		first_group = source.first_group;
-		current_element = source.current_element;
-		start_element = source.start_element;
-		end_element = source.end_element;
-		total_number_of_elements = source.total_number_of_elements;
-		min_elements_per_group = source.min_elements_per_group;
-		group_allocator_pair.max_elements_per_group = source.group_allocator_pair.max_elements_per_group;
-		
-		source.current_group = swap_current_group;
-		source.first_group = swap_first_group;
-		source.current_element = swap_current_element;
-		source.start_element = swap_start_element;
-		source.end_element = swap_end_element;
-		source.total_number_of_elements = swap_total_number_of_elements;
-		source.min_elements_per_group = swap_min_elements_per_group;
-		source.group_allocator_pair.max_elements_per_group = swap_max_elements_per_group;
+            current_group = source.current_group;
+            first_group = source.first_group;
+            current_element = source.current_element;
+            start_element = source.start_element;
+            end_element = source.end_element;
+            total_number_of_elements = source.total_number_of_elements;
+            min_elements_per_group = source.min_elements_per_group;
+            group_allocator_pair.max_elements_per_group = source.group_allocator_pair.max_elements_per_group;
+            
+            source.current_group = swap_current_group;
+            source.first_group = swap_first_group;
+            source.current_element = swap_current_element;
+            source.start_element = swap_start_element;
+            source.end_element = swap_end_element;
+            source.total_number_of_elements = swap_total_number_of_elements;
+            source.min_elements_per_group = swap_min_elements_per_group;
+            source.group_allocator_pair.max_elements_per_group = swap_max_elements_per_group;
+        #endif
 	}	
 
 

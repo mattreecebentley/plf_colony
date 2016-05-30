@@ -107,14 +107,25 @@ template <class element_type, class element_allocator_type = std::allocator<elem
 {
 public:
 	// Standard container typedefs:
-	typedef element_type										value_type;
-	typedef element_allocator_type								allocator_type;
-	typedef typename element_allocator_type::reference			reference;
-	typedef typename element_allocator_type::const_reference	const_reference;
-	typedef typename element_allocator_type::difference_type	difference_type;
-	typedef typename element_allocator_type::size_type			size_type;
-	typedef typename element_allocator_type::pointer			pointer;
-	typedef typename element_allocator_type::const_pointer		const_pointer;
+    #ifdef PLF_COLONY_ALLOCATOR_TRAITS_SUPPORT
+        typedef element_type										                        value_type;
+        typedef element_allocator_type								                        allocator_type;
+        typedef typename std::allocator_traits<element_allocator_type>::size_type           size_type;
+        typedef typename std::allocator_traits<element_allocator_type>::difference_type     difference_type;
+        typedef value_type &			                                            		reference;
+        typedef const value_type &	                                                		const_reference;
+        typedef typename std::allocator_traits<element_allocator_type>::pointer             pointer;
+        typedef typename std::allocator_traits<element_allocator_type>::const_pointer       const_pointer;
+    #else
+        typedef element_type										value_type;
+        typedef element_allocator_type								allocator_type;
+        typedef typename element_allocator_type::size_type			size_type;
+        typedef typename element_allocator_type::difference_type	difference_type;
+        typedef typename element_allocator_type::reference			reference;
+        typedef typename element_allocator_type::const_reference	const_reference;
+        typedef typename element_allocator_type::pointer			pointer;
+        typedef typename element_allocator_type::const_pointer		const_pointer;
+    #endif
 
 	// Iterator declarations:
 	template <class colony_allocator_type, bool is_const> class colony_iterator;
@@ -300,22 +311,10 @@ public:
 		}
 
 
-        inline PLF_COLONY_FORCE_INLINE bool operator == (const colony_iterator<colony_allocator_type, !is_const> &rh) const PLF_COLONY_NOEXCEPT
-        {
-            return (element_pointer == rh.element_pointer);
-        }
-
-
 		inline PLF_COLONY_FORCE_INLINE bool operator != (const colony_iterator &rh) const PLF_COLONY_NOEXCEPT
 		{
 			return (element_pointer != rh.element_pointer);
 		}
-
-
-        inline PLF_COLONY_FORCE_INLINE bool operator != (const colony_iterator<colony_allocator_type, !is_const> &rh) const PLF_COLONY_NOEXCEPT
-        {
-            return (element_pointer != rh.element_pointer);
-        }
 
 
 		inline PLF_COLONY_FORCE_INLINE reference operator * () const PLF_COLONY_NOEXCEPT
@@ -411,54 +410,68 @@ public:
 		}
 
 
-
-		inline bool operator > (const colony_iterator &rh) const PLF_COLONY_NOEXCEPT
-		{
-			return (((group_pointer == rh.group_pointer) && (element_pointer > rh.element_pointer)) || (group_pointer->group_number > rh.group_pointer->group_number));
-		}
-
-
-		inline bool operator > (const colony_iterator<colony_allocator_type, !is_const> &rh) const PLF_COLONY_NOEXCEPT
-		{
-			return (((group_pointer == rh.group_pointer) && (element_pointer > rh.element_pointer)) || (group_pointer->group_number > rh.group_pointer->group_number));
-		}
+        inline bool operator > (const colony_iterator &rh) const PLF_COLONY_NOEXCEPT
+        {
+            return (((group_pointer == rh.group_pointer) && (element_pointer > rh.element_pointer)) || (group_pointer->group_number > rh.group_pointer->group_number));
+        }
 
 
-		inline bool operator < (const colony_iterator &rh) const PLF_COLONY_NOEXCEPT
-		{
-			return rh > *this;
-		}
+        inline bool operator < (const colony_iterator &rh) const PLF_COLONY_NOEXCEPT
+        {
+            return rh > *this;
+        }
 
 
-		inline bool operator < (const colony_iterator<colony_allocator_type, !is_const> &rh) const PLF_COLONY_NOEXCEPT
-		{
-			return rh > *this;
-		}
+        inline bool operator >= (const colony_iterator &rh) const PLF_COLONY_NOEXCEPT
+        {
+            return !(rh > *this);
+        }
 
 
-		inline bool operator >= (const colony_iterator &rh) const PLF_COLONY_NOEXCEPT
-		{
-			return !(rh > *this);
-		}
+        inline bool operator <= (const colony_iterator &rh) const PLF_COLONY_NOEXCEPT
+        {
+            return !(*this > rh);
+        }
 
 
-		inline bool operator >= (const colony_iterator<colony_allocator_type, !is_const> &rh) const PLF_COLONY_NOEXCEPT
-		{
-			return !(rh > *this);
-		}
+
+        // C++14-specific functionality:
+        #if defined(__cplusplus) && __cplusplus >= 201402L
+            inline PLF_COLONY_FORCE_INLINE bool operator == (const colony_iterator<colony_allocator_type, !is_const> &rh) const PLF_COLONY_NOEXCEPT
+            {
+                return (element_pointer == rh.element_pointer);
+            }
 
 
-		inline bool operator <= (const colony_iterator &rh) const PLF_COLONY_NOEXCEPT
-		{
-			return !(*this > rh);
-		}
+            inline PLF_COLONY_FORCE_INLINE bool operator != (const colony_iterator<colony_allocator_type, !is_const> &rh) const PLF_COLONY_NOEXCEPT
+            {
+                return (element_pointer != rh.element_pointer);
+            }
 
 
-		inline bool operator <= (const colony_iterator<colony_allocator_type, !is_const> &rh) const PLF_COLONY_NOEXCEPT
-		{
-			return !(*this > rh);
-		}
+            inline bool operator > (const colony_iterator<colony_allocator_type, !is_const> &rh) const PLF_COLONY_NOEXCEPT
+            {
+                return (((group_pointer == rh.group_pointer) && (element_pointer > rh.element_pointer)) || (group_pointer->group_number > rh.group_pointer->group_number));
+            }
 
+
+            inline bool operator < (const colony_iterator<colony_allocator_type, !is_const> &rh) const PLF_COLONY_NOEXCEPT
+            {
+                return rh > *this;
+            }
+
+
+            inline bool operator >= (const colony_iterator<colony_allocator_type, !is_const> &rh) const PLF_COLONY_NOEXCEPT
+            {
+                return !(rh > *this);
+            }
+
+
+            inline bool operator <= (const colony_iterator<colony_allocator_type, !is_const> &rh) const PLF_COLONY_NOEXCEPT
+            {
+                return !(*this > rh);
+            }
+        #endif
 
 
 		colony_iterator() PLF_COLONY_NOEXCEPT: group_pointer(NULL), element_pointer(NULL), skipfield_pointer(NULL) {}
@@ -1978,7 +1991,7 @@ public:
 
 	inline size_type capacity() PLF_COLONY_NOEXCEPT
 	{
-		return total_number_of_elements + static_cast<size_type>(empty_indexes.size()) + static_cast<size_type>(reinterpret_cast<element_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer);
+		return total_number_of_elements + static_cast<size_type>(empty_indexes.size()) + (first_group == NULL) ? 0 : static_cast<size_type>(reinterpret_cast<element_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer);
 	}
 
 
@@ -2099,7 +2112,7 @@ public:
 
 	void shrink_to_fit()
 	{
-		if (first_group == NULL || total_number_of_elements == 0)
+		if (first_group == NULL || total_number_of_elements == 0 || total_number_of_elements == capacity())
 		{
 			return;
 		}
@@ -2138,6 +2151,11 @@ public:
 	{
 		assert(initial_allocation_amount > 2);
 		
+        if (capacity() >= initial_allocation_amount)
+        {
+            return;
+        }
+
 		if (initial_allocation_amount > group_allocator_pair.max_elements_per_group)
 		{
 			initial_allocation_amount = group_allocator_pair.max_elements_per_group;
@@ -2799,26 +2817,32 @@ public:
 
 	void swap(colony &source) PLF_COLONY_NOEXCEPT
 	{
-		iterator				swap_end_iterator = end_iterator, swap_begin_iterator = begin_iterator;
-		group_pointer_type		swap_first_group = first_group;
-		size_type				swap_total_number_of_elements = total_number_of_elements;
-		unsigned short 			swap_min_elements_per_group = min_elements_per_group, swap_max_elements_per_group = group_allocator_pair.max_elements_per_group;
-		
-		end_iterator = source.end_iterator;
-		begin_iterator = source.begin_iterator;
-		first_group = source.first_group;
-		total_number_of_elements = source.total_number_of_elements;
-		min_elements_per_group = source.min_elements_per_group;
-		group_allocator_pair.max_elements_per_group = source.group_allocator_pair.max_elements_per_group;
+        #ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
+            colony temp(std::move(source));
+            source = std::move(*this);
+            *this = std::move(temp);
+        #else
+            iterator				swap_end_iterator = end_iterator, swap_begin_iterator = begin_iterator;
+            group_pointer_type		swap_first_group = first_group;
+            size_type				swap_total_number_of_elements = total_number_of_elements;
+            unsigned short 			swap_min_elements_per_group = min_elements_per_group, swap_max_elements_per_group = group_allocator_pair.max_elements_per_group;
+            
+            end_iterator = source.end_iterator;
+            begin_iterator = source.begin_iterator;
+            first_group = source.first_group;
+            total_number_of_elements = source.total_number_of_elements;
+            min_elements_per_group = source.min_elements_per_group;
+            group_allocator_pair.max_elements_per_group = source.group_allocator_pair.max_elements_per_group;
 
-		source.end_iterator = swap_end_iterator;
-		source.begin_iterator = swap_begin_iterator;
-		source.first_group = swap_first_group;
-		source.total_number_of_elements = swap_total_number_of_elements;
-		source.min_elements_per_group = swap_min_elements_per_group;
-		source.group_allocator_pair.max_elements_per_group = swap_max_elements_per_group;
-		
-		empty_indexes.swap(source.empty_indexes);
+            source.end_iterator = swap_end_iterator;
+            source.begin_iterator = swap_begin_iterator;
+            source.first_group = swap_first_group;
+            source.total_number_of_elements = swap_total_number_of_elements;
+            source.min_elements_per_group = swap_min_elements_per_group;
+            source.group_allocator_pair.max_elements_per_group = swap_max_elements_per_group;
+            
+            empty_indexes.swap(source.empty_indexes);
+        #endif
 	}	
 
 
