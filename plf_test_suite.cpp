@@ -162,7 +162,9 @@ int main(int argc, char **argv)
 		
 		failpass("Iterator next test", p_colony.distance(p_colony.begin(), next_iterator) == 5);
 		failpass("Const iterator prev test", p_colony.distance(p_colony.cend(), prev_iterator) == -300);
-		failpass("Iterator/Const iterator equality operator test", prev_iterator == prev_iterator2);
+        #if defined(__cplusplus) && __cplusplus >= 201402L
+            failpass("Iterator/Const iterator equality operator test", prev_iterator == prev_iterator2);
+        #endif
         
 		
 		colony<int *> p_colony2 = p_colony;
