@@ -2025,7 +2025,6 @@ public:
 	{
 		assert (&source != this);
 
-		destroy_all_data();
 		colony temp(source);
 
 		#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
