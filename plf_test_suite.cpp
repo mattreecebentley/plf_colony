@@ -25,21 +25,27 @@
 		#define PLF_VARIADICS_SUPPORT
 		#define PLF_MOVE_SEMANTICS_SUPPORT
 		#define PLF_NOEXCEPT throw()
+		#define PLF_INITIALIZER_LIST_SUPPORT
 	#elif _MSC_VER >= 1900
 		#define PLF_TYPE_TRAITS_SUPPORT
 		#define PLF_ALLOCATOR_TRAITS_SUPPORT
 		#define PLF_VARIADICS_SUPPORT
 		#define PLF_MOVE_SEMANTICS_SUPPORT
 		#define PLF_NOEXCEPT noexcept
+		#define PLF_INITIALIZER_LIST_SUPPORT
 	#endif
 #elif defined(__cplusplus) && __cplusplus >= 201103L
 	#define PLF_FORCE_INLINE // note: GCC creates faster code without forcing inline
 
-	#if defined(__GNUC__) && !defined(__clang__) // If compiler is GCC/G++
-		#if __GNUC__ >= 5 // GCC v4.9 and below do not support std::is_trivially_copyable
+	#if defined(__GNUC__) && defined(__GNUC_MINOR__) && !defined(__clang__) // If compiler is GCC/G++
+		#if __GNUC__ == 4 && __GNUC_MINOR__ >= 4 // 4.3 and below do not support initializer lists
+			#define PLF_INITIALIZER_LIST_SUPPORT
+		#elif __GNUC__ >= 5 // GCC v4.9 and below do not support std::is_trivially_copyable
+			#define PLF_INITIALIZER_LIST_SUPPORT
 			#define PLF_TYPE_TRAITS_SUPPORT
 		#endif
-	#else // Assume type traits support for non-GCC compilers
+	#else // Assume type traits and initializer support for non-GCC compilers
+		#define PLF_INITIALIZER_LIST_SUPPORT
 		#define PLF_TYPE_TRAITS_SUPPORT
 	#endif
 
@@ -364,7 +370,8 @@ int main(int argc, char **argv)
 		failpass("Erase randomly till-empty test", i_colony.size() == 0);
 
 
-		i_colony.reinitialize(10000);
+		i_colony.clear();
+        i_colony.change_minimum_group_size(10000);
 		
 		for (unsigned int temp = 0; temp != 30000; ++temp)
 		{
@@ -539,7 +546,8 @@ int main(int argc, char **argv)
 		failpass("Total erase test", i_colony.empty());
 		
 		
-		i_colony.reinitialize(3);
+		i_colony.clear();
+        i_colony.change_minimum_group_size(3);
 
 		const unsigned int temp_capacity2 = static_cast<unsigned int>(i_colony.capacity());
 		i_colony.reserve(1000);
@@ -576,7 +584,32 @@ int main(int argc, char **argv)
 		failpass("Multiple sequential small insert/erase commands test", count == i_colony.size());
 	}
 
+	{
+		title1("Different insertion-style tests");
+		
+		#ifdef PLF_INITIALIZER_LIST_SUPPORT
+			colony<int> i_colony = {1, 2, 3};
+		#else
+			colony<int> i_colony(3, 1);
+		#endif
+		
+		failpass("Initializer-list constructor test", i_colony.size() == 3);
+		
+		colony<int> i_colony2(i_colony.begin(), i_colony.end());
+		
+		failpass("Range-based constructor test", i_colony2.size() == 3);
+		
+		colony<int> i_colony3(5000, 2, 100, 1000);
+		
+		failpass("Fill construction test", i_colony3.size() == 5000);
+		
+		i_colony2.insert(500000, 5);
+		
+		failpass("Fill insertion test", i_colony2.size() == 500003);
 
+		
+		
+	}
 
 	{
 		title1("Stack Tests");

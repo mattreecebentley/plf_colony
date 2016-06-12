@@ -26,21 +26,27 @@
 		#define PLF_COLONY_VARIADICS_SUPPORT
 		#define PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 		#define PLF_COLONY_NOEXCEPT throw()
+		#define PLF_COLONY_INITIALIZER_LIST_SUPPORT
 	#elif _MSC_VER >= 1900
 		#define PLF_COLONY_TYPE_TRAITS_SUPPORT
 		#define PLF_COLONY_ALLOCATOR_TRAITS_SUPPORT
 		#define PLF_COLONY_VARIADICS_SUPPORT
 		#define PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 		#define PLF_COLONY_NOEXCEPT noexcept
+		#define PLF_COLONY_INITIALIZER_LIST_SUPPORT
 	#endif
 #elif defined(__cplusplus) && __cplusplus >= 201103L
 	#define PLF_COLONY_FORCE_INLINE // note: GCC creates faster code without forcing inline
 
-	#if defined(__GNUC__) && !defined(__clang__) // If compiler is GCC/G++
-		#if __GNUC__ >= 5 // GCC v4.9 and below do not support std::is_trivially_copyable
+	#if defined(__GNUC__) && defined(__GNUC_MINOR__) && !defined(__clang__) // If compiler is GCC/G++
+		#if __GNUC__ == 4 && __GNUC_MINOR__ >= 4 // 4.3 and below do not support initializer lists
+			#define PLF_COLONY_INITIALIZER_LIST_SUPPORT
+		#elif __GNUC__ >= 5 // GCC v4.9 and below do not support std::is_trivially_copyable
+			#define PLF_COLONY_INITIALIZER_LIST_SUPPORT
 			#define PLF_COLONY_TYPE_TRAITS_SUPPORT
 		#endif
-	#else // Assume type traits support for non-GCC compilers
+	#else // Assume type traits and initializer support for non-GCC compilers
+		#define PLF_COLONY_INITIALIZER_LIST_SUPPORT
 		#define PLF_COLONY_TYPE_TRAITS_SUPPORT
 	#endif
 
@@ -100,6 +106,9 @@
 	#include <utility> // std::move
 #endif
 
+#ifdef PLF_COLONY_INITIALIZER_LIST_SUPPORT
+	#include <initializer_list>
+#endif
 
 namespace plf
 {
@@ -131,15 +140,15 @@ public:
 	// Iterator declarations:
 	template <class colony_element_allocator_type, bool is_const> class colony_iterator;
 	typedef colony_iterator<element_allocator_type, false>	iterator;
+	friend class colony_iterator<element_allocator_type, false>;
 	typedef colony_iterator<element_allocator_type, true>	const_iterator;
-	friend iterator;
-	friend const_iterator;
+	friend class colony_iterator<element_allocator_type, true>;
 
 	template <class r_colony_element_allocator_type, bool r_is_const> class colony_reverse_iterator;
 	typedef colony_reverse_iterator<element_allocator_type, false>	reverse_iterator;
+	friend class colony_reverse_iterator<element_allocator_type, false>;
 	typedef colony_reverse_iterator<element_allocator_type, true>	const_reverse_iterator;
-	friend reverse_iterator;
-	friend const_reverse_iterator;
+	friend class colony_reverse_iterator<element_allocator_type, true>;
 
 private:
 	struct group; // forward declaration for typedefs below
@@ -152,7 +161,7 @@ private:
 
 		typedef typename std::allocator_traits<element_allocator_type>::pointer				element_pointer_type;
 		typedef typename std::allocator_traits<group_allocator_type>::pointer 				group_pointer_type;
-		typedef group &												 		group_reference_type;
+		typedef group &												 						group_reference_type;
 		typedef typename std::allocator_traits<ushort_allocator_type>::pointer 				ushort_pointer_type;
 		typedef typename std::allocator_traits<uchar_allocator_type>::pointer				uchar_pointer_type;
 		typedef typename std::allocator_traits<iterator_allocator_type>::pointer 			iterator_pointer_type;
@@ -263,17 +272,18 @@ public:
 	template <class colony_allocator_type, bool is_const> class colony_iterator : public std::iterator<std::bidirectional_iterator_tag, typename colony::value_type>
 	{
 	private:
-		colony::group_pointer_type		group_pointer;
-		colony::element_pointer_type	element_pointer;
-		colony::ushort_pointer_type		skipfield_pointer;
+		group_pointer_type		group_pointer;
+		element_pointer_type	element_pointer;
+		ushort_pointer_type		skipfield_pointer;
 
 	public:
-		typedef typename choose<is_const, colony::const_reference, colony::reference>::type	value_reference;
-		typedef typename choose<is_const, colony::const_pointer, colony::pointer>::type		value_pointer;
+		typedef typename choose<is_const, const_reference, reference>::type	value_reference;
+		typedef typename choose<is_const, const_pointer, pointer>::type		value_pointer;
 
 		friend class colony;
-		friend reverse_iterator;
-		friend const_reverse_iterator;
+		friend class colony_reverse_iterator<element_allocator_type, false>;
+		friend class colony_reverse_iterator<element_allocator_type, true>;
+
 
 
 		inline colony_iterator & operator = (const colony_iterator &source) PLF_COLONY_NOEXCEPT
@@ -763,28 +773,134 @@ private:
 
 public:
 
+	// Standard constuctor:
+
 	explicit colony():
 		first_group(NULL),
 		total_number_of_elements(0),
 		min_elements_per_group(8),
 		group_allocator_pair(USHRT_MAX)
-	{
-		assert(USHRT_MAX <= element_allocator_type::max_size() / 2); // Compare against the maximum size the allocator can allocate. Only important if for some reason max_size / 2 < 65535. /2 because otherwise an allocation could overflow
-	}
+	{}
 
 
 
-	explicit colony(const unsigned short initial_allocation_amount, const unsigned short max_allocation_amount = USHRT_MAX):
+	// Fill constructors:
+
+	explicit colony(const size_type fill_number):
 		first_group(NULL),
 		total_number_of_elements(0),
-		min_elements_per_group(initial_allocation_amount),
-		group_allocator_pair(max_allocation_amount),
-		erased_locations((initial_allocation_amount < 8) ? initial_allocation_amount : (initial_allocation_amount >> 7) + 8)
+		min_elements_per_group(8),
+		group_allocator_pair(USHRT_MAX)
 	{
-		assert(initial_allocation_amount > 2); 	// Otherwise, too much overhead for too small a group
-		assert(initial_allocation_amount <= group_allocator_pair.max_elements_per_group);
-		assert(max_allocation_amount <= element_allocator_type::max_size() / 2); // Compare against the maximum size the allocator can allocate. Only important if for some reason max_size / 2 < 65535. /2 because otherwise an allocation could overflow
+		insert(fill_number, element_type());
 	}
+
+
+
+	explicit colony(const size_type fill_number, const unsigned short min_allocation_amount, const unsigned short max_allocation_amount = USHRT_MAX):
+		first_group(NULL),
+		total_number_of_elements(0),
+		min_elements_per_group(min_allocation_amount),
+		group_allocator_pair(max_allocation_amount),
+		erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
+	{
+		assert(min_allocation_amount > 2); 	// Otherwise, too much overhead for too small a group
+		assert(min_allocation_amount <= group_allocator_pair.max_elements_per_group);
+
+		if (fill_number != 0)
+		{
+			insert(fill_number, element_type());
+		}
+	}
+
+
+
+	colony(const size_type fill_number, const element_type &element):
+		first_group(NULL),
+		total_number_of_elements(0),
+		min_elements_per_group(8),
+		group_allocator_pair(USHRT_MAX)
+	{
+		insert(fill_number, element);
+	}
+	
+
+
+	colony(const size_type fill_number, const element_type &element, const unsigned short min_allocation_amount, const unsigned short max_allocation_amount = USHRT_MAX):
+		first_group(NULL),
+		total_number_of_elements(0),
+		min_elements_per_group(min_allocation_amount),
+		group_allocator_pair(max_allocation_amount),
+		erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
+	{
+		assert(min_allocation_amount > 2); 	// Otherwise, too much overhead for too small a group
+		assert(min_allocation_amount <= group_allocator_pair.max_elements_per_group);
+
+		if (fill_number != 0)
+		{
+			insert(fill_number, element);
+		}
+	}
+
+
+
+	// Range constructors:
+
+	template<typename input_iterator_type>
+	colony(const input_iterator_type &first, const input_iterator_type &last):
+		first_group(NULL),
+		total_number_of_elements(0),
+		min_elements_per_group(8),
+		group_allocator_pair(USHRT_MAX)
+	{
+		insert(first, last);
+	}
+
+
+	template<typename input_iterator_type>
+	colony(const input_iterator_type &first, const input_iterator_type &last, const unsigned short min_allocation_amount, const unsigned short max_allocation_amount = USHRT_MAX):
+		first_group(NULL),
+		total_number_of_elements(0),
+		min_elements_per_group(min_allocation_amount),
+		group_allocator_pair(max_allocation_amount),
+		erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
+	{
+		assert(min_allocation_amount > 2); 	// Otherwise, too much overhead for too small a group
+		assert(min_allocation_amount <= group_allocator_pair.max_elements_per_group);
+
+		insert(first, last);
+	}
+
+
+
+	// Initializer list constructors:
+
+	#ifdef PLF_COLONY_INITIALIZER_LIST_SUPPORT
+		colony(const std::initializer_list<element_type> element_list):
+			first_group(NULL),
+			total_number_of_elements(0),
+			min_elements_per_group(8),
+			group_allocator_pair(USHRT_MAX)
+		{
+			insert(element_list);
+		}
+
+
+
+		colony(const std::initializer_list<element_type> element_list, const unsigned short min_allocation_amount, const unsigned short max_allocation_amount = USHRT_MAX):
+			first_group(NULL),
+			total_number_of_elements(0),
+			min_elements_per_group(min_allocation_amount),
+			group_allocator_pair(max_allocation_amount),
+			erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
+		{
+			assert(min_allocation_amount > 2); 	// Otherwise, too much overhead for too small a group
+			assert(min_allocation_amount <= group_allocator_pair.max_elements_per_group);
+
+			insert(element_list);
+		}
+		
+	#endif
 
 
 
@@ -918,7 +1034,7 @@ private:
 	void destroy_all_data() PLF_COLONY_NOEXCEPT
 	{
 	#ifdef PLF_COLONY_TYPE_TRAITS_SUPPORT
-		if (total_number_of_elements != 0	&& !(std::is_trivially_destructible<element_type>::value))
+		if (total_number_of_elements != 0 && !(std::is_trivially_destructible<element_type>::value))
 	#else // If compiler doesn't support traits, iterate regardless - trivial destructors will not be called, hopefully compiler will optimise the 'destruct' loop out for POD types
 		if (total_number_of_elements != 0)
 	#endif
@@ -1177,12 +1293,7 @@ public:
 			}
 			catch (...)
 			{
-				PLF_COLONY_DEALLOCATE(group_allocator_type, group_allocator_pair, first_group, 1);
-				first_group = NULL;
-				begin_iterator.group_pointer = NULL;
-				begin_iterator.element_pointer = NULL;
-				begin_iterator.skipfield_pointer = NULL;
-				end_iterator = begin_iterator;
+				clear();
 				throw;
 			}
 
@@ -1196,7 +1307,7 @@ public:
 	}
 
 
-
+	
 	// Group insert:
 	inline void insert(const iterator &iterator1, const iterator &iterator2)
 	{
@@ -1387,11 +1498,7 @@ public:
 				}
 				catch (...)
 				{
-					first_group = NULL;
-					begin_iterator.group_pointer = NULL;
-					begin_iterator.element_pointer = NULL;
-					begin_iterator.skipfield_pointer = NULL;
-					end_iterator = begin_iterator;
+					clear();
 					throw;
 				}
 
@@ -1426,6 +1533,190 @@ public:
 	#endif
 
 
+private:
+	void vectorized_fill(const element_type &element, const unsigned short number_of_elements)
+	{
+		unsigned short vectorize = number_of_elements / 4;
+		unsigned short remainder = number_of_elements - (vectorize * 4);
+		
+		while (vectorize-- != 0)
+		{
+			try
+			{
+				PLF_COLONY_CONSTRUCT(element_allocator_type, (*this), end_iterator.element_pointer, element);
+				PLF_COLONY_CONSTRUCT(element_allocator_type, (*this), end_iterator.element_pointer + 1, element);
+				PLF_COLONY_CONSTRUCT(element_allocator_type, (*this), end_iterator.element_pointer + 2, element);
+				PLF_COLONY_CONSTRUCT(element_allocator_type, (*this), end_iterator.element_pointer + 3, element);
+			}
+			catch (...)
+			{
+				clear();
+				throw;
+			}
+			
+			end_iterator.element_pointer += 4;
+		}
+		
+		while (remainder-- != 0)
+		{
+			try
+			{
+				PLF_COLONY_CONSTRUCT(element_allocator_type, (*this), end_iterator.element_pointer++, element);
+			}
+			catch (...)
+			{
+				clear();
+				throw;
+			}
+		}
+		
+		end_iterator.group_pointer->last_endpoint = end_iterator.element_pointer;
+		end_iterator.group_pointer->number_of_elements = number_of_elements;
+	}
+
+public:
+
+
+	// Fill-insert
+	iterator insert(const size_type number_of_elements, const element_type &element)
+	{
+		assert(number_of_elements != 0);
+		
+		if (first_group == NULL)
+		{
+			if (number_of_elements > group_allocator_pair.max_elements_per_group)
+			{
+				size_type multiples = (number_of_elements / static_cast<size_type>(group_allocator_pair.max_elements_per_group));
+				const unsigned short element_remainder = static_cast<unsigned short>(number_of_elements - (multiples * static_cast<size_type>(group_allocator_pair.max_elements_per_group)));
+				const unsigned short temp = min_elements_per_group;
+				min_elements_per_group = group_allocator_pair.max_elements_per_group;
+				initialize(); // Construct first group
+				min_elements_per_group = temp;
+
+				vectorized_fill(element, group_allocator_pair.max_elements_per_group);
+				
+				
+				while (--multiples != 0)
+				{
+					end_iterator.group_pointer->next_group = PLF_COLONY_ALLOCATE(group_allocator_type, group_allocator_pair, 1, end_iterator.group_pointer);
+					const group_reference_type next_group = *(end_iterator.group_pointer->next_group);
+
+					try
+					{
+						#ifdef PLF_COLONY_VARIADICS_SUPPORT
+							PLF_COLONY_CONSTRUCT(group_allocator_type, group_allocator_pair, &next_group, group_allocator_pair.max_elements_per_group, end_iterator.group_pointer);
+						#else 
+							PLF_COLONY_CONSTRUCT(group_allocator_type, group_allocator_pair, &next_group, group(group_allocator_pair.max_elements_per_group, end_iterator.group_pointer));
+						#endif
+					}
+					catch (...)
+					{
+						clear();
+						throw;
+					}
+
+					end_iterator.group_pointer = &next_group;
+					end_iterator.element_pointer = next_group.elements;
+
+					vectorized_fill(element, group_allocator_pair.max_elements_per_group);
+				}
+				
+				
+				if (element_remainder != 0)
+				{
+					end_iterator.group_pointer->next_group = PLF_COLONY_ALLOCATE(group_allocator_type, group_allocator_pair, 1, end_iterator.group_pointer);
+					const group_reference_type next_group = *(end_iterator.group_pointer->next_group);
+
+					try
+					{
+						#ifdef PLF_COLONY_VARIADICS_SUPPORT
+							PLF_COLONY_CONSTRUCT(group_allocator_type, group_allocator_pair, &next_group, group_allocator_pair.max_elements_per_group, end_iterator.group_pointer);
+						#else 
+							PLF_COLONY_CONSTRUCT(group_allocator_type, group_allocator_pair, &next_group, group(group_allocator_pair.max_elements_per_group, end_iterator.group_pointer));
+						#endif
+					}
+					catch (...)
+					{
+						clear();
+						throw;
+					}
+
+					end_iterator.group_pointer = &next_group;
+					end_iterator.element_pointer = next_group.elements;
+
+					vectorized_fill(element, static_cast<unsigned short>(element_remainder));
+				}
+
+				end_iterator.skipfield_pointer = end_iterator.group_pointer->skipfield + element_remainder;
+			}
+			else
+			{
+				const unsigned short temp = min_elements_per_group;
+				min_elements_per_group = (number_of_elements < min_elements_per_group) ? min_elements_per_group : static_cast<unsigned short>(number_of_elements);
+				initialize(); // Construct first group
+				min_elements_per_group = temp;
+				
+				vectorized_fill(element, static_cast<unsigned short>(number_of_elements));
+				end_iterator.skipfield_pointer = end_iterator.group_pointer->skipfield + number_of_elements;
+			}
+
+			total_number_of_elements += number_of_elements;
+			return begin_iterator;
+		}
+		else // less-common case, so not optimizing for this as much:
+		{
+			const iterator return_iterator = end_iterator;
+			size_type element_remainder = number_of_elements;
+			
+			while (element_remainder-- != 0)
+			{
+				insert(element);
+			}
+			
+			return return_iterator;
+		}
+	}
+	
+
+
+	// Range insert
+	template<class class_type>
+	iterator insert (const typename class_type::iterator &first, const typename class_type::iterator &last)
+	{
+		iterator return_iterator = end_iterator;
+		typename class_type::iterator temp = first;
+		
+		while (temp++ != last)
+		{
+			insert(*temp);
+		}
+		
+		return return_iterator;
+	}
+	
+	
+	
+	// Initializer-list insert
+
+	#ifdef PLF_COLONY_INITIALIZER_LIST_SUPPORT
+		iterator insert (std::initializer_list<element_type> element_list)
+		{
+			if (first_group == NULL)
+			{
+				initialize();
+			}
+			
+			const iterator return_iterator = end_iterator;
+			
+			for (typename std::initializer_list<element_type>::iterator current_element = element_list.begin(); current_element != element_list.end(); ++current_element)
+			{
+				insert(*current_element);
+			}
+			
+			return return_iterator;
+		}
+	#endif
+	
 
 
 private:
@@ -1985,38 +2276,53 @@ public:
 
 
 
-	void reinitialize(const unsigned short min_allocation_amount) PLF_COLONY_NOEXCEPT
+	inline void change_minimum_group_size(const unsigned short min_allocation_amount)
+	{
+		change_group_sizes(min_allocation_amount, group_allocator_pair.max_elements_per_group);
+	}
+	
+	
+
+	inline void change_maximum_group_size(const unsigned short max_allocation_amount)
+	{
+		change_group_sizes(min_elements_per_group, max_allocation_amount);
+	}
+	
+	
+
+	inline void change_group_sizes(const unsigned short min_allocation_amount, const unsigned short max_allocation_amount)
 	{
 		assert(min_allocation_amount > 2); // Otherwise, too much overhead for too small a group
-		assert(min_allocation_amount <= group_allocator_pair.max_elements_per_group);
+		assert(min_allocation_amount <= max_allocation_amount);
 
+		min_elements_per_group = min_allocation_amount;
+		group_allocator_pair.max_elements_per_group = max_allocation_amount;
+
+		if (first_group != NULL)
+		{
+			colony temp(*this);
+
+			#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
+				*this = std::move(temp); // Avoid generating 2nd temporary
+			#else
+				this->swap(temp);
+			#endif
+		}
+
+		erased_locations.clear();
+		erased_locations.change_minimum_group_size((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8);
+	}
+	
+		
+
+	inline void clear() PLF_COLONY_NOEXCEPT
+	{
 		destroy_all_data();
 		total_number_of_elements = 0;
-		min_elements_per_group = min_allocation_amount;
-
 		begin_iterator.group_pointer = NULL;
 		begin_iterator.element_pointer = NULL;
 		begin_iterator.skipfield_pointer = NULL;
 		end_iterator = begin_iterator;
-
-		erased_locations.reinitialize((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8);
-	}
-
-
-
-	inline void reinitialize(const size_type min_allocation_amount, const size_type max_allocation_amount) PLF_COLONY_NOEXCEPT
-	{
-		assert(max_allocation_amount <= USHRT_MAX);
-
-		group_allocator_pair.max_elements_per_group = max_allocation_amount;
-		reinitialize(min_allocation_amount);
-	}
-
-
-
-	inline void clear() PLF_COLONY_NOEXCEPT
-	{
-		reinitialize(min_elements_per_group);
 	}
 
 
@@ -2134,7 +2440,7 @@ public:
 		}
 		else if (reserve_amount > max_size())
 		{
-			reserve_amount = max_size();
+			reserve_amount = static_cast<unsigned short>(max_size());
 		}
 
 		if (total_number_of_elements == 0) // Most common scenario
@@ -2833,6 +3139,7 @@ public:
 
 #undef PLF_COLONY_FORCE_INLINE
 
+#undef PLF_COLONY_INITIALIZER_LIST_SUPPORT
 #undef PLF_COLONY_TYPE_TRAITS_SUPPORT
 #undef PLF_COLONY_ALLOCATOR_TRAITS_SUPPORT
 #undef PLF_COLONY_VARIADICS_SUPPORT
