@@ -784,126 +784,6 @@ public:
 
 
 
-	// Fill constructors:
-
-	explicit colony(const size_type fill_number):
-		first_group(NULL),
-		total_number_of_elements(0),
-		min_elements_per_group(8),
-		group_allocator_pair(USHRT_MAX)
-	{
-		insert(fill_number, element_type());
-	}
-
-
-
-	explicit colony(const size_type fill_number, const unsigned short min_allocation_amount, const unsigned short max_allocation_amount = USHRT_MAX):
-		first_group(NULL),
-		total_number_of_elements(0),
-		min_elements_per_group(min_allocation_amount),
-		group_allocator_pair(max_allocation_amount),
-		erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
-	{
-		assert(min_allocation_amount > 2); 	// Otherwise, too much overhead for too small a group
-		assert(min_allocation_amount <= group_allocator_pair.max_elements_per_group);
-
-		if (fill_number != 0)
-		{
-			insert(fill_number, element_type());
-		}
-	}
-
-
-
-	colony(const size_type fill_number, const element_type &element):
-		first_group(NULL),
-		total_number_of_elements(0),
-		min_elements_per_group(8),
-		group_allocator_pair(USHRT_MAX)
-	{
-		insert(fill_number, element);
-	}
-	
-
-
-	colony(const size_type fill_number, const element_type &element, const unsigned short min_allocation_amount, const unsigned short max_allocation_amount = USHRT_MAX):
-		first_group(NULL),
-		total_number_of_elements(0),
-		min_elements_per_group(min_allocation_amount),
-		group_allocator_pair(max_allocation_amount),
-		erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
-	{
-		assert(min_allocation_amount > 2); 	// Otherwise, too much overhead for too small a group
-		assert(min_allocation_amount <= group_allocator_pair.max_elements_per_group);
-
-		if (fill_number != 0)
-		{
-			insert(fill_number, element);
-		}
-	}
-
-
-
-	// Range constructors:
-
-	template<typename input_iterator_type>
-	colony(const input_iterator_type &first, const input_iterator_type &last):
-		first_group(NULL),
-		total_number_of_elements(0),
-		min_elements_per_group(8),
-		group_allocator_pair(USHRT_MAX)
-	{
-		insert(first, last);
-	}
-
-
-	template<typename input_iterator_type>
-	colony(const input_iterator_type &first, const input_iterator_type &last, const unsigned short min_allocation_amount, const unsigned short max_allocation_amount = USHRT_MAX):
-		first_group(NULL),
-		total_number_of_elements(0),
-		min_elements_per_group(min_allocation_amount),
-		group_allocator_pair(max_allocation_amount),
-		erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
-	{
-		assert(min_allocation_amount > 2); 	// Otherwise, too much overhead for too small a group
-		assert(min_allocation_amount <= group_allocator_pair.max_elements_per_group);
-
-		insert(first, last);
-	}
-
-
-
-	// Initializer list constructors:
-
-	#ifdef PLF_COLONY_INITIALIZER_LIST_SUPPORT
-		colony(const std::initializer_list<element_type> element_list):
-			first_group(NULL),
-			total_number_of_elements(0),
-			min_elements_per_group(8),
-			group_allocator_pair(USHRT_MAX)
-		{
-			insert(element_list);
-		}
-
-
-
-		colony(const std::initializer_list<element_type> element_list, const unsigned short min_allocation_amount, const unsigned short max_allocation_amount = USHRT_MAX):
-			first_group(NULL),
-			total_number_of_elements(0),
-			min_elements_per_group(min_allocation_amount),
-			group_allocator_pair(max_allocation_amount),
-			erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
-		{
-			assert(min_allocation_amount > 2); 	// Otherwise, too much overhead for too small a group
-			assert(min_allocation_amount <= group_allocator_pair.max_elements_per_group);
-
-			insert(element_list);
-		}
-		
-	#endif
-
-
-
 	colony (const colony &source):
 		element_allocator_type(source),
 		first_group(NULL),
@@ -932,6 +812,82 @@ public:
 			source.first_group = NULL;
 			source.total_number_of_elements = 0; // Nullifying the other data members is unnecessary - technically all can be removed except first_group NULL and total_number_of_elements 0, to allow for clean destructor usage
 		}
+	#endif
+
+
+
+	// Fill constructors:
+
+	explicit colony(const size_type fill_number, const unsigned short min_allocation_amount = 8, const unsigned short max_allocation_amount = USHRT_MAX):
+		first_group(NULL),
+		total_number_of_elements(0),
+		min_elements_per_group(min_allocation_amount),
+		group_allocator_pair(max_allocation_amount),
+		erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
+	{
+		assert(min_allocation_amount > 2); 	// Otherwise, too much overhead for too small a group
+		assert(min_allocation_amount <= group_allocator_pair.max_elements_per_group);
+
+		if (fill_number != 0)
+		{
+			insert(fill_number, element_type());
+		}
+	}
+
+
+
+	colony(const size_type fill_number, const element_type &element, const unsigned short min_allocation_amount = 8, const unsigned short max_allocation_amount = USHRT_MAX):
+		first_group(NULL),
+		total_number_of_elements(0),
+		min_elements_per_group(min_allocation_amount),
+		group_allocator_pair(max_allocation_amount),
+		erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
+	{
+		assert(min_allocation_amount > 2); 	// Otherwise, too much overhead for too small a group
+		assert(min_allocation_amount <= group_allocator_pair.max_elements_per_group);
+
+		if (fill_number != 0)
+		{
+			insert(fill_number, element);
+		}
+	}
+
+
+
+	// Range constructors:
+
+	template<typename input_iterator_type>
+	colony(const input_iterator_type &first, const input_iterator_type &last, const unsigned short min_allocation_amount = 8, const unsigned short max_allocation_amount = USHRT_MAX):
+		first_group(NULL),
+		total_number_of_elements(0),
+		min_elements_per_group(min_allocation_amount),
+		group_allocator_pair(max_allocation_amount),
+		erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
+	{
+		assert(min_allocation_amount > 2); 	// Otherwise, too much overhead for too small a group
+		assert(min_allocation_amount <= group_allocator_pair.max_elements_per_group);
+
+		insert(first, last);
+	}
+
+
+
+	// Initializer list constructors:
+
+	#ifdef PLF_COLONY_INITIALIZER_LIST_SUPPORT
+		colony(const std::initializer_list<element_type> &element_list, const unsigned short min_allocation_amount = 8, const unsigned short max_allocation_amount = USHRT_MAX):
+			first_group(NULL),
+			total_number_of_elements(0),
+			min_elements_per_group(min_allocation_amount),
+			group_allocator_pair(max_allocation_amount),
+			erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
+		{
+			assert(min_allocation_amount > 2); 	// Otherwise, too much overhead for too small a group
+			assert(min_allocation_amount <= group_allocator_pair.max_elements_per_group);
+
+			insert(element_list);
+		}
+		
 	#endif
 
 
