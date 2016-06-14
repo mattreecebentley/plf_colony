@@ -1,3 +1,4 @@
+#include <vector>
 #include <iostream>
 #include <algorithm>
 #include <cstdio> // log redirection
@@ -606,9 +607,12 @@ int main(int argc, char **argv)
 		i_colony2.insert(500000, 5);
 		
 		failpass("Fill insertion test", i_colony2.size() == 500003);
-
 		
+		std::vector<int> some_ints(500, 2);
 		
+		i_colony2.insert(some_ints.begin(), some_ints.end());
+		
+		failpass("Fill insertion test", i_colony2.size() == 500503);
 	}
 
 	{

@@ -619,6 +619,7 @@ public:
 	{
 		assert(&source != this);
 
+		destroy_all_data();
 		stack temp(source);
 
 		#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
@@ -732,7 +733,7 @@ public:
 
 
 
-	inline void clear() PLF_STACK_NOEXCEPT
+	void clear() PLF_STACK_NOEXCEPT
 	{
 		destroy_all_data();
 		total_number_of_elements = 0;

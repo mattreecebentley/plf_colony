@@ -206,7 +206,7 @@ private:
 				size(elements_per_group)
 			{
 				// Static casts to unsigned int from short not necessary as C++ automatically promotes lesser types for arithmetic purposes.
-				std::memset(&*skipfield, false, sizeof(unsigned short) * (size + 1)); // &* to avoid problems with non-trivial pointers - size + 1 to allow for computationally-faster operator ++ and other operations - extra field is unused but checked - not having it will result in out-of-bounds checks
+				std::memset(&*skipfield, 0, sizeof(unsigned short) * (size + 1)); // &* to avoid problems with non-trivial pointers - size + 1 to allow for computationally-faster operator ++ and other operations - extra field is unused but checked - not having it will result in out-of-bounds checks
 			}
 
 		#else
@@ -222,7 +222,7 @@ private:
 				size(elements_per_group)
 			{
 				// Static casts to unsigned int from short not necessary as C++ automatically promotes lesser types for arithmetic purposes.
-				std::memset(&*skipfield, false, sizeof(unsigned short) * (size + 1)); // &* to avoid problems with non-trivial pointers - size + 1 to allow for computationally-faster operator ++ and other operations - extra field is unused but checked - not having it will result in out-of-bounds checks
+				std::memset(&*skipfield, 0, sizeof(unsigned short) * (size + 1)); // &* to avoid problems with non-trivial pointers - size + 1 to allow for computationally-faster operator ++ and other operations - extra field is unused but checked - not having it will result in out-of-bounds checks
 			}
 
 
@@ -1138,7 +1138,7 @@ public:
 				case 1:  // ie. erased_locations is empty and end_iterator is at end of current final group - ie. colony is full - create new group
 				{
 					end_iterator.group_pointer->next_group = PLF_COLONY_ALLOCATE(group_allocator_type, group_allocator_pair, 1, end_iterator.group_pointer);
-					const group_reference_type next_group = *(end_iterator.group_pointer->next_group);
+					group_reference_type next_group = *(end_iterator.group_pointer->next_group);
 
 					try
 					{
@@ -1308,17 +1308,6 @@ public:
 
 
 	
-	// Group insert:
-	inline void insert(const iterator &iterator1, const iterator &iterator2)
-	{
-		for (iterator the_iterator = iterator1; the_iterator != iterator2; ++the_iterator)
-		{
-			insert(*the_iterator);
-		}
-	}
-
-
-
 	#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 		// Note: the reason for code duplication from non-move insert, as opposed to using std::forward for both, was because most compilers didn't actually create as-optimal code in that strategy.
 
@@ -1343,7 +1332,7 @@ public:
 					case 1:  // ie. erased_locations is empty and end_iterator is at end of current final group - ie. colony is full - create new group
 					{
 						end_iterator.group_pointer->next_group = PLF_COLONY_ALLOCATE(group_allocator_type, group_allocator_pair, 1, end_iterator.group_pointer);
-						const group_reference_type next_group = *(end_iterator.group_pointer->next_group);
+						group_reference_type next_group = *(end_iterator.group_pointer->next_group);
 
 						try
 						{
@@ -1512,18 +1501,6 @@ public:
 		}
 
 
-		// Group move-insert:
-		inline void insert(iterator &&iterator1, iterator &&iterator2)
-		{
-			assert(iterator1 <= iterator2);
-
-			for (iterator the_iterator = iterator1; the_iterator != iterator2; ++the_iterator)
-			{
-				insert(std::move(*the_iterator));
-			}
-		}
-
-
 		#ifdef PLF_COLONY_VARIADICS_SUPPORT
 			template<typename... Arguments> inline iterator emplace(Arguments... parameters)
 			{
@@ -1533,31 +1510,15 @@ public:
 	#endif
 
 
+
 private:
-	void vectorized_fill(const element_type &element, const unsigned short number_of_elements)
+	
+	// Internal functions for insert-fill:
+	void group_fill(const element_type &element, const unsigned short number_of_elements)
 	{
-		unsigned short vectorize = number_of_elements / 4;
-		unsigned short remainder = number_of_elements - (vectorize * 4);
+		const element_pointer_type fill_end = end_iterator.element_pointer + number_of_elements;
 		
-		while (vectorize-- != 0)
-		{
-			try
-			{
-				PLF_COLONY_CONSTRUCT(element_allocator_type, (*this), end_iterator.element_pointer, element);
-				PLF_COLONY_CONSTRUCT(element_allocator_type, (*this), end_iterator.element_pointer + 1, element);
-				PLF_COLONY_CONSTRUCT(element_allocator_type, (*this), end_iterator.element_pointer + 2, element);
-				PLF_COLONY_CONSTRUCT(element_allocator_type, (*this), end_iterator.element_pointer + 3, element);
-			}
-			catch (...)
-			{
-				clear();
-				throw;
-			}
-			
-			end_iterator.element_pointer += 4;
-		}
-		
-		while (remainder-- != 0)
+		while (end_iterator.element_pointer != fill_end)
 		{
 			try
 			{
@@ -1573,78 +1534,71 @@ private:
 		end_iterator.group_pointer->last_endpoint = end_iterator.element_pointer;
 		end_iterator.group_pointer->number_of_elements = number_of_elements;
 	}
+	
 
+
+	void group_create()
+	{
+		const group_pointer_type next_group = end_iterator.group_pointer->next_group = PLF_COLONY_ALLOCATE(group_allocator_type, group_allocator_pair, 1, end_iterator.group_pointer);
+
+		try
+		{
+			#ifdef PLF_COLONY_VARIADICS_SUPPORT
+				PLF_COLONY_CONSTRUCT(group_allocator_type, group_allocator_pair, next_group, group_allocator_pair.max_elements_per_group, end_iterator.group_pointer);
+			#else 
+				PLF_COLONY_CONSTRUCT(group_allocator_type, group_allocator_pair, next_group, group(group_allocator_pair.max_elements_per_group, end_iterator.group_pointer));
+			#endif
+		}
+		catch (...)
+		{
+			clear();
+			throw;
+		}
+
+		end_iterator.group_pointer = next_group;
+		end_iterator.element_pointer = next_group->elements;
+	}
+	
+	
 public:
 
 
 	// Fill-insert
+	inline PLF_COLONY_FORCE_INLINE iterator insert(const int number_of_elements, const element_type &element) // Overload to stop C++ compilers calling the templated range insert function instead
+	{
+		return insert(static_cast<size_type>(number_of_elements), element);
+	}
+	
+
 	iterator insert(const size_type number_of_elements, const element_type &element)
 	{
 		assert(number_of_elements != 0);
 		
-		if (first_group == NULL)
+		if (first_group == NULL) // Empty colony, no groups created yet
 		{
 			if (number_of_elements > group_allocator_pair.max_elements_per_group)
 			{
-				size_type multiples = (number_of_elements / static_cast<size_type>(group_allocator_pair.max_elements_per_group));
-				const unsigned short element_remainder = static_cast<unsigned short>(number_of_elements - (multiples * static_cast<size_type>(group_allocator_pair.max_elements_per_group)));
+				// Create and fill first group:
 				const unsigned short temp = min_elements_per_group;
 				min_elements_per_group = group_allocator_pair.max_elements_per_group;
 				initialize(); // Construct first group
 				min_elements_per_group = temp;
-
-				vectorized_fill(element, group_allocator_pair.max_elements_per_group);
+				group_fill(element, group_allocator_pair.max_elements_per_group);
 				
+				// Create and fill all remaining groups:
+				size_type multiples = (number_of_elements / static_cast<size_type>(group_allocator_pair.max_elements_per_group));
+				const unsigned short element_remainder = static_cast<unsigned short>(number_of_elements - (multiples * static_cast<size_type>(group_allocator_pair.max_elements_per_group)));
 				
 				while (--multiples != 0)
 				{
-					end_iterator.group_pointer->next_group = PLF_COLONY_ALLOCATE(group_allocator_type, group_allocator_pair, 1, end_iterator.group_pointer);
-					const group_reference_type next_group = *(end_iterator.group_pointer->next_group);
-
-					try
-					{
-						#ifdef PLF_COLONY_VARIADICS_SUPPORT
-							PLF_COLONY_CONSTRUCT(group_allocator_type, group_allocator_pair, &next_group, group_allocator_pair.max_elements_per_group, end_iterator.group_pointer);
-						#else 
-							PLF_COLONY_CONSTRUCT(group_allocator_type, group_allocator_pair, &next_group, group(group_allocator_pair.max_elements_per_group, end_iterator.group_pointer));
-						#endif
-					}
-					catch (...)
-					{
-						clear();
-						throw;
-					}
-
-					end_iterator.group_pointer = &next_group;
-					end_iterator.element_pointer = next_group.elements;
-
-					vectorized_fill(element, group_allocator_pair.max_elements_per_group);
+					group_create();
+					group_fill(element, group_allocator_pair.max_elements_per_group);
 				}
-				
 				
 				if (element_remainder != 0)
 				{
-					end_iterator.group_pointer->next_group = PLF_COLONY_ALLOCATE(group_allocator_type, group_allocator_pair, 1, end_iterator.group_pointer);
-					const group_reference_type next_group = *(end_iterator.group_pointer->next_group);
-
-					try
-					{
-						#ifdef PLF_COLONY_VARIADICS_SUPPORT
-							PLF_COLONY_CONSTRUCT(group_allocator_type, group_allocator_pair, &next_group, group_allocator_pair.max_elements_per_group, end_iterator.group_pointer);
-						#else 
-							PLF_COLONY_CONSTRUCT(group_allocator_type, group_allocator_pair, &next_group, group(group_allocator_pair.max_elements_per_group, end_iterator.group_pointer));
-						#endif
-					}
-					catch (...)
-					{
-						clear();
-						throw;
-					}
-
-					end_iterator.group_pointer = &next_group;
-					end_iterator.element_pointer = next_group.elements;
-
-					vectorized_fill(element, static_cast<unsigned short>(element_remainder));
+					group_create();
+					group_fill(element, element_remainder);
 				}
 
 				end_iterator.skipfield_pointer = end_iterator.group_pointer->skipfield + element_remainder;
@@ -1656,22 +1610,51 @@ public:
 				initialize(); // Construct first group
 				min_elements_per_group = temp;
 				
-				vectorized_fill(element, static_cast<unsigned short>(number_of_elements));
+				group_fill(element, static_cast<unsigned short>(number_of_elements));
 				end_iterator.skipfield_pointer = end_iterator.group_pointer->skipfield + number_of_elements;
 			}
 
 			total_number_of_elements += number_of_elements;
 			return begin_iterator;
 		}
-		else // less-common case, so not optimizing for this as much:
+		else
 		{
-			const iterator return_iterator = end_iterator;
-			size_type element_remainder = number_of_elements;
+			const iterator return_iterator = (erased_locations.empty()) ? end_iterator : erased_locations.top();
+			size_type num_elements = number_of_elements;
 			
-			while (element_remainder-- != 0)
+			// Use up erased locations first:
+			while (num_elements != 0 && !(erased_locations.empty()))
 			{
+				--num_elements;
 				insert(element);
 			}
+
+			// Then fill till end of current end group:
+			while (num_elements != 0 && end_iterator.element_pointer != reinterpret_cast<element_pointer_type>(end_iterator.group_pointer->skipfield))
+			{
+				--num_elements;
+				insert(element);
+			}
+
+			// If still some left over, create new groups and fill:
+			size_type multiples = (num_elements / static_cast<size_type>(group_allocator_pair.max_elements_per_group));
+			const unsigned short element_remainder = static_cast<unsigned short>(num_elements - (multiples * static_cast<size_type>(group_allocator_pair.max_elements_per_group)));
+			
+			while (multiples-- != 0)
+			{
+				group_create();
+				group_fill(element, group_allocator_pair.max_elements_per_group);
+				end_iterator.skipfield_pointer = end_iterator.group_pointer->skipfield + group_allocator_pair.max_elements_per_group;
+			}
+			
+			if (element_remainder != 0)
+			{
+				group_create();
+				group_fill(element, element_remainder);
+				end_iterator.skipfield_pointer = end_iterator.group_pointer->skipfield + element_remainder;
+			}
+			
+			total_number_of_elements += num_elements;
 			
 			return return_iterator;
 		}
@@ -1680,17 +1663,17 @@ public:
 
 
 	// Range insert
-	template<class class_type>
-	iterator insert (const typename class_type::iterator &first, const typename class_type::iterator &last)
+
+	template <class iterator_type>
+	iterator insert (const iterator_type &first, const iterator_type &last)
 	{
-		iterator return_iterator = end_iterator;
-		typename class_type::iterator temp = first;
-		
-		while (temp++ != last)
+		const iterator return_iterator = (erased_locations.empty()) ? end_iterator : erased_locations.top();
+
+		for (iterator_type the_iterator = first; the_iterator != last; ++the_iterator)
 		{
-			insert(*temp);
+			insert(*the_iterator);
 		}
-		
+
 		return return_iterator;
 	}
 	
@@ -1699,14 +1682,14 @@ public:
 	// Initializer-list insert
 
 	#ifdef PLF_COLONY_INITIALIZER_LIST_SUPPORT
-		iterator insert (std::initializer_list<element_type> element_list)
+		iterator insert (const std::initializer_list<element_type> &element_list)
 		{
 			if (first_group == NULL)
 			{
 				initialize();
 			}
 			
-			const iterator return_iterator = end_iterator;
+			const iterator return_iterator = (erased_locations.empty()) ? end_iterator : erased_locations.top();
 			
 			for (typename std::initializer_list<element_type>::iterator current_element = element_list.begin(); current_element != element_list.end(); ++current_element)
 			{
@@ -2118,18 +2101,13 @@ public:
 		{
 			case 0: // ie. the_group_pointer == first_group && the_group.next_group == NULL; only group in colony
 			{
-				PLF_COLONY_DESTROY(group_allocator_type, group_allocator_pair, first_group);
-
-				#ifdef PLF_COLONY_VARIADICS_SUPPORT
-					PLF_COLONY_CONSTRUCT(group_allocator_type, group_allocator_pair, first_group, min_elements_per_group);
-				#else
-					PLF_COLONY_CONSTRUCT(group_allocator_type, group_allocator_pair, first_group, group(min_elements_per_group));
-				#endif
-
+				// Reset skipfield and erased_locations:
+				std::memset(&*(first_group->skipfield), 0, sizeof(unsigned short) * (first_group->size + 1)); // &* to avoid problems with non-trivial pointers - size + 1 to allow for computationally-faster operator ++ and other operations - extra field is unused but checked - not having it will result in out-of-bounds checks
 				erased_locations.clear();
 
 				// Reset begin_iterator:
-				begin_iterator.element_pointer = first_group->elements;
+				first_group->number_of_elements = 0;
+				begin_iterator.element_pointer = first_group->last_endpoint = first_group->elements;
 				begin_iterator.skipfield_pointer = first_group->skipfield;
 				end_iterator = begin_iterator;
 
@@ -2235,7 +2213,7 @@ public:
 				the_iterator.group_pointer = the_group;
 				the_iterator.element_pointer = the_pointer;
 				the_iterator.skipfield_pointer = the_group->skipfield + (the_pointer - the_group->elements);
-				the_iterator = erase(the_iterator); // Only getting return value to avoid compiler warnings. It is unused.
+				erase(the_iterator);
 				return 0;
 			}
 
@@ -2244,7 +2222,6 @@ public:
 
 		return -1;
 	}
-
 
 
 
@@ -2315,9 +2292,10 @@ public:
 	
 		
 
-	inline void clear() PLF_COLONY_NOEXCEPT
+	void clear() PLF_COLONY_NOEXCEPT
 	{
 		destroy_all_data();
+		erased_locations.clear();
 		total_number_of_elements = 0;
 		begin_iterator.group_pointer = NULL;
 		begin_iterator.element_pointer = NULL;
@@ -2331,6 +2309,7 @@ public:
 	{
 		assert (&source != this);
 
+		destroy_all_data();
 		colony temp(source);
 
 		#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
@@ -2637,7 +2616,7 @@ private:
 			{
 				const group &current_group = *group_pointer;
 
-				if (current_group.number_of_elements == static_cast<const unsigned short>(current_group.last_endpoint - current_group.elements))
+				if (current_group.number_of_elements == static_cast<const unsigned short>(current_group.last_endpoint - current_group.elements)) // ie. full group
 				{
 					const distance_type distance_from_beginning = static_cast<const distance_type>(element_pointer - current_group.elements);
 					
