@@ -775,7 +775,8 @@ public:
 
 	// Standard constuctor:
 
-	explicit colony():
+	explicit colony(const element_allocator_type &alloc = element_allocator_type()):
+		element_allocator_type(alloc),
 		first_group(NULL),
 		total_number_of_elements(0),
 		min_elements_per_group(8),
@@ -818,25 +819,8 @@ public:
 
 	// Fill constructors:
 
-	explicit colony(const size_type fill_number, const unsigned short min_allocation_amount = 8, const unsigned short max_allocation_amount = USHRT_MAX):
-		first_group(NULL),
-		total_number_of_elements(0),
-		min_elements_per_group(min_allocation_amount),
-		group_allocator_pair(max_allocation_amount),
-		erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
-	{
-		assert(min_allocation_amount > 2); 	// Otherwise, too much overhead for too small a group
-		assert(min_allocation_amount <= group_allocator_pair.max_elements_per_group);
-
-		if (fill_number != 0)
-		{
-			insert(fill_number, element_type());
-		}
-	}
-
-
-
-	colony(const size_type fill_number, const element_type &element, const unsigned short min_allocation_amount = 8, const unsigned short max_allocation_amount = USHRT_MAX):
+	colony(const size_type fill_number, const element_type &element, const unsigned short min_allocation_amount = 8, const unsigned short max_allocation_amount = USHRT_MAX, const element_allocator_type &alloc = element_allocator_type()):
+		element_allocator_type(alloc),
 		first_group(NULL),
 		total_number_of_elements(0),
 		min_elements_per_group(min_allocation_amount),
@@ -857,7 +841,8 @@ public:
 	// Range constructors:
 
 	template<typename input_iterator_type>
-	colony(const input_iterator_type &first, const input_iterator_type &last, const unsigned short min_allocation_amount = 8, const unsigned short max_allocation_amount = USHRT_MAX):
+	colony(const input_iterator_type &first, const input_iterator_type &last, const unsigned short min_allocation_amount = 8, const unsigned short max_allocation_amount = USHRT_MAX, const element_allocator_type &alloc = element_allocator_type()):
+		element_allocator_type(alloc),
 		first_group(NULL),
 		total_number_of_elements(0),
 		min_elements_per_group(min_allocation_amount),
@@ -875,7 +860,8 @@ public:
 	// Initializer list constructors:
 
 	#ifdef PLF_COLONY_INITIALIZER_LIST_SUPPORT
-		colony(const std::initializer_list<element_type> &element_list, const unsigned short min_allocation_amount = 8, const unsigned short max_allocation_amount = USHRT_MAX):
+		colony(const std::initializer_list<element_type> &element_list, const unsigned short min_allocation_amount = 8, const unsigned short max_allocation_amount = USHRT_MAX, const element_allocator_type &alloc = element_allocator_type()):
+			element_allocator_type(alloc),
 			first_group(NULL),
 			total_number_of_elements(0),
 			min_elements_per_group(min_allocation_amount),
@@ -898,6 +884,7 @@ public:
 	}
 
 
+
 	inline PLF_COLONY_FORCE_INLINE const iterator & begin() const PLF_COLONY_NOEXCEPT // To allow for functions which only take const colony & as a source ie. copy constructor
 	{
 		return begin_iterator;
@@ -909,6 +896,7 @@ public:
 	{
 		return end_iterator;
 	}
+
 
 
 	inline PLF_COLONY_FORCE_INLINE const iterator & end() const PLF_COLONY_NOEXCEPT
@@ -1043,6 +1031,7 @@ private:
 			}
 		}
 	}
+
 
 
 	void initialize()
@@ -1520,12 +1509,7 @@ public:
 
 
 	// Fill-insert
-	inline PLF_COLONY_FORCE_INLINE iterator insert(const int number_of_elements, const element_type &element) // Overload to stop C++ compilers calling the templated range insert function instead
-	{
-		return insert(static_cast<size_type>(number_of_elements), element);
-	}
 	
-
 	iterator insert(const size_type number_of_elements, const element_type &element)
 	{
 		assert(number_of_elements != 0);
@@ -1620,8 +1604,25 @@ public:
 
 	// Range insert
 
+private:
+	// Enable-if used to prevent fill-insert functions mistakenly matching the range insert template below
+	
+	template <bool condition, class T = void> 
+	struct plf_enable_if_c
+	{
+		typedef T type;
+	};
+
+	template <class T>
+	struct plf_enable_if_c<false, T>
+	{};
+	
+
+public:
+
+
 	template <class iterator_type>
-	iterator insert (const iterator_type &first, const iterator_type &last)
+	iterator insert (const typename plf_enable_if_c<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type &first, const iterator_type &last)
 	{
 		const iterator return_iterator = (erased_locations.empty()) ? end_iterator : erased_locations.top();
 
@@ -1633,7 +1634,7 @@ public:
 		return return_iterator;
 	}
 	
-	
+
 	
 	// Initializer-list insert
 
