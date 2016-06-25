@@ -627,7 +627,7 @@ int main(int argc, char **argv)
 		
 		failpass("Multipush test", i_stack.size() == 250000);
 		
-		stack<unsigned int> i_stack2(50, 500);
+		stack<unsigned int> i_stack2;
 		i_stack2 = i_stack;
 
 		stack<unsigned int> i_stack3(i_stack);

@@ -91,10 +91,10 @@
 #include <cassert>	// assert
 #include <climits>	// USHRT_MAX - could differ between platforms, but at least 65535
 #include <memory>	// std::uninitialized_copy, std::allocator
-#include <iterator>	// typedef inheritance for iterators
+#include <iterator> // std::bidirectional_iterator_tag
 
 #ifndef PLF_STACK_H
-	#include "plf_stack.h" // Includes plf::stack and compiler-specific Macro defines
+	#include "plf_stack.h" // For erased_location stack
 #endif
 
 
@@ -140,14 +140,14 @@ public:
 	// Iterator declarations:
 	template <class colony_element_allocator_type, bool is_const> class colony_iterator;
 	typedef colony_iterator<element_allocator_type, false>	iterator;
-	friend class colony_iterator<element_allocator_type, false>;
 	typedef colony_iterator<element_allocator_type, true>	const_iterator;
+	friend class colony_iterator<element_allocator_type, false>; // clang complains if typedefs used in friend declarations
 	friend class colony_iterator<element_allocator_type, true>;
 
 	template <class r_colony_element_allocator_type, bool r_is_const> class colony_reverse_iterator;
 	typedef colony_reverse_iterator<element_allocator_type, false>	reverse_iterator;
-	friend class colony_reverse_iterator<element_allocator_type, false>;
 	typedef colony_reverse_iterator<element_allocator_type, true>	const_reverse_iterator;
+	friend class colony_reverse_iterator<element_allocator_type, false>;
 	friend class colony_reverse_iterator<element_allocator_type, true>;
 
 private:
@@ -180,6 +180,7 @@ private:
 	#endif
 
 	typedef typename plf::stack<iterator, iterator_allocator_type> iterator_stack_type;
+
 
 
 	struct group : private uchar_allocator_type  // Empty base class optimisation - inheriting allocator functions
@@ -269,7 +270,7 @@ public:
 
 
 	// Iterators:
-	template <class colony_allocator_type, bool is_const> class colony_iterator : public std::iterator<std::bidirectional_iterator_tag, typename colony::value_type>
+	template <class colony_allocator_type, bool is_const> class colony_iterator 
 	{
 	private:
 		group_pointer_type		group_pointer;
@@ -277,12 +278,15 @@ public:
 		ushort_pointer_type		skipfield_pointer;
 
 	public:
-		typedef typename choose<is_const, const_reference, reference>::type	value_reference;
-		typedef typename choose<is_const, const_pointer, pointer>::type		value_pointer;
+		typedef std::bidirectional_iterator_tag 	iterator_category;
+		typedef typename colony::value_type 		value_type;
+		typedef typename colony::difference_type 	difference_type;
+		typedef typename choose<is_const, typename colony::const_pointer, typename colony::pointer>::type		pointer;
+		typedef typename choose<is_const, typename colony::const_reference, typename colony::reference>::type	reference;
 
 		friend class colony;
-		friend class colony_reverse_iterator<element_allocator_type, false>;
-		friend class colony_reverse_iterator<element_allocator_type, true>;
+		friend class colony_reverse_iterator<typename colony::allocator_type, false>;
+		friend class colony_reverse_iterator<typename colony::allocator_type, true>;
 
 
 
@@ -328,14 +332,14 @@ public:
 		}
 
 
-		inline PLF_COLONY_FORCE_INLINE value_reference operator * () const PLF_COLONY_NOEXCEPT
+		inline PLF_COLONY_FORCE_INLINE reference operator * () const PLF_COLONY_NOEXCEPT
 		{
 			return *element_pointer;
 		}
 
 
 
-		inline PLF_COLONY_FORCE_INLINE value_pointer operator -> () const PLF_COLONY_NOEXCEPT
+		inline PLF_COLONY_FORCE_INLINE pointer operator -> () const PLF_COLONY_NOEXCEPT
 		{
 			return element_pointer;
 		}
@@ -491,7 +495,6 @@ public:
 
 
 		inline colony_iterator (const colony_iterator &source) PLF_COLONY_NOEXCEPT:
-			std::iterator<std::bidirectional_iterator_tag, typename colony::value_type>(source),
 			group_pointer(source.group_pointer),
 			element_pointer(source.element_pointer),
 			skipfield_pointer(source.skipfield_pointer)
@@ -503,7 +506,6 @@ public:
 		#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 			// move constructor
 			inline colony_iterator(const colony_iterator &&source) PLF_COLONY_NOEXCEPT:
-				std::iterator<std::bidirectional_iterator_tag, typename colony::value_type>(source),
 				group_pointer(std::move(source.group_pointer)),
 				element_pointer(std::move(source.element_pointer)),
 				skipfield_pointer(std::move(source.skipfield_pointer))
@@ -511,7 +513,7 @@ public:
 		#endif
 
 
-	};
+	}; // colony_iterator
 
 
 
@@ -519,17 +521,20 @@ public:
 
 	// Reverse iterators:
 
-	template <class r_colony_allocator_type, bool r_is_const> class colony_reverse_iterator : public std::iterator<std::bidirectional_iterator_tag, typename colony::value_type>
+	template <class r_colony_allocator_type, bool r_is_const> class colony_reverse_iterator
 	{
 	private:
-		typename colony::iterator the_iterator;
+		iterator the_iterator;
 
 	public:
-		typedef typename choose<r_is_const, typename colony::const_reference, typename colony::reference>::type	value_reference;
-		typedef typename choose<r_is_const, typename colony::const_pointer, typename colony::pointer>::type		value_pointer;
+		typedef std::bidirectional_iterator_tag iterator_category;
+		typedef typename colony::value_type 		value_type;
+		typedef typename colony::difference_type 	difference_type;
+		typedef typename choose<r_is_const, typename colony::const_pointer, typename colony::pointer>::type		pointer;
+		typedef typename choose<r_is_const, typename colony::const_reference, typename colony::reference>::type	reference;
 
 		friend class colony;
-
+		
 
 
 		inline colony_reverse_iterator& operator = (const colony_reverse_iterator &source) PLF_COLONY_NOEXCEPT
@@ -563,14 +568,14 @@ public:
 		}
 
 
-		inline PLF_COLONY_FORCE_INLINE value_reference operator * () const PLF_COLONY_NOEXCEPT
+		inline PLF_COLONY_FORCE_INLINE reference operator * () const PLF_COLONY_NOEXCEPT
 		{
 			return *(the_iterator.element_pointer);
 		}
 
 
 
-		inline PLF_COLONY_FORCE_INLINE value_pointer * operator -> () const PLF_COLONY_NOEXCEPT
+		inline PLF_COLONY_FORCE_INLINE pointer * operator -> () const PLF_COLONY_NOEXCEPT
 		{
 			return the_iterator.element_pointer;
 		}
@@ -724,14 +729,12 @@ public:
 
 
 		colony_reverse_iterator (const colony_reverse_iterator &source) PLF_COLONY_NOEXCEPT: 
-			std::iterator<std::bidirectional_iterator_tag, typename colony::value_type>(source),
 			the_iterator(source.the_iterator)
 		{}
 
 
 
 		colony_reverse_iterator (const typename colony::iterator &source) PLF_COLONY_NOEXCEPT:
-			std::iterator<std::bidirectional_iterator_tag, typename colony::value_type>(source),
 			the_iterator(source)
 		{}
 
@@ -740,19 +743,15 @@ public:
 		#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 			// move constructors
 			colony_reverse_iterator (const colony_reverse_iterator &&source) PLF_COLONY_NOEXCEPT:
-				std::iterator<std::bidirectional_iterator_tag, typename colony::value_type>(source),
 				the_iterator(std::move(source.the_iterator))
 			{}
 
 			colony_reverse_iterator (const typename colony::iterator &&source) PLF_COLONY_NOEXCEPT:
-				std::iterator<std::bidirectional_iterator_tag, typename colony::value_type>(source),
 				the_iterator(std::move(source))
 			{}
 		#endif
 
-
-
-	};
+	}; // colony_reverse_iterator
 
 
 
@@ -1269,7 +1268,7 @@ public:
 
 	
 	#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
-		// Note: the reason for code duplication from non-move insert, as opposed to using std::forward for both, was because most compilers didn't actually create as-optimal code in that strategy.
+		// Note: the reason for code duplication from non-move insert, as opposed to using std::forward for both, was because most compilers didn't actually create as-optimal code in that strategy. Also, C++03 compliance...
 
 		iterator insert(const element_type &&element)
 		{
@@ -1924,10 +1923,10 @@ public:
 	{
 		assert(!empty());
 		const group_pointer_type the_group_pointer = the_iterator.group_pointer;
-		assert(the_group_pointer != NULL);
-		assert(the_iterator.element_pointer != the_group_pointer->last_endpoint);
-		assert(*(the_iterator.skipfield_pointer) == 0); // ie. element has not been previously erased
+		assert(the_group_pointer != NULL); // not uninitialized iterator
 		group &the_group = *the_group_pointer;
+		assert(the_iterator.element_pointer != the_group.last_endpoint); // not end()
+		assert(*(the_iterator.skipfield_pointer) == 0); // element has not been previously erased
 
 		#ifdef PLF_COLONY_TYPE_TRAITS_SUPPORT
 			if (!(std::is_trivially_destructible<element_type>::value)) // This if-statement should be removed by the compiler on resolution of element_type. For some optimizing compilers this step won't be necessary (for MSVC 2013 it makes a difference)
@@ -1950,8 +1949,8 @@ public:
 
 			iterator return_iterator;
 
-			const unsigned char prev_skipfield = (the_iterator.skipfield_pointer != the_iterator.group_pointer->skipfield && *(the_iterator.skipfield_pointer - 1) != 0);
-			const unsigned char after_skipfield = (the_iterator.element_pointer + 1 != the_iterator.group_pointer->last_endpoint && *(the_iterator.skipfield_pointer + 1) != 0);
+			const unsigned char prev_skipfield = (the_iterator.skipfield_pointer != the_group.skipfield && *(the_iterator.skipfield_pointer - 1) != 0);
+			const unsigned char after_skipfield = (the_iterator.element_pointer + 1 != the_group.last_endpoint && *(the_iterator.skipfield_pointer + 1) != 0);
 
 			switch (prev_skipfield | (after_skipfield << 1))
 			{
@@ -2328,7 +2327,6 @@ public:
 
 
 
-
 	inline bool operator != (const colony &rh) const PLF_COLONY_NOEXCEPT
 	{
 		return !(*this == rh);
@@ -2453,12 +2451,11 @@ public:
 
 
 
-
 private:
 
 	// Advance implementation for iterators and const_iterators:
-	template <class colony_allocator_type, bool is_const, class distance_type>
-	void advance_implementation(colony_iterator<colony_allocator_type, is_const> &it, distance_type distance)
+	template <class forward_iterator_type, class distance_type>
+	void advance_implementation(forward_iterator_type &it, distance_type distance)
 	{
 		// For simplicity - should hopefully be optimized out by compiler:
 		group_pointer_type &group_pointer = it.group_pointer;
@@ -2467,7 +2464,6 @@ private:
 
 		assert(group_pointer != NULL); // covers uninitialized colony_iterator && empty group
 
-		
 		// Now, run code based on the nature of the distance type - negative, positive or zero:
 		if (distance > 0) // ie. +=
 		{
@@ -2475,15 +2471,16 @@ private:
 			// For the initial state of the iterator, we don't know how what's been erased before it in the group.
 			// So for the first group, we follow the following logic:
 			// 1. If no elements have been erased in the group, we do simple addition to progress either to the end of the group, or if there is another group after it and the addition amount specified is larger than the distance between the iterator and the end of the group, we progress onto the next group.
-			// 2. If any of the first group elements have been erased, we manually iterate, as we don't know whether the skipfield element slots are before or after the initial iterator state. Iteration continues until we reach either reduce the addition amount to zero, or reach the end of the group.
+			// 2. If any of the first group elements have been erased, we manually iterate, as we don't know whether the erased elements occur before or after the initial iterator position, subtracting 1 from the addition amount each time. Iteration continues until either the addition amount becomes zero, or we reach the end of the group.
 
 			// For all subsequent groups, we follow the logic below:
-			// 1. If the addition amount is larger than the total number of non-skipfield elements in the group, we skip the group and reduce the addition amount by the number of non-skipfield elements
-			// 2. If the addition amount is smaller than the total number of non-skipfield elements in the group, then:
+			// 1. If the addition amount is larger than the total number of non-erased elements in the group, we skip the group and reduce the addition amount by the number of non-skipfield elements
+			// 2. If the addition amount is smaller than the total number of non-erased elements in the group, then:
 			//	  a. if there're no erased elements in the group we do simple addition to find the new location for the iterator
 			//	  b. if there are erased elements in the group, manually iterate until the new iterator location is found ie. addition amount is reduced to zero
 
-			assert (element_pointer != end_iterator.element_pointer); // Check that we're not already at end()
+
+			assert (!(element_pointer == group_pointer->last_endpoint && group_pointer->next_group == NULL)); // Check that we're not already at end()
 			
 			// Special case for initial element pointer and initial group (we don't know how far into the group the element pointer is)
 			if (element_pointer != group_pointer->elements)
@@ -2604,7 +2601,7 @@ private:
 		else if (distance < 0) // for negative change
 		{
 			// Code logic is very similar to += above
-			assert(!(element_pointer == begin_iterator.element_pointer)); // check that we're not already at begin()
+			assert(!(element_pointer == group_pointer->elements && group_pointer->previous_group == NULL)); // check that we're not already at begin()
 			distance = -distance;
 
 			// Special case for initial element pointer and initial group (we don't know how far into the group the element pointer is)
@@ -2731,8 +2728,8 @@ public:
 private:
 
 	// Advance for reverse_iterator and const_reverse_iterator:
-	template <class colony_allocator_type, bool is_const, class distance_type>
-	void reverse_advance_implementation(colony_reverse_iterator<colony_allocator_type, is_const> &it, distance_type distance)
+	template <class reverse_iterator_type, class distance_type>
+	void reverse_advance_implementation(reverse_iterator_type &it, distance_type distance)
 	{
 		group_pointer_type &group_pointer = it.the_iterator.group_pointer;
 		element_pointer_type &element_pointer = it.the_iterator.element_pointer;
@@ -2742,7 +2739,7 @@ private:
 		
 		if (distance > 0) // ie. += - this needs to be implemented differently to iterator's advance, as it needs to be able to reach rend() ie. beginning - 1
 		{
-			assert (!(element_pointer == (begin_iterator.element_pointer - 1))); // Check that we're not already at rend()
+			assert (!(element_pointer == group_pointer->elements - 1 && group_pointer->previous_group == NULL)); // Check that we're not already at rend()
 			
 			// Special case for initial element pointer and initial group (we don't know how far into the group the element pointer is)
 			if (element_pointer != group_pointer->last_endpoint)
@@ -2840,7 +2837,7 @@ private:
 		}
 		else if (distance < 0) // ie. -=
 		{
-			assert (!(element_pointer == (end_iterator.element_pointer - 1))); // Check that we're not already at rbegin()
+			assert (!(element_pointer == group_pointer->last_endpoint - 1 && group_pointer->next_group == NULL)); // Check that we're not already at rbegin()				
 			advance_implementation(it.the_iterator, -distance);
 		}
 
@@ -2866,7 +2863,7 @@ public:
 	
 
 	// Next implementations:
-	inline iterator next(const iterator &it, typename std::iterator_traits<iterator>::difference_type distance)
+	inline iterator next(const iterator &it, typename iterator::difference_type distance = 1)
 	{
 		iterator return_iterator(it);
 		advance_implementation(return_iterator, distance);
@@ -2874,7 +2871,7 @@ public:
 	}
 	
 
-	inline const_iterator next(const const_iterator &it, typename std::iterator_traits<const_iterator>::difference_type distance)
+	inline const_iterator next(const const_iterator &it, typename const_iterator::difference_type distance = 1)
 	{
 		const_iterator return_iterator(it);
 		advance_implementation(return_iterator, distance);
@@ -2882,7 +2879,7 @@ public:
 	}
 
 
-	inline reverse_iterator next(const reverse_iterator &it, typename std::iterator_traits<reverse_iterator>::difference_type distance)
+	inline reverse_iterator next(const reverse_iterator &it, typename reverse_iterator::difference_type distance = 1)
 	{
 		reverse_iterator return_iterator(it);
 		reverse_advance_implementation(return_iterator, distance);
@@ -2890,7 +2887,7 @@ public:
 	}
 	
 
-	inline const_reverse_iterator next(const const_reverse_iterator &it, typename std::iterator_traits<const_reverse_iterator>::difference_type distance)
+	inline const_reverse_iterator next(const const_reverse_iterator &it, typename const_reverse_iterator::difference_type distance = 1)
 	{
 		const_reverse_iterator return_iterator(it);
 		reverse_advance_implementation(return_iterator, distance);
@@ -2901,7 +2898,7 @@ public:
 	
 
 	// Prev implementations:
-	inline iterator prev(const iterator &it, typename std::iterator_traits<iterator>::difference_type distance)
+	inline iterator prev(const iterator &it, typename iterator::difference_type distance = 1)
 	{
 		iterator return_iterator(it);
 		advance_implementation(return_iterator, -distance);
@@ -2909,7 +2906,7 @@ public:
 	}
 	
 
-	inline const_iterator prev(const const_iterator &it, typename std::iterator_traits<const_iterator>::difference_type distance)
+	inline const_iterator prev(const const_iterator &it, typename const_iterator::difference_type distance = 1)
 	{
 		const_iterator return_iterator(it);
 		advance_implementation(return_iterator, -distance);
@@ -2917,7 +2914,7 @@ public:
 	}
 
 
-	inline reverse_iterator prev(const reverse_iterator &it, typename std::iterator_traits<reverse_iterator>::difference_type distance)
+	inline reverse_iterator prev(const reverse_iterator &it, typename reverse_iterator::difference_type distance = 1)
 	{
 		reverse_iterator return_iterator(it);
 		reverse_advance_implementation(return_iterator, -distance);
@@ -2925,7 +2922,7 @@ public:
 	}
 	
 
-	inline const_reverse_iterator prev(const const_reverse_iterator &it, typename std::iterator_traits<const_reverse_iterator>::difference_type distance)
+	inline const_reverse_iterator prev(const const_reverse_iterator &it, typename const_reverse_iterator::difference_type distance = 1)
 	{
 		const_reverse_iterator return_iterator(it);
 		reverse_advance_implementation(return_iterator, -distance);
@@ -2937,8 +2934,8 @@ public:
 private:
 
 	// distance implementation:
-	template <class colony_allocator_type, bool is_const>
-	typename std::iterator_traits<colony_iterator<colony_allocator_type, is_const> >::difference_type distance_implementation(const colony_iterator<colony_allocator_type, is_const> &first, const colony_iterator<colony_allocator_type, is_const> &last) PLF_COLONY_NOEXCEPT
+	template <class iterator_type>
+	typename iterator_type::difference_type distance_implementation(const iterator_type &first, const iterator_type &last) PLF_COLONY_NOEXCEPT
 	{
 		// Code logic:
 		// If iterators are the same, return 0
@@ -2955,12 +2952,13 @@ private:
 		}
 
 
-		colony_iterator<colony_allocator_type, is_const> iterator1 = first, iterator2 = last;
-		typedef typename std::iterator_traits<colony_iterator<colony_allocator_type, is_const> >::difference_type diff_type;
+		typedef typename iterator_type::difference_type diff_type;
 		diff_type distance = 0;
 		bool swap = false;
 
-		if (first > last) // Less common case
+		iterator_type iterator1 = first, iterator2 = last;
+
+		if (iterator1 > iterator2) // Less common case
 		{
 			iterator1 = last;
 			iterator2 = first;
@@ -3036,37 +3034,35 @@ private:
 
 public:
 
-	inline typename std::iterator_traits<iterator>::difference_type distance(const iterator &first, const iterator &last) PLF_COLONY_NOEXCEPT
+	inline typename iterator::difference_type distance(const iterator &first, const iterator &last) PLF_COLONY_NOEXCEPT
 	{
 		return distance_implementation(first, last);
 	}
 
 
-	inline typename std::iterator_traits<const_iterator>::difference_type distance(const const_iterator &first, const const_iterator &last) PLF_COLONY_NOEXCEPT
+	inline typename const_iterator::difference_type distance(const const_iterator &first, const const_iterator &last) PLF_COLONY_NOEXCEPT
 	{
 		return distance_implementation(first, last);
 	}
 
 
 	template <class reverse_iterator_type>
-	inline typename std::iterator_traits<reverse_iterator_type>::difference_type reverse_distance_implementation(const reverse_iterator_type &first, const reverse_iterator_type &last) PLF_COLONY_NOEXCEPT
+	inline typename reverse_iterator_type::difference_type reverse_distance_implementation(const reverse_iterator_type &first, const reverse_iterator_type &last) PLF_COLONY_NOEXCEPT
 	{
 		return distance_implementation(first.the_iterator, last.the_iterator);
 	}
 
 
-	inline typename std::iterator_traits<reverse_iterator>::difference_type distance(const reverse_iterator &first, const reverse_iterator &last) PLF_COLONY_NOEXCEPT
+	inline typename reverse_iterator::difference_type distance(const reverse_iterator &first, const reverse_iterator &last) PLF_COLONY_NOEXCEPT
 	{
 		return reverse_distance_implementation(first, last);
 	}
 
 
-	inline typename std::iterator_traits<const_reverse_iterator>::difference_type distance(const const_reverse_iterator &first, const const_reverse_iterator &last) PLF_COLONY_NOEXCEPT
+	inline typename const_reverse_iterator::difference_type distance(const const_reverse_iterator &first, const const_reverse_iterator &last) PLF_COLONY_NOEXCEPT
 	{
 		return reverse_distance_implementation(first, last);
 	}
-
-
 
 };	// colony
 
