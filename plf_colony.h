@@ -305,7 +305,7 @@ public:
 
 		#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 			// Move assignment
-			inline colony_iterator & operator = (const colony_iterator &&source) PLF_COLONY_NOEXCEPT // Move is a copy in this scenario
+			inline colony_iterator & operator = (colony_iterator &&source) PLF_COLONY_NOEXCEPT // Move is a copy in this scenario
 			{
 				assert (&source != this);
 
@@ -491,7 +491,6 @@ public:
 
 		colony_iterator() PLF_COLONY_NOEXCEPT: group_pointer(NULL), element_pointer(NULL), skipfield_pointer(NULL) {}
 
-		~colony_iterator() PLF_COLONY_NOEXCEPT {}
 
 
 		inline colony_iterator (const colony_iterator &source) PLF_COLONY_NOEXCEPT:
@@ -505,7 +504,7 @@ public:
 
 		#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 			// move constructor
-			inline colony_iterator(const colony_iterator &&source) PLF_COLONY_NOEXCEPT:
+			inline colony_iterator(colony_iterator &&source) PLF_COLONY_NOEXCEPT:
 				group_pointer(std::move(source.group_pointer)),
 				element_pointer(std::move(source.element_pointer)),
 				skipfield_pointer(std::move(source.skipfield_pointer))
@@ -547,7 +546,7 @@ public:
 
 		#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 			// move assignment
-			inline colony_reverse_iterator& operator = (const colony_reverse_iterator &&source) PLF_COLONY_NOEXCEPT 
+			inline colony_reverse_iterator& operator = (colony_reverse_iterator &&source) PLF_COLONY_NOEXCEPT 
 			{
 				the_iterator = std::move(source.the_iterator);
 				return *this;
@@ -721,13 +720,6 @@ public:
 
 
 
-		colony_reverse_iterator() PLF_COLONY_NOEXCEPT {}
-
-
-		~colony_reverse_iterator() PLF_COLONY_NOEXCEPT {}
-
-
-
 		colony_reverse_iterator (const colony_reverse_iterator &source) PLF_COLONY_NOEXCEPT: 
 			the_iterator(source.the_iterator)
 		{}
@@ -742,11 +734,11 @@ public:
 
 		#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 			// move constructors
-			colony_reverse_iterator (const colony_reverse_iterator &&source) PLF_COLONY_NOEXCEPT:
+			colony_reverse_iterator (colony_reverse_iterator &&source) PLF_COLONY_NOEXCEPT:
 				the_iterator(std::move(source.the_iterator))
 			{}
 
-			colony_reverse_iterator (const typename colony::iterator &&source) PLF_COLONY_NOEXCEPT:
+			colony_reverse_iterator (typename colony::iterator &&source) PLF_COLONY_NOEXCEPT:
 				the_iterator(std::move(source))
 			{}
 		#endif
@@ -793,6 +785,7 @@ public:
 		min_elements_per_group(8),
 		group_allocator_pair(USHRT_MAX)
 	{}
+	
 
 
 	// Copy constructor:
