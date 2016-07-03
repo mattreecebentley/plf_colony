@@ -2114,18 +2114,25 @@ public:
 			}
 			default: // this is a non-first group and the final group in the chain: the group is completely empty of elements, so delete the group, then set previous group's next-group to NULL:
 			{
-				the_group.previous_group->next_group = NULL;
-				end_iterator.group_pointer = the_group.previous_group; // end iterator only needs to be changed if this is the final group in the chain
-				end_iterator.element_pointer = reinterpret_cast<element_pointer_type>(end_iterator.group_pointer->skipfield);
-				end_iterator.skipfield_pointer = reinterpret_cast<ushort_pointer_type>(end_iterator.element_pointer) + end_iterator.group_pointer->size;
-
 				if (!erased_locations.empty())
 				{
-					consolidate_erased_locations(the_group_pointer);
-				}
+					the_group.previous_group->next_group = NULL;
+					end_iterator.group_pointer = the_group.previous_group; // end iterator only needs to be changed if this is the final group in the chain
+					end_iterator.element_pointer = reinterpret_cast<element_pointer_type>(end_iterator.group_pointer->skipfield);
+					end_iterator.skipfield_pointer = reinterpret_cast<ushort_pointer_type>(end_iterator.element_pointer) + end_iterator.group_pointer->size;
 
-				PLF_COLONY_DESTROY(group_allocator_type, group_allocator_pair, the_group_pointer);
-				PLF_COLONY_DEALLOCATE(group_allocator_type, group_allocator_pair, the_group_pointer, 1);
+					consolidate_erased_locations(the_group_pointer);
+
+					PLF_COLONY_DESTROY(group_allocator_type, group_allocator_pair, the_group_pointer);
+					PLF_COLONY_DEALLOCATE(group_allocator_type, group_allocator_pair, the_group_pointer, 1);
+				}
+				else // This scenario prevents end groups being created and erased repeatedly when new elements are introduced then erased repeatedly
+				{ // In this case because there are no erased locations in the erased_locations stack, only the first element of this group can have been used so far. This simplifies the required steps
+					the_group.number_of_elements = 0;
+					end_iterator.element_pointer = the_group.last_endpoint = the_group.elements;
+					end_iterator.skipfield_pointer = the_group.skipfield;
+					*end_iterator.skipfield_pointer = 0;
+				}
 
 				return end_iterator;
 			}
