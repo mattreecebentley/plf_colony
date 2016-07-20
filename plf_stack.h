@@ -189,7 +189,7 @@ private:
 	}						group_allocator_pair;
 
 
-	template <class colony_type, class colony_allocator> friend class colony;
+	template <class colony_type, class colony_allocator, typename colony_skipfield_type> friend class colony;
 
 
 
@@ -678,6 +678,22 @@ public:
 	inline size_type max_size() const PLF_STACK_NOEXCEPT
 	{
 		return element_allocator_type::max_size();
+	}
+
+
+
+	unsigned int approximate_memory_use() const PLF_STACK_NOEXCEPT
+	{
+		unsigned int memory_use = 0;
+		group_pointer_type temp_group = first_group;
+
+		while (temp_group != NULL)
+		{
+			memory_use += static_cast<unsigned int>((((temp_group->end + 1) - temp_group->elements) * sizeof(value_type)) + sizeof(group));
+			temp_group = temp_group->next_group;
+		}
+
+		return memory_use;
 	}
 
 
