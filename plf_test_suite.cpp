@@ -93,7 +93,7 @@ void failpass(const char *test_type, bool condition)
 }
 
 
-int main(int argc, char **argv)
+int main()
 {
 	freopen("error.log","w", stderr);
 
