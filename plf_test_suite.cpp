@@ -614,7 +614,21 @@ int main()
 		
 		failpass("Fill insertion test", i_colony2.size() == 500503);
 	}
-
+	{
+		title1("In-place construction");
+		struct test_struct {
+		private:
+			test_struct(const test_struct& t) = delete;
+			test_struct& operator = (const test_struct&) = delete;
+		public:
+			int test;
+			test_struct(int n) : test(n) {}
+			~test_struct();
+		};
+		colony<test_struct> i_colony;
+		i_colony.emplace(1);
+		failpass("In-place construction test", i_colony.size() == 1);
+	}
 	{
 		title1("Stack Tests");
 
