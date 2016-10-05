@@ -616,23 +616,6 @@ private:
 
 
 
-		// Remove trailing stack groups (not removed in general 'pop' usage for performance reasons)
-		void trim_trailing_groups() PLF_COLONY_NOEXCEPT
-		{
-			stack_group_pointer_type temp_group = current_group->next_group, temp_group2;
-			current_group->next_group = NULL; // Set to NULL regardless of whether it is already NULL (avoids branching). Cuts off rest of groups from this group.
-
-			while (temp_group != NULL)
-			{
-				temp_group2 = temp_group;
-				temp_group = temp_group->next_group;
-				PLF_COLONY_DESTROY(stack_group_allocator_type, group_allocator_pair, temp_group2);
-				PLF_COLONY_DEALLOCATE(stack_group_allocator_type, group_allocator_pair, temp_group2, 1);
-			}
-		}
-
-
-
 		void swap(reduced_stack &source) PLF_COLONY_NOEXCEPT
 		{
 			#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
@@ -2094,7 +2077,18 @@ private:
 		typename reduced_stack::ebco_pair &stack_group_allocator = erased_locations.group_allocator_pair;
 
 		// Remove trailing stack groups (not removed in general 'pop' usage in plf::stack for performance reasons)
-		erased_locations.trim_trailing_groups();
+		{
+			stack_group_pointer temp_group = erased_locations.current_group->next_group, temp_group2;
+			erased_locations.current_group->next_group = NULL; // Set to NULL regardless of whether it is already NULL (avoids branching). Cuts off rest of groups from this group.
+
+			while (temp_group != NULL)
+			{
+				temp_group2 = temp_group;
+				temp_group = temp_group->next_group;
+				PLF_COLONY_DESTROY(stack_group_allocator_type, stack_group_allocator, temp_group2);
+				PLF_COLONY_DEALLOCATE(stack_group_allocator_type, stack_group_allocator, temp_group2, 1);
+			}
+		}
 
 		// Determine what the size of erased_locations should be, based on the size of the first colony group:
 		const size_type temp_size = (min_elements_per_group < 8) ? min_elements_per_group : (min_elements_per_group >> 7) + 8;
