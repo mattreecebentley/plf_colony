@@ -370,15 +370,23 @@ int main()
 			failpass("Erase randomly till-empty test", i_colony.size() == 0);
 
 
-			i_colony.clear();
-			i_colony.change_minimum_group_size(10000);
+			i_colony.reinitialize(10000, 20000);
 			
-			for (unsigned int temp = 0; temp != 30000; ++temp)
+			for (unsigned int temp = 0; temp != 29999; ++temp)
 			{
 				i_colony.insert(1);
 			}
 			
-			failpass("Size after reinitialize + insert test", i_colony.size() == 30000);
+			failpass("Size after reinitialize + insert test", i_colony.size() == 29999);
+
+
+			#ifdef PLF_VARIADICS_SUPPORT
+				i_colony.emplace(1);
+				failpass("Emplace test", i_colony.size() == 30000);
+			#else
+				i_colony.insert(1);
+			#endif
+			
 
 			unsigned short count2 = 0;
 			
