@@ -581,7 +581,7 @@ int main()
 			{
 				for (unsigned int loop = 0; loop != 10; ++loop)
 				{
-					if ((xor_rand() % 7) == 0)
+					if ((xor_rand() & 7) == 0)
 					{
 						i_colony.insert(1);
 						++count;
@@ -590,7 +590,7 @@ int main()
 
 				for (colony<int>::iterator the_iterator = i_colony.begin(); the_iterator != i_colony.end();)
 				{
-					if ((xor_rand() % 7) == 0)
+					if ((xor_rand() & 7) == 0)
 					{
 						the_iterator = i_colony.erase(the_iterator);
 						--count;
