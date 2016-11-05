@@ -2,7 +2,6 @@
 #include <iostream>
 #include <algorithm>
 #include <cstdio> // log redirection
-#include <cstdlib> // rand
 #include <ctime> // timer
 #include "plf_colony.h"
 
@@ -93,15 +92,31 @@ void failpass(const char *test_type, bool condition)
 }
 
 
+// MATH FUNCTIONS:
+
+// Fast xorshift+128 random number generator function (original: https://codingforspeed.com/using-faster-psudo-random-generator-xorshift/)
+unsigned int xor_rand()
+{
+	static unsigned int x = 123456789;
+	static unsigned int y = 362436069;
+	static unsigned int z = 521288629;
+	static unsigned int w = 88675123;
+	
+	const unsigned int t = x ^ (x << 11); 
+
+	// Rotate the static values (w rotation in return statement):
+	x = y;
+	y = z;
+	z = w;
+   
+	return w = w ^ (w >> 19) ^ (t ^ (t >> 8));
+}
+
+
+
 int main()
 {
 	freopen("error.log","w", stderr);
-
-	{
-		time_t timer;
-		time(&timer);
-		srand((unsigned int)timer); // Note: using random numbers to avoid CPU prediction
-	}
 
 	using namespace std;
 	using namespace plf;
@@ -321,7 +336,7 @@ int main()
 		
 		{
 			title1("Insert and Erase tests");
-
+			
 			colony<int> i_colony;
 
 			for (unsigned int temp = 0; temp != 500000; ++temp)
@@ -354,13 +369,12 @@ int main()
 			{
 				for (colony<int>::iterator the_iterator = i_colony.begin(); the_iterator != i_colony.end();)
 				{
-					if (rand() % 5 == 0)
+					if ((xor_rand() & 7) == 0)
 					{
 						the_iterator = i_colony.erase(the_iterator);
 					}
 					else
 					{
-						colony<int>::iterator temp_iterator = the_iterator;
 						++the_iterator;
 					}
 				}
@@ -370,23 +384,15 @@ int main()
 			failpass("Erase randomly till-empty test", i_colony.size() == 0);
 
 
-			i_colony.reinitialize(10000, 20000);
+			i_colony.clear();
+			i_colony.change_minimum_group_size(10000);
 			
-			for (unsigned int temp = 0; temp != 29999; ++temp)
+			for (unsigned int temp = 0; temp != 30000; ++temp)
 			{
 				i_colony.insert(1);
 			}
 			
-			failpass("Size after reinitialize + insert test", i_colony.size() == 29999);
-
-
-			#ifdef PLF_VARIADICS_SUPPORT
-				i_colony.emplace(1);
-				failpass("Emplace test", i_colony.size() == 30000);
-			#else
-				i_colony.insert(1);
-			#endif
-			
+			failpass("Size after reinitialize + insert test", i_colony.size() == 30000);
 
 			unsigned short count2 = 0;
 			
@@ -394,14 +400,13 @@ int main()
 			{
 				for (colony<int>::iterator the_iterator = i_colony.begin(); the_iterator != i_colony.end();)
 				{
-					if (rand() % 5 == 0)
+					if ((xor_rand() & 7) == 0)
 					{
 						the_iterator = i_colony.erase(the_iterator);
 						++count2;
 					}
 					else
 					{
-						colony<int>::iterator temp_iterator = the_iterator;
 						++the_iterator;
 					}
 				}
@@ -443,7 +448,7 @@ int main()
 			{
 				for (colony<int>::iterator the_iterator = i_colony.begin(); the_iterator != i_colony.end();)
 				{
-					if (rand() % 3 == 0)
+					if ((xor_rand() & 3) == 0)
 					{
 						++the_iterator;
 						i_colony.insert(1);
@@ -491,7 +496,7 @@ int main()
 
 			failpass("Large multi-decrement iterator test", i_colony.size() == 250000);
 
-
+			
 			for (unsigned int temp = 0; temp != 250000; ++temp)
 			{
 				i_colony.insert(10);
@@ -541,7 +546,7 @@ int main()
 			colony<int>::iterator temp_iterator = i_colony.begin();
 			i_colony.advance(temp_iterator, 500);
 			
-			unsigned int index = static_cast<unsigned int>(i_colony.get_index_from_iterator(temp_iterator));
+			unsigned int index = i_colony.get_index_from_iterator(temp_iterator);
 
 			failpass("Iterator-to-index test", index == 500);
 
@@ -576,7 +581,7 @@ int main()
 			{
 				for (unsigned int loop = 0; loop != 10; ++loop)
 				{
-					if (rand() % 5 == 0)
+					if ((xor_rand() % 7) == 0)
 					{
 						i_colony.insert(1);
 						++count;
@@ -585,7 +590,7 @@ int main()
 
 				for (colony<int>::iterator the_iterator = i_colony.begin(); the_iterator != i_colony.end();)
 				{
-					if (rand() % 5 == 0)
+					if ((xor_rand() % 7) == 0)
 					{
 						the_iterator = i_colony.erase(the_iterator);
 						--count;
@@ -626,7 +631,7 @@ int main()
 			std::vector<int> some_ints(500, 2);
 			
 			i_colony2.insert(some_ints.begin(), some_ints.end());
-
+			
 			failpass("Fill insertion test", i_colony2.size() == 500503);
 		}
 	}

@@ -21,11 +21,12 @@
 #define PLF_COLONY_H
 
 
-
 // Compiler-specific defines used by colony:
 
 #if defined(_MSC_VER)
 	#define PLF_COLONY_FORCE_INLINE __forceinline
+	#define PLF_COLONY_LIKELY(x) x
+	#define PLF_COLONY_UNLIKELY(x) x
 
 	#if _MSC_VER < 1600
 		#define PLF_COLONY_NOEXCEPT throw()
@@ -55,10 +56,18 @@
 #elif defined(__cplusplus) && __cplusplus >= 201103L
 	#define PLF_COLONY_FORCE_INLINE // note: GCC creates faster code without forcing inline
 
+	#if defined(__GNUC__) || defined(__clang__) // If compiler is GCC/G++ or clang
+		#define PLF_COLONY_LIKELY(x) __builtin_expect(!!(x), 1)
+		#define PLF_COLONY_UNLIKELY(x) __builtin_expect(!!(x), 0)
+	#else
+		#define PLF_COLONY_LIKELY(x) x
+		#define PLF_COLONY_UNLIKELY(x) x
+	#endif
+
 	#if defined(__GNUC__) && defined(__GNUC_MINOR__) && !defined(__clang__) // If compiler is GCC/G++
 		#if __GNUC__ == 4 && __GNUC_MINOR__ >= 4 // 4.3 and below do not support initializer lists
 			#define PLF_COLONY_INITIALIZER_LIST_SUPPORT
-		#elif __GNUC__ >= 5 // GCC v4.9 and below do not support std::is_trivially_copyable or initializer lists
+		#elif __GNUC__ >= 5 // GCC v4.9 and below do not support std::is_trivially_copyable
 			#define PLF_COLONY_INITIALIZER_LIST_SUPPORT
 			#define PLF_COLONY_TYPE_TRAITS_SUPPORT
 		#endif
@@ -515,7 +524,7 @@ private:
 			}
 
 			// ie. if total_number_of_elements != 0 after decrement, or we were not already at the start of a non-first group
-			if (total_number_of_elements-- == 1 || top_element != start_element) // If total_number_of_elements is now 0 after decrement, this essentially moves top_element back to it's initial position (start_element - 1). But otherwise, this is just a regular pop
+			if (PLF_COLONY_LIKELY(total_number_of_elements-- == 1 || top_element != start_element)) // If total_number_of_elements is now 0 after decrement, this essentially moves top_element back to it's initial position (start_element - 1). But otherwise, this is just a regular pop
 			{
 				--top_element;
 			}
@@ -765,7 +774,7 @@ public:
 			element_pointer += 1 + *skipfield_pointer;
 			skipfield_pointer += *skipfield_pointer;
 
-			if (element_pointer == group_pointer->last_endpoint && group_pointer->next_group != NULL) // ie. beyond end of available data
+			if (PLF_COLONY_UNLIKELY(element_pointer == group_pointer->last_endpoint && group_pointer->next_group != NULL)) // ie. beyond end of available data
 			{
 				group_pointer = group_pointer->next_group;
 				element_pointer = group_pointer->elements + *(group_pointer->skipfield);
@@ -789,7 +798,7 @@ public:
 	private:
 		inline PLF_COLONY_FORCE_INLINE void check_for_end_of_group_and_progress() // used by erase
 		{
-			if (element_pointer == group_pointer->last_endpoint && group_pointer->next_group != NULL) // ie. beyond end of available data
+			if (element_pointer == group_pointer->last_endpoint && group_pointer->next_group != NULL)
 			{
 				group_pointer = group_pointer->next_group;
 				element_pointer = group_pointer->elements + *(group_pointer->skipfield);
@@ -806,13 +815,13 @@ public:
 			assert(group_pointer != NULL);
 			assert(!(element_pointer == group_pointer->elements && group_pointer->previous_group == NULL)); // Assert that we are not already at begin() - this is not required to be tested in the code below as we don't need a special condition to progress to begin(), like we do with end() in operator ++
 
-			if (element_pointer != group_pointer->elements) // ie. not already at beginning of group
+			if (PLF_COLONY_LIKELY(element_pointer != group_pointer->elements)) // ie. not already at beginning of group
 			{
 				--skipfield_pointer;
 				element_pointer -= 1 + *skipfield_pointer;
 				skipfield_pointer -= *skipfield_pointer;
 
-				if (element_pointer != group_pointer->elements - 1) // ie. iterator was not already at beginning of colony (with some previous consecutive deleted elements), and skipfield does not takes us into the previous group)
+				if (PLF_COLONY_LIKELY(element_pointer != group_pointer->elements - 1)) // ie. iterator was not already at beginning of colony (with some previous consecutive deleted elements), and skipfield does not takes us into the previous group)
 				{
 					return *this;
 				}
@@ -1020,13 +1029,13 @@ public:
 			assert(group_pointer != NULL);
 			assert(!(element_pointer == group_pointer->elements - 1 && group_pointer->previous_group == NULL)); // Assert that we are not already at rend()
 
-			if (element_pointer != group_pointer->elements) // ie. not already at beginning of group
+			if (PLF_COLONY_LIKELY(element_pointer != group_pointer->elements)) // ie. not already at beginning of group
 			{
 				--skipfield_pointer;
 				element_pointer -= 1 + *skipfield_pointer;
 				skipfield_pointer -= *skipfield_pointer;
 
-				if (!(element_pointer == group_pointer->elements - 1 && group_pointer->previous_group == NULL)) // ie. iterator is not == rend()
+				if (PLF_COLONY_LIKELY(!(element_pointer == group_pointer->elements - 1 && group_pointer->previous_group == NULL))) // ie. iterator is not == rend()
 				{
 					return *this;
 				}
@@ -1290,10 +1299,7 @@ public:
 	 	assert(std::numeric_limits<skipfield_type>::is_integer & !std::numeric_limits<skipfield_type>::is_signed);
 		assert((min_allocation_amount > 2) & (min_allocation_amount <= group_allocator_pair.max_elements_per_group));
 
-		if (fill_number != 0)
-		{
-			insert(fill_number, element);
-		}
+		insert(fill_number, element);
 	}
 
 
@@ -1439,7 +1445,7 @@ private:
 				element_pointer += 1 + *skipfield_pointer;
 				skipfield_pointer += *skipfield_pointer;
 
-				if (element_pointer == end_pointer) // ie. beyond end of available data
+				if (PLF_COLONY_UNLIKELY(element_pointer == end_pointer)) // ie. beyond end of available data
 				{
 					previous_group = first_group;
 					first_group = first_group->next_group;
@@ -2654,8 +2660,7 @@ public:
 	inline size_type capacity() const PLF_COLONY_NOEXCEPT
 	{
 		return (first_group == NULL) ? 0 : (total_number_of_elements + static_cast<size_type>(erased_locations.total_number_of_elements) +
-			static_cast<size_type>(reinterpret_cast<element_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer)) +
-			((end_iterator.group_pointer->next_group == NULL) ? 0 : end_iterator.group_pointer->next_group->size); // Empty last group clause
+			static_cast<size_type>(reinterpret_cast<element_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer));
 	}
 
 
@@ -2964,7 +2969,7 @@ public:
 				{
 					const distance_type distance_from_end = static_cast<const distance_type>(current_group.last_endpoint - element_pointer);
 
-					if(distance < distance_from_end)
+					if (distance < distance_from_end)
 					{
 						element_pointer += distance;
 						skipfield_pointer += distance;
@@ -2996,7 +3001,7 @@ public:
 						element_pointer += 1 + *skipfield_pointer;
 						skipfield_pointer += *skipfield_pointer;
 
-						if (element_pointer != group_pointer->last_endpoint)
+						if (PLF_COLONY_UNLIKELY(element_pointer != group_pointer->last_endpoint))
 						{
 							if (distance-- == 1)
 							{
@@ -3005,7 +3010,7 @@ public:
 
 							continue; // only loop point
 						}
-						else if(group_pointer->next_group != NULL) // ie. beyond end of available data
+						else if (group_pointer->next_group != NULL) // ie. beyond end of available data
 						{
 							group_pointer = group_pointer->next_group;
 							element_pointer = group_pointer->elements + *(group_pointer->skipfield);
@@ -3085,7 +3090,7 @@ public:
 				{
 					const distance_type distance_from_beginning = static_cast<const distance_type>(element_pointer - current_group.elements);
 
-					if(distance <= distance_from_beginning) // can ignore skipfield field as no elements have been erased in this group
+					if (distance <= distance_from_beginning) // can ignore skipfield field as no elements have been erased in this group
 					{
 						element_pointer -= distance;
 						skipfield_pointer -= distance;
@@ -3109,13 +3114,13 @@ public:
 				{
 					while(distance-- != 1)
 					{
-						if (element_pointer != current_group.elements) // ie. not already at beginning of group
+						if (PLF_COLONY_LIKELY(element_pointer != current_group.elements)) // ie. not already at beginning of group
 						{
 							--skipfield_pointer;
 							element_pointer -= 1 + *skipfield_pointer;
 							skipfield_pointer -= *skipfield_pointer;
 
-							if (element_pointer != current_group.elements - 1) // ie. iterator was not already at beginning of colony, and skipfield does not takes us into the previous group)
+							if (PLF_COLONY_LIKELY(element_pointer != current_group.elements - 1)) // ie. iterator was not already at beginning of colony, and skipfield does not takes us into the previous group)
 							{
 								continue;
 							}
@@ -3209,11 +3214,16 @@ public:
 				{
 					distance_type distance_from_beginning = static_cast<distance_type>(element_pointer - current_group.elements);
 
-					if(distance <= distance_from_beginning || current_group.previous_group == NULL) // can ignore skipfield field as no elements have been erased in this group
+					if (distance <= distance_from_beginning) // can ignore skipfield field as no elements have been erased in this group
 					{
 						element_pointer -= distance;
 						skipfield_pointer -= distance;
 						return;
+					}
+					else if (current_group.previous_group == NULL)
+					{
+						element_pointer = current_group.elements;
+						skipfield_pointer = current_group.skipfield;
 					}
 					else
 					{ // No need to process erasure field in prev group either - this will be handled by the next section of code, if necessary
@@ -3370,15 +3380,14 @@ public:
 		typedef colony_iterator<colony_element_allocator_type, is_const> iterator_type;
 		typedef typename iterator_type::difference_type diff_type;
 		diff_type distance = 0;
-		bool swap = false;
-
 		iterator_type iterator1 = first, iterator2 = last;
+		bool swap = first > last;
 
-		if (iterator1 > iterator2) // Less common case
+
+		if (swap) // Less common case
 		{
 			iterator1 = last;
 			iterator2 = first;
-			swap = true;
 		}
 
 
@@ -3465,32 +3474,20 @@ public:
 	iterator get_iterator_from_pointer(const element_pointer_type the_pointer) const PLF_COLONY_NOEXCEPT
 	{
 		assert(!empty());
-
-		iterator the_iterator = end_iterator;
 		group_pointer_type the_group = end_iterator.group_pointer; // Start with last group first, as will be the largest group
 
 		while (the_group != NULL)
 		{
 			if (the_pointer >= the_group->elements && the_pointer < reinterpret_cast<element_pointer_type>(the_group->skipfield))
 			{
-				the_iterator.group_pointer = the_group;
-				the_iterator.element_pointer = the_pointer;
-				the_iterator.skipfield_pointer = the_group->skipfield + (the_pointer - the_group->elements);
-
-				if (*the_iterator.skipfield_pointer != 0) // ie. element has been erased
-				{
-					return end_iterator;
-				}
-				else
-				{
-					break;
-				}
+				const skipfield_pointer_type the_skipfield = the_group->skipfield + (the_pointer - the_group->elements);
+				return (*the_skipfield == 0) ? iterator(the_group, the_pointer, the_skipfield) : end_iterator;
 			}
 
 			the_group = the_group->previous_group;
 		}
 
-		return the_iterator;
+		return end_iterator;
 	}
 
 
@@ -3499,35 +3496,7 @@ public:
 	size_type get_index_from_iterator(const colony_iterator<colony_element_allocator_type, is_const> &the_iterator) const
 	{
 		assert(!empty());
-
-		size_type index = 0;
-		group_pointer_type group_pointer = the_iterator.group_pointer;
-
-
-		if (group_pointer->last_endpoint - group_pointer->elements == group_pointer->number_of_elements)
-		{
-			index += the_iterator.element_pointer - group_pointer->elements; // If no erased elements in group exist, do straight pointer arithmetic to get distance to start for first element
-		}
-		else // Otherwise do manual -- loop
-		{
-			const skipfield_pointer_type begin = group_pointer->skipfield;
-			skipfield_pointer_type skipfield_pointer = the_iterator.skipfield_pointer;
-
-			while(skipfield_pointer > begin)
-			{
-				--skipfield_pointer;
-				skipfield_pointer -= *skipfield_pointer;
-			}
-		}
-
-		// For all prior groups, add group sizes till group == NULL
-		while (group_pointer->previous_group != NULL)
-		{
-			group_pointer = group_pointer->previous_group;
-			index += group_pointer->number_of_elements;
-		}
-
-		return index;
+		return distance(begin_iterator, the_iterator);
 	}
 
 
@@ -3535,7 +3504,8 @@ public:
 	template <class colony_element_allocator_type, bool is_const>
 	inline size_type get_index_from_reverse_iterator(const colony_reverse_iterator<colony_element_allocator_type, is_const> &rev_iterator) const
 	{
-		return get_index_from_iterator(rev_iterator.the_iterator);
+		assert(!empty());
+		return distance(begin_iterator, rev_iterator.the_iterator);
 	}
 
 
@@ -3559,6 +3529,8 @@ public:
 
 
 #undef PLF_COLONY_FORCE_INLINE
+#undef PLF_COLONY_LIKELY
+#undef PLF_COLONY_UNLIKELY
 
 #undef PLF_COLONY_INITIALIZER_LIST_SUPPORT
 #undef PLF_COLONY_TYPE_TRAITS_SUPPORT
