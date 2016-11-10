@@ -546,7 +546,7 @@ int main()
 			colony<int>::iterator temp_iterator = i_colony.begin();
 			i_colony.advance(temp_iterator, 500);
 			
-			unsigned int index = i_colony.get_index_from_iterator(temp_iterator);
+			unsigned int index = static_cast<unsigned int>(i_colony.get_index_from_iterator(temp_iterator));
 
 			failpass("Iterator-to-index test", index == 500);
 
