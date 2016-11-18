@@ -532,7 +532,7 @@ int main()
 			}
 			
 			begin_iterator = i_colony.begin();
-			i_colony.advance(begin_iterator, 300000);
+			i_colony.advance(begin_iterator, 300001);
 			
 			
 			for (colony<int>::iterator the_iterator = begin_iterator; the_iterator != i_colony.end();)
@@ -540,15 +540,21 @@ int main()
 				the_iterator = i_colony.erase(the_iterator);
 			}
 			
-			failpass("Non-beginning increment + erase test", i_colony.size() == 300000);
-			
+			failpass("Non-beginning increment + erase test", i_colony.size() == 300001);
 
 			colony<int>::iterator temp_iterator = i_colony.begin();
+			i_colony.advance(temp_iterator, 2); // Advance test 1
+
+			unsigned int index = static_cast<unsigned int>(i_colony.get_index_from_iterator(temp_iterator));
+			failpass("Advance + iterator-to-index test", index == 2);
+
+			i_colony.erase(temp_iterator);
+			temp_iterator = i_colony.begin(); // Check edge-case with advance when erasures present in initial group
 			i_colony.advance(temp_iterator, 500);
 			
 			unsigned int index = static_cast<unsigned int>(i_colony.get_index_from_iterator(temp_iterator));
 
-			failpass("Iterator-to-index test", index == 500);
+			failpass("Advance + iterator-to-index test", index == 500);
 
 			colony<int>::iterator temp2 = i_colony.get_iterator_from_pointer(&(*temp_iterator));
 			

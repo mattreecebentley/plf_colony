@@ -284,7 +284,6 @@ private:
 		{}
 
 
-
 		reduced_stack(const reduced_stack &source):
 			element_pointer_allocator_type(source),
 			current_group(NULL),
@@ -1229,8 +1228,9 @@ public:
 		element_allocator_type(alloc),
 		first_group(NULL),
 		total_number_of_elements(0),
-		min_elements_per_group(8),
-		group_allocator_pair(std::numeric_limits<skipfield_type>::max())
+		min_elements_per_group((sizeof(element_type) * 8 > (sizeof(*this) + sizeof(group)) * 2) ? 8 : (((sizeof(*this) + sizeof(group)) * 2) / sizeof(element_type)) + 1),
+		group_allocator_pair(std::numeric_limits<skipfield_type>::max()),
+		erased_locations((min_elements_per_group >> 7) + 8)
 	{
 	 	assert(std::numeric_limits<skipfield_type>::is_integer & !std::numeric_limits<skipfield_type>::is_signed); // skipfield type must be of unsigned integer type (uchar, ushort, uint etc)
 	}
@@ -1275,13 +1275,13 @@ public:
 
 	// Fill constructor:
 
-	colony(const size_type fill_number, const element_type &element, const skipfield_type min_allocation_amount = 8, const skipfield_type max_allocation_amount = std::numeric_limits<skipfield_type>::max(), const element_allocator_type &alloc = element_allocator_type()):
+	colony(const size_type fill_number, const element_type &element, const skipfield_type min_allocation_amount = 0, const skipfield_type max_allocation_amount = std::numeric_limits<skipfield_type>::max(), const element_allocator_type &alloc = element_allocator_type()):
 		element_allocator_type(alloc),
 		first_group(NULL),
 		total_number_of_elements(0),
-		min_elements_per_group(min_allocation_amount),
+		min_elements_per_group((min_allocation_amount != 0) ? min_allocation_amount : (fill_number > std::numeric_limits<skipfield_type>::max()) ? std::numeric_limits<skipfield_type>::max() : static_cast<skipfield_type>(fill_number)),
 		group_allocator_pair(max_allocation_amount),
-		erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
+		erased_locations((min_elements_per_group < 8) ? min_elements_per_group : (min_elements_per_group >> 7) + 8)
 	{
 	 	assert(std::numeric_limits<skipfield_type>::is_integer & !std::numeric_limits<skipfield_type>::is_signed);
 		assert((min_allocation_amount > 2) & (min_allocation_amount <= group_allocator_pair.max_elements_per_group));
@@ -1317,9 +1317,10 @@ public:
 			element_allocator_type(alloc),
 			first_group(NULL),
 			total_number_of_elements(0),
-			min_elements_per_group(min_allocation_amount),
+			min_elements_per_group((element_list.size() < min_allocation_amount) ? min_allocation_amount :
+				(element_list.size() > std::numeric_limits<skipfield_type>::max()) ? std::numeric_limits<skipfield_type>::max() : static_cast<skipfield_type>(element_list.size())),
 			group_allocator_pair(max_allocation_amount),
-			erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
+			erased_locations((min_elements_per_group < 8) ? min_elements_per_group : (min_elements_per_group >> 7) + 8)
 		{
 		 	assert(std::numeric_limits<skipfield_type>::is_integer & !std::numeric_limits<skipfield_type>::is_signed);
 			assert((min_allocation_amount > 2) & (min_allocation_amount <= group_allocator_pair.max_elements_per_group));
@@ -2164,7 +2165,7 @@ private:
 			}
 		}
 
-		// Determine what the size of erased_locations should be, based on the size of the first colony group:
+		// Determine what the size of the first new group in erased_locations should be, based on the size of the first colony group:
 		const size_type temp_size = (min_elements_per_group < 8) ? min_elements_per_group : (min_elements_per_group >> 7) + 8;
 
 		// Note: All groups from here onwards refer to erased_location's stack groups, not colony groups, unless stated otherwise
@@ -2918,7 +2919,7 @@ public:
 			assert (!(element_pointer == group_pointer->last_endpoint && group_pointer->next_group == NULL)); // Check that we're not already at end()
 
 			// Special case for initial element pointer and initial group (we don't know how far into the group the element pointer is)
-			if (element_pointer != group_pointer->elements)
+			if (element_pointer != group_pointer->elements + *(group_pointer->skipfield)) // ie. != first non-erased element in group
 			{
 				if (group_pointer->number_of_elements == static_cast<skipfield_type>(group_pointer->last_endpoint - group_pointer->elements)) // ie. if there are no erasures in the group (using endpoint - elements_start to determine number of elements in group just in case this is the last group of the colony, in which case group->last_endpoint != group->elements + group->size)
 				{
@@ -3014,11 +3015,11 @@ public:
 			{
 				skipfield_pointer = group_pointer->skipfield + *(group_pointer->skipfield);
 
-				while(--distance != 0)
+				do
 				{
 					++skipfield_pointer;
 					skipfield_pointer += *skipfield_pointer;
-				}
+				} while(--distance != 0);
 				
 				element_pointer = group_pointer->elements + (skipfield_pointer - group_pointer->skipfield);
 				return;
@@ -3033,7 +3034,7 @@ public:
 			distance = -distance;
 
 			// Special case for initial element pointer and initial group (we don't know how far into the group the element pointer is)
-			if (element_pointer != group_pointer->last_endpoint)
+			if (element_pointer != group_pointer->last_endpoint) // ie. != end()
 			{
 				if (group_pointer->number_of_elements == static_cast<const skipfield_type>(group_pointer->last_endpoint - group_pointer->elements)) // ie. no prior erasures have occurred in this group
 				{
@@ -3063,7 +3064,7 @@ public:
 						--skipfield_pointer;
 						skipfield_pointer -= *skipfield_pointer;
 
-						if (distance-- == 1)
+						if (--distance == 0)
 						{
 							element_pointer = group_pointer->elements + (skipfield_pointer - group_pointer->skipfield);
 							return;
@@ -3085,7 +3086,7 @@ public:
 			// Intermediary groups:
 			while(static_cast<distance_type>(group_pointer->number_of_elements) <= distance)
 			{
-				if (group_pointer->previous_group == NULL) // either we've reached begin() or gone beyond it, so bound to begin()
+				if (group_pointer->previous_group == NULL || static_cast<distance_type>(group_pointer->number_of_elements) == distance) // either we've reached begin() or gone beyond it, so bound to begin()
 				{
 					element_pointer = group_pointer->elements + *(group_pointer->skipfield);
 					skipfield_pointer = group_pointer->skipfield + *(group_pointer->skipfield); 
@@ -3142,7 +3143,7 @@ public:
 			assert (!(element_pointer == group_pointer->elements - 1 && group_pointer->previous_group == NULL)); // Check that we're not already at rend()
 
 			// Special case for initial element pointer and initial group (we don't know how far into the group the element pointer is)
-			if (element_pointer != group_pointer->last_endpoint)
+			if (element_pointer != group_pointer->last_endpoint) // ie. != rbegin()
 			{
 				if (group_pointer->number_of_elements == static_cast<const skipfield_type>(group_pointer->last_endpoint - group_pointer->elements))
 				{
@@ -3172,7 +3173,7 @@ public:
 						--skipfield_pointer;
 						skipfield_pointer -= *skipfield_pointer;
 
-						if (distance-- == 1)
+						if (--distance == 0)
 						{
 							element_pointer = group_pointer->elements + (skipfield_pointer - group_pointer->skipfield);
 							return;
@@ -3194,7 +3195,7 @@ public:
 			// Intermediary groups:
 			while(group_pointer->number_of_elements <= distance)
 			{
-				if (group_pointer->previous_group == NULL) // bound to rend()
+				if (group_pointer->previous_group == NULL || static_cast<distance_type>(group_pointer->number_of_elements) == distance) // bound to rend()
 				{
 					element_pointer = group_pointer->elements - 1;
 					skipfield_pointer = group_pointer->skipfield - 1;
@@ -3227,11 +3228,11 @@ public:
 				return;
 			}
 		}
-		else if (distance < 0) // ie. -=
+		else if (distance < 0)
 		{
 			assert (!((element_pointer == (group_pointer->last_endpoint - 1) - *(group_pointer->skipfield + (group_pointer->last_endpoint - group_pointer->elements) - 1)) && group_pointer->next_group == NULL)); // Check that we're not already at rbegin()
 
-			if (element_pointer != group_pointer->elements)
+			if (element_pointer != group_pointer->elements + *(group_pointer->skipfield)) // ie. != first non-erased element in group
 			{
 				if (group_pointer->number_of_elements == static_cast<skipfield_type>(group_pointer->last_endpoint - group_pointer->elements)) // ie. if there are no erasures in the group (using endpoint - elements_start to determine number of elements in group just in case this is the last group of the colony, in which case group->last_endpoint != group->elements + group->size)
 				{
@@ -3331,11 +3332,11 @@ public:
 			{
 				skipfield_pointer = group_pointer->skipfield + *(group_pointer->skipfield);
 
-				while(--distance != 0)
+				do
 				{
 					++skipfield_pointer;
 					skipfield_pointer += *skipfield_pointer;
-				}
+				} while(--distance != 0);
 				
 				element_pointer = group_pointer->elements + (skipfield_pointer - group_pointer->skipfield);
 				return;
