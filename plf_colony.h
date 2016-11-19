@@ -1279,7 +1279,8 @@ public:
 		element_allocator_type(alloc),
 		first_group(NULL),
 		total_number_of_elements(0),
-		min_elements_per_group((min_allocation_amount != 0) ? min_allocation_amount : (fill_number > std::numeric_limits<skipfield_type>::max()) ? std::numeric_limits<skipfield_type>::max() : static_cast<skipfield_type>(fill_number)),
+		min_elements_per_group((min_allocation_amount != 0) ? min_allocation_amount : 
+			(fill_number > max_allocation_amount) ? max_allocation_amount : static_cast<skipfield_type>(fill_number)),
 		group_allocator_pair(max_allocation_amount),
 		erased_locations((min_elements_per_group < 8) ? min_elements_per_group : (min_elements_per_group >> 7) + 8)
 	{
@@ -1303,7 +1304,7 @@ public:
 		erased_locations((min_allocation_amount < 8) ? min_allocation_amount : (min_allocation_amount >> 7) + 8)
 	{
 	 	assert(std::numeric_limits<skipfield_type>::is_integer & !std::numeric_limits<skipfield_type>::is_signed);
-		assert((min_allocation_amount > 2) & (min_allocation_amount <= group_allocator_pair.max_elements_per_group));
+		assert((min_elements_per_group > 2) & (min_elements_per_group <= group_allocator_pair.max_elements_per_group));
 
 		insert<iterator_type>(first, last);
 	}
@@ -1313,17 +1314,18 @@ public:
 	// Initializer-list constructor:
 
 	#ifdef PLF_COLONY_INITIALIZER_LIST_SUPPORT
-		colony(const std::initializer_list<element_type> &element_list, const skipfield_type min_allocation_amount = 8, const skipfield_type max_allocation_amount = std::numeric_limits<skipfield_type>::max(), const element_allocator_type &alloc = element_allocator_type()):
+		colony(const std::initializer_list<element_type> &element_list, const skipfield_type min_allocation_amount = 0, const skipfield_type max_allocation_amount = std::numeric_limits<skipfield_type>::max(), const element_allocator_type &alloc = element_allocator_type()):
 			element_allocator_type(alloc),
 			first_group(NULL),
 			total_number_of_elements(0),
-			min_elements_per_group((element_list.size() < min_allocation_amount) ? min_allocation_amount :
-				(element_list.size() > std::numeric_limits<skipfield_type>::max()) ? std::numeric_limits<skipfield_type>::max() : static_cast<skipfield_type>(element_list.size())),
+			min_elements_per_group((min_allocation_amount != 0) ? min_allocation_amount : 
+				(element_list.size() < 8) ? 8 :
+				(element_list.size() > max_allocation_amount) ? max_allocation_amount : static_cast<skipfield_type>(element_list.size())),
 			group_allocator_pair(max_allocation_amount),
 			erased_locations((min_elements_per_group < 8) ? min_elements_per_group : (min_elements_per_group >> 7) + 8)
 		{
 		 	assert(std::numeric_limits<skipfield_type>::is_integer & !std::numeric_limits<skipfield_type>::is_signed);
-			assert((min_allocation_amount > 2) & (min_allocation_amount <= group_allocator_pair.max_elements_per_group));
+			assert((min_elements_per_group > 2) & (min_elements_per_group <= group_allocator_pair.max_elements_per_group));
 
 			insert(element_list);
 		}
