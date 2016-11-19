@@ -1284,7 +1284,7 @@ public:
 		erased_locations((min_elements_per_group < 8) ? min_elements_per_group : (min_elements_per_group >> 7) + 8)
 	{
 	 	assert(std::numeric_limits<skipfield_type>::is_integer & !std::numeric_limits<skipfield_type>::is_signed);
-		assert((min_allocation_amount > 2) & (min_allocation_amount <= group_allocator_pair.max_elements_per_group));
+		assert((min_elements_per_group > 2) & (min_elements_per_group <= group_allocator_pair.max_elements_per_group));
 
 		insert(fill_number, element);
 	}
@@ -3059,7 +3059,7 @@ public:
 				}
 				else
 				{
-					const skipfield_type beginning_point = group_pointer->skipfield + *(group_pointer->skipfield);
+					const skipfield_pointer_type beginning_point = group_pointer->skipfield + *(group_pointer->skipfield);
 					
 					while(skipfield_pointer != beginning_point)
 					{
@@ -3174,7 +3174,7 @@ public:
 			}
 			else
 			{
-				const skipfield_type beginning_point = group_pointer->skipfield + *(group_pointer->skipfield);
+				const skipfield_pointer_type beginning_point = group_pointer->skipfield + *(group_pointer->skipfield);
 				
 				while(skipfield_pointer != beginning_point)
 				{

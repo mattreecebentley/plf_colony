@@ -552,7 +552,7 @@ int main()
 			temp_iterator = i_colony.begin(); // Check edge-case with advance when erasures present in initial group
 			i_colony.advance(temp_iterator, 500);
 			
-			unsigned int index = static_cast<unsigned int>(i_colony.get_index_from_iterator(temp_iterator));
+			index = static_cast<unsigned int>(i_colony.get_index_from_iterator(temp_iterator));
 
 			failpass("Advance + iterator-to-index test", index == 500);
 
