@@ -2,7 +2,6 @@
 #include <iostream>
 #include <algorithm>
 #include <cstdio> // log redirection
-#include <ctime> // timer
 #include "plf_colony.h"
 
 

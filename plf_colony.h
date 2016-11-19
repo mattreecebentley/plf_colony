@@ -3515,6 +3515,7 @@ public:
 	iterator get_iterator_from_pointer(const element_pointer_type the_pointer) const PLF_COLONY_NOEXCEPT
 	{
 		assert(!empty());
+		
 		group_pointer_type the_group = end_iterator.group_pointer; // Start with last group first, as will be the largest group
 
 		while (the_group != NULL)
@@ -3537,9 +3538,9 @@ public:
 	size_type get_index_from_iterator(const colony_iterator<colony_element_allocator_type, is_const> &the_iterator) const
 	{
 		assert(!empty());
-
+		
+		// This is essentially, a simplified version of distance() optimized for counting from begin()
 		size_type index = 0;
-
 		group_pointer_type group_pointer = first_group;
 
 		// For all prior groups, add group sizes
