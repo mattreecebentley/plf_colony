@@ -2983,7 +2983,7 @@ public:
 			}
 
 
-			// Intermediary groups:
+			// Intermediary groups - at the start of this code block and the subsequent block, the position of the iterator is assumed to be the first non-erased element in the current group:
 			while (static_cast<distance_type>(group_pointer->number_of_elements) <= distance)
 			{
 				if (group_pointer->next_group == NULL) // either we've reached end() or gone beyond it, so bound to end()
@@ -3087,7 +3087,7 @@ public:
 			}
 
 
-			// Intermediary groups:
+			// Intermediary groups - at the start of this code block and the subsequent block, the position of the iterator is assumed to be either the first non-erased element in the next group over, or end():
 			while(static_cast<distance_type>(group_pointer->number_of_elements) < distance)
 			{
 				if (group_pointer->previous_group == NULL) // we've gone beyond begin(), so bound to it
@@ -3201,7 +3201,7 @@ public:
 			group_pointer = group_pointer->previous_group;
 
 
-			// Intermediary groups:
+			// Intermediary groups - at the start of this code block and the subsequent block, the position of the iterator is assumed to be the first non-erased element in the next group:
 			while(static_cast<distance_type>(group_pointer->number_of_elements) < distance)
 			{
 				if (group_pointer->previous_group == NULL) // bound to rend()
@@ -3312,7 +3312,7 @@ public:
 			}
 
 
-			// Intermediary groups:
+			// Intermediary groups - at the start of this code block and the subsequent block, the position of the iterator is assumed to be the first non-erased element in the current group:
 			while(static_cast<distance_type>(group_pointer->number_of_elements) <= distance)
 			{
 				if (group_pointer->next_group == NULL) // bound to rbegin()
