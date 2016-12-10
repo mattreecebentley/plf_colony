@@ -790,7 +790,7 @@ int main()
 				{
 					it2 = it1 = i_colony.begin();
 
-					size = i_colony.size();
+					size = static_cast<unsigned int>(i_colony.size());
 					range1 = xor_rand() % size;
 					range2 = range1 + 1 + (xor_rand() % (size - range1));
 					i_colony.advance(it1, range1);
