@@ -91,6 +91,23 @@ void failpass(const char *test_type, bool condition)
 }
 
 
+struct perfect_forwarding_test
+{
+	const bool success;
+
+	perfect_forwarding_test(int&& perfect1, int& perfect2)
+		: success(true)
+	{
+		perfect2 = 1;
+	}
+
+	template <typename T, typename U>
+	perfect_forwarding_test(T&& imperfect1, U&& imperfect2)
+		: success(false)
+	{}
+};
+
+
 // MATH FUNCTIONS:
 
 // Fast xorshift+128 random number generator function (original: https://codingforspeed.com/using-faster-psudo-random-generator-xorshift/)
@@ -187,11 +204,20 @@ int main()
 			#endif
 			
 			
-			colony<int *> p_colony2 = p_colony;
+			colony<int *> p_colony2;
+			p_colony2 = p_colony;
 			colony<int *> p_colony3(p_colony);
+			colony<int *> p_colony4(p_colony2, p_colony2.get_allocator());
+			
+			colony<int *>::iterator it = p_colony.begin();
+			colony<int *>::const_iterator cit(it);
+			colony<int *>::iterator it2(cit);
+			
 			
 			failpass("Copy test", p_colony2.size() == 400);
 			failpass("Copy construct test", p_colony3.size() == 400);
+			failpass("Allocator-extended copy construct test", p_colony4.size() == 400);
+		
 
 			failpass("Equality operator test", p_colony == p_colony2);
 			failpass("Equality operator test 2", p_colony2 == p_colony3);
@@ -315,6 +341,11 @@ int main()
 			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
 				p_colony2 = std::move(p_colony);
 				failpass("Move test", p_colony2.size() == 400);
+
+				colony<int *> p_colony5(p_colony2);
+				colony<int *> p_colony6(std::move(p_colony5), p_colony2.get_allocator());
+				
+				failpass("Allocator-extended move construct test", p_colony6.size() == 400);
 			#else
 				p_colony2 = p_colony;
 			#endif
@@ -328,6 +359,11 @@ int main()
 			p_colony2.swap(p_colony3);
 
 			failpass("Swap test", p_colony2.size() == p_colony3.size() - 1);
+
+			swap(p_colony2, p_colony3);
+
+			failpass("Swap test 2", p_colony3.size() == p_colony2.size() - 1);
+
 			failpass("max_size() test", p_colony2.max_size() > p_colony2.size());
 			
 		}
@@ -857,6 +893,23 @@ int main()
 			
 			failpass("Fill insertion test", i_colony2.size() == 500503);
 		}
+
+
+		#ifdef PLF_VARIADICS_SUPPORT
+		{
+			title2("Perfect Forwarding tests");
+
+			colony<perfect_forwarding_test> pf_colony;
+
+			int lvalue = 0;
+			int &lvalueref = lvalue;
+
+			pf_colony.emplace(7, lvalueref);
+
+			failpass("Perfect forwarding test", (*pf_colony.begin()).success);
+			failpass("Perfect forwarding test 2", lvalueref == 1);
+		}
+		#endif
 	}
 
 	title1("Test Suite PASS - Press ENTER to Exit");
