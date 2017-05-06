@@ -91,21 +91,23 @@ void failpass(const char *test_type, bool condition)
 }
 
 
-struct perfect_forwarding_test
-{
-	const bool success;
-
-	perfect_forwarding_test(int&& perfect1, int& perfect2)
-		: success(true)
+#ifdef PLF_VARIADICS_SUPPORT
+	struct perfect_forwarding_test
 	{
-		perfect2 = 1;
-	}
+		const bool success;
 
-	template <typename T, typename U>
-	perfect_forwarding_test(T&& imperfect1, U&& imperfect2)
-		: success(false)
-	{}
-};
+		perfect_forwarding_test(int&& perfect1, int& perfect2)
+			: success(true)
+		{
+			perfect2 = 1;
+		}
+
+		template <typename T, typename U>
+		perfect_forwarding_test(T&& imperfect1, U&& imperfect2)
+			: success(false)
+		{}
+	};
+#endif
 
 
 // MATH FUNCTIONS:
@@ -211,7 +213,7 @@ int main()
 			
 			colony<int *>::iterator it = p_colony.begin();
 			colony<int *>::const_iterator cit(it);
-			colony<int *>::iterator it2(cit);
+			//colony<int *>::iterator it2(cit);
 			
 			
 			failpass("Copy test", p_colony2.size() == 400);
