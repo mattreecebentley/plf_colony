@@ -30,6 +30,8 @@
 #include <iostream>
 #include <algorithm> // std::find
 #include <cstdio> // log redirection
+#include <cstdlib> // abort
+
 
 #include "plf_colony.h"
 
@@ -648,7 +650,7 @@ int main()
 				++counter;
 			}
 
-			failpass("Simply range-erase test 1", counter == 700 && i_colony.size() == 700);
+			failpass("Simple range-erase test 1", counter == 700 && i_colony.size() == 700);
 
 		
 			it1 = it2 = i_colony.begin();
@@ -665,7 +667,7 @@ int main()
 				++counter;
 			}
 
-			failpass("Simply range-erase test 2", counter == 600 && i_colony.size() == 600);
+			failpass("Simple range-erase test 2", counter == 600 && i_colony.size() == 600);
 
 			
 
@@ -786,8 +788,6 @@ int main()
 
 			unsigned int size, range1, range2, internal_loop_counter;
 
-			std::cout << "Fuzz-test range-erase randomly until empty: ";
-
 			for (unsigned int loop_counter = 0; loop_counter != 50; ++loop_counter)
 			{
 				i_colony.clear();
@@ -835,10 +835,7 @@ int main()
 				}
 			}
 
-			if (i_colony.size() == 0)
-			{
-				std::cout << "Pass\n";
-			}
+			failpass("Fuzz-test range-erase randomly until empty", i_colony.size() == 0);
 		}
 
 
