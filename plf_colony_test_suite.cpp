@@ -8,14 +8,14 @@
 	#endif
 #elif defined(__cplusplus) && __cplusplus >= 201103L
 	#if defined(__GNUC__) && defined(__GNUC_MINOR__) && !defined(__clang__) // If compiler is GCC/G++
-		#if __GNUC__ == 5 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4) // 4.3 and below do not support initializer lists
+		#if __GNUC__ >= 5 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4) // 4.3 and below do not support initializer lists
 			#define PLF_INITIALIZER_LIST_SUPPORT
 		#endif
 	#elif defined(__GLIBCXX__) // Using another compiler type with libstdc++ - we are assuming full c++11 compliance for compiler - which may not be true
 		#if __GLIBCXX__ >= 20090421 	// libstdc++ 4.3 and below do not support initializer lists
 			#define PLF_INITIALIZER_LIST_SUPPORT
 		#endif
-	#else // Assume initializer support for non-GCC compilers and standard libraries
+	#else // Assume initializer support for non-GCC compilers and standard libraries - may not be accurate
 		#define PLF_INITIALIZER_LIST_SUPPORT
 	#endif
 
@@ -32,12 +32,11 @@
 #include <cstdio> // log redirection
 #include <cstdlib> // abort
 
-
-#include "plf_colony.h"
-
 #ifdef PLF_MOVE_SEMANTICS_SUPPORT
 	#include <utility> // std::move
 #endif
+
+#include "plf_colony.h"
 
 
 
@@ -89,7 +88,6 @@ void failpass(const char *test_type, bool condition)
 #endif
 
 
-// MATH FUNCTIONS:
 
 // Fast xorshift+128 random number generator function (original: https://codingforspeed.com/using-faster-psudo-random-generator-xorshift/)
 unsigned int xor_rand()
@@ -221,11 +219,11 @@ int main()
 			colony<int *>::reverse_iterator r_iterator = p_colony.rbegin();
 			p_colony.advance(r_iterator, 50);
 			
-			failpass("Reverse iterator advance and distance test", p_colony.distance(p_colony.rbegin(), r_iterator) == -50);
+			failpass("Reverse iterator advance and distance test", p_colony.distance(p_colony.rbegin(), r_iterator) == 50);
 
 			colony<int *>::reverse_iterator r_iterator2 = p_colony.next(r_iterator, 2);
 
-			failpass("Reverse iterator next and distance test", p_colony.distance(p_colony.rbegin(), r_iterator2) == -52);
+			failpass("Reverse iterator next and distance test", p_colony.distance(p_colony.rbegin(), r_iterator2) == 52);
 
 			numtotal = 0;
 			total = 0;
