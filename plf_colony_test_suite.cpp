@@ -767,6 +767,14 @@ int main()
 				}
 			}
 			
+			if (i_colony.size() < 400)
+			{
+				for (counter = 0; counter != 400; ++counter)
+				{
+					i_colony.insert(counter);
+				}
+			}
+
 			it1 = i_colony.begin();
 			it2 = i_colony.end();
 			
@@ -780,7 +788,7 @@ int main()
 				++counter;
 			}
 
-			failpass("Range-erase with colony already third-erased, randomizes erasures", counter == 400 && i_colony.size() == 400);
+			failpass("Range-erase with colony already third-erased, randomized erasures", counter == 400 && i_colony.size() == 400);
 
 
 
@@ -892,11 +900,11 @@ int main()
 
 			#ifdef PLF_INITIALIZER_LIST_SUPPORT
 				colony<int> i_colony = {1, 2, 3};
+
+				failpass("Initializer-list constructor test", i_colony.size() == 3);
 			#else
 				colony<int> i_colony(3, 1);
 			#endif
-			
-			failpass("Initializer-list constructor test", i_colony.size() == 3);
 			
 			colony<int> i_colony2(i_colony.begin(), i_colony.end());
 			
