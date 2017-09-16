@@ -120,7 +120,7 @@ int main()
 	unsigned int looper = 0;
 
 
-	while (++looper != 50)
+	while (++looper != 100)
 	{
 		{
 			title1("Colony");
