@@ -1089,7 +1089,7 @@ int main()
 				
 				for (colony<int>::iterator current = colony2.begin(); current != colony2.end();)
 				{
-					if ((xor_rand() & 3) == 0)
+					if ((xor_rand() & 7) == 0)
 					{
 						current = colony2.erase(current);
 					}
@@ -1098,7 +1098,7 @@ int main()
 						++current;
 					}
 				}
-					
+
 				
 				colony1.splice(colony2);
 				
