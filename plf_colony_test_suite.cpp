@@ -8,18 +8,24 @@
 	#endif
 #elif defined(__cplusplus) && __cplusplus >= 201103L
 	#if defined(__GNUC__) && defined(__GNUC_MINOR__) && !defined(__clang__) // If compiler is GCC/G++
+		#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 3) || __GNUC__ > 4 // 4.3 and below do not support initializer lists
+			#define PLF_COLONY_VARIADICS_SUPPORT // Variadics, in this context, means both variadic templates and variadic macros are supported
+		#endif
 		#if __GNUC__ >= 5 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4) // 4.3 and below do not support initializer lists
 			#define PLF_INITIALIZER_LIST_SUPPORT
 		#endif
 	#elif defined(__GLIBCXX__) // Using another compiler type with libstdc++ - we are assuming full c++11 compliance for compiler - which may not be true
+		#if __GLIBCXX__ >= 20080606 	// libstdc++ 4.2 and below do not support variadic templates
+			#define PLF_COLONY_VARIADICS_SUPPORT
+		#endif
 		#if __GLIBCXX__ >= 20090421 	// libstdc++ 4.3 and below do not support initializer lists
 			#define PLF_INITIALIZER_LIST_SUPPORT
 		#endif
-	#else // Assume initializer support for non-GCC compilers and standard libraries - may not be accurate
+	#else // Assume initializer/variadics support for non-GCC compilers and standard libraries - may not be accurate
+		#define PLF_VARIADICS_SUPPORT
 		#define PLF_INITIALIZER_LIST_SUPPORT
 	#endif
 
-	#define PLF_VARIADICS_SUPPORT
 	#define PLF_MOVE_SEMANTICS_SUPPORT
 #endif
 
@@ -43,7 +49,7 @@
 void title1(const char *title_text)
 {
 	std::cout << std::endl << std::endl << std::endl << "*** " << title_text << " ***" << std::endl;
-	std::cout << "===========================================" << std::endl << std::endl << std::endl; 
+	std::cout << "===========================================" << std::endl << std::endl << std::endl;
 }
 
 void title2(const char *title_text)
@@ -51,20 +57,20 @@ void title2(const char *title_text)
 	std::cout << std::endl << std::endl << "--- " << title_text << " ---" << std::endl << std::endl;
 }
 
-	
+
 void failpass(const char *test_type, bool condition)
 {
 	std::cout << test_type << ": ";
-	
-	if (condition) 
-	{ 
+
+	if (condition)
+	{
 		std::cout << "Pass\n";
-	} 
-	else 
+	}
+	else
 	{
 		std::cout << "Fail" << std::endl;
-		std::cin.get(); 
-		abort(); 
+		std::cin.get();
+		abort();
 	}
 }
 
@@ -72,17 +78,17 @@ void failpass(const char *test_type, bool condition)
 #ifdef PLF_VARIADICS_SUPPORT
 	struct perfect_forwarding_test
 	{
-		const bool success;
+		const int success;
 
 		perfect_forwarding_test(int&& /*perfect1*/, int& perfect2)
-			: success(true)
+			: success(1)
 		{
 			perfect2 = 1;
 		}
 
 		template <typename T, typename U>
 		perfect_forwarding_test(T&& /*imperfect1*/, U&& /*imperfect2*/)
-			: success(false)
+			: success(0)
 		{}
 	};
 #endif
@@ -96,14 +102,14 @@ unsigned int xor_rand()
 	static unsigned int y = 362436069;
 	static unsigned int z = 521288629;
 	static unsigned int w = 88675123;
-	
-	const unsigned int t = x ^ (x << 11); 
+
+	const unsigned int t = x ^ (x << 11);
 
 	// Rotate the static values (w rotation in return statement):
 	x = y;
 	y = z;
 	z = w;
-   
+
 	return w = w ^ (w >> 19) ^ (t ^ (t >> 8));
 }
 
@@ -356,7 +362,7 @@ int main()
 				i_colony.insert(temp);
 			}
 			
-			
+
 			failpass("Size after insert test", i_colony.size() == 500000);
 
 
@@ -1252,11 +1258,11 @@ int main()
 				
 				for(int number = 0; number != 100000; ++number)
 				{
-					colony1.insert(number + 150000);
+					colony1.insert(number + 200000);
 				}
 				
 				
-				for(int number = 0; number != 150000; ++number)
+				for(int number = 0; number != 200000; ++number)
 				{
 					colony2.insert(number);
 				}
@@ -1290,9 +1296,9 @@ int main()
 				colony1.erase(--(colony1.end()));
 				colony2.erase(--(colony2.end()));
 
-				colony1.splice(colony2);
+				colony1.splice(colony2); // splice should swap the order at this point due to differences in numbers of unused elements at end of final group in each colony
 				
-				int check_number = -1;
+				int check_number = -1, counter = 0;
 				bool fail = false;
 				
 				for (colony<int>::iterator current = colony1.begin(); current != colony1.end(); ++current)
@@ -1300,9 +1306,11 @@ int main()
 					if (check_number >= *current)
 					{
 						fail = true;
+						break;
 					}
 					
 					check_number = *current;
+					++counter;
 				}
 				
 				failpass("Large unequal size + erase splice test 1", fail == false);
