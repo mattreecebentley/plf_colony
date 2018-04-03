@@ -78,17 +78,17 @@ void failpass(const char *test_type, bool condition)
 #ifdef PLF_VARIADICS_SUPPORT
 	struct perfect_forwarding_test
 	{
-		const int success;
+		const bool success;
 
 		perfect_forwarding_test(int&& /*perfect1*/, int& perfect2)
-			: success(1)
+			: success(true)
 		{
 			perfect2 = 1;
 		}
 
 		template <typename T, typename U>
 		perfect_forwarding_test(T&& /*imperfect1*/, U&& /*imperfect2*/)
-			: success(0)
+			: success(false)
 		{}
 	};
 #endif
@@ -1298,7 +1298,7 @@ int main()
 
 				colony1.splice(colony2); // splice should swap the order at this point due to differences in numbers of unused elements at end of final group in each colony
 				
-				int check_number = -1, counter = 0;
+				int check_number = -1;
 				bool fail = false;
 				
 				for (colony<int>::iterator current = colony1.begin(); current != colony1.end(); ++current)
@@ -1310,7 +1310,6 @@ int main()
 					}
 					
 					check_number = *current;
-					++counter;
 				}
 				
 				failpass("Large unequal size + erase splice test 1", fail == false);
