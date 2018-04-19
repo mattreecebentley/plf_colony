@@ -1058,7 +1058,7 @@ public:
 			group_allocator_pair(source.group_allocator_pair.max_elements_per_group)
 		{
 			source.first_group = NULL;
-			source.total_number_of_elements = 0; // Nullifying the other data members is unnecessary - technically all can be removed except first_group NULL and total_number_of_elements 0, to allow for clean destructor usage
+			source.total_number_of_elements = 0; // Nullifying the other data members is unnecessary - technically all can be removed except first_group NULL and total_number_of_elements 0, to allow for clean destructor and copy-assignment usage
 		}
 
 
@@ -1076,7 +1076,7 @@ public:
 			group_allocator_pair(source.group_allocator_pair.max_elements_per_group)
 		{
 			source.first_group = NULL;
-			source.total_number_of_elements = 0; // Nullifying the other data members is unnecessary - technically all can be removed except first_group NULL and total_number_of_elements 0, to allow for clean destructor usage
+			source.total_number_of_elements = 0;
 		}
 	#endif
 
@@ -1243,7 +1243,7 @@ private:
 		if (total_number_of_elements != 0)
 	#endif
 		{
-			total_number_of_elements = 0;
+			total_number_of_elements = 0; // to avoid double-destruction
 			aligned_pointer_type element_pointer = begin_iterator.element_pointer;
 			skipfield_pointer_type skipfield_pointer = begin_iterator.skipfield_pointer;
 
@@ -1262,7 +1262,7 @@ private:
 				const group_pointer_type next_group = first_group->next_group;
 				PLF_COLONY_DESTROY(group_allocator_type, group_allocator_pair, first_group);
 				PLF_COLONY_DEALLOCATE(group_allocator_type, group_allocator_pair, first_group, 1);
-     			first_group = next_group;
+     			first_group = next_group; // required to be before if statement in order for first_group to be NULL and avoid potential double-destruction in future
 
 				if (next_group == NULL)
 				{
@@ -3767,34 +3767,29 @@ public:
 	{
 		assert(&source != this);
 
-		#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
-			colony temp(std::move(source));
-			source = std::move(*this);
-			*this = std::move(temp);
-		#else
-			const iterator						swap_end_iterator = end_iterator, swap_begin_iterator = begin_iterator;
-			const group_pointer_type		swap_first_group = first_group, swap_groups_with_erasures_list_head = groups_with_erasures_list_head;
-			const size_type					swap_total_number_of_elements = total_number_of_elements, swap_total_capacity = total_capacity;
-			const skipfield_type 			swap_min_elements_per_group = pointer_allocator_pair.min_elements_per_group, swap_max_elements_per_group = group_allocator_pair.max_elements_per_group;
+		// The below is faster than doing a move-swap, by a significant margin, due to fewer function calls:
+		const iterator						swap_end_iterator = end_iterator, swap_begin_iterator = begin_iterator;
+		const group_pointer_type		swap_first_group = first_group, swap_groups_with_erasures_list_head = groups_with_erasures_list_head;
+		const size_type					swap_total_number_of_elements = total_number_of_elements, swap_total_capacity = total_capacity;
+		const skipfield_type 			swap_min_elements_per_group = pointer_allocator_pair.min_elements_per_group, swap_max_elements_per_group = group_allocator_pair.max_elements_per_group;
 
-			end_iterator = source.end_iterator;
-			begin_iterator = source.begin_iterator;
-			first_group = source.first_group;
-			groups_with_erasures_list_head = source.groups_with_erasures_list_head;
-			total_number_of_elements = source.total_number_of_elements;
-			total_capacity = source.total_capacity;
-			pointer_allocator_pair.min_elements_per_group = source.pointer_allocator_pair.min_elements_per_group;
-			group_allocator_pair.max_elements_per_group = source.group_allocator_pair.max_elements_per_group;
+		end_iterator = source.end_iterator;
+		begin_iterator = source.begin_iterator;
+		first_group = source.first_group;
+		groups_with_erasures_list_head = source.groups_with_erasures_list_head;
+		total_number_of_elements = source.total_number_of_elements;
+		total_capacity = source.total_capacity;
+		pointer_allocator_pair.min_elements_per_group = source.pointer_allocator_pair.min_elements_per_group;
+		group_allocator_pair.max_elements_per_group = source.group_allocator_pair.max_elements_per_group;
 
-			source.end_iterator = swap_end_iterator;
-			source.begin_iterator = swap_begin_iterator;
-			source.first_group = swap_first_group;
-			source.groups_with_erasures_list_head = swap_groups_with_erasures_list_head;
-			source.total_number_of_elements = swap_total_number_of_elements;
-			source.total_capacity = swap_total_capacity;
-			source.pointer_allocator_pair.min_elements_per_group = swap_min_elements_per_group;
-			source.group_allocator_pair.max_elements_per_group = swap_max_elements_per_group;
-		#endif
+		source.end_iterator = swap_end_iterator;
+		source.begin_iterator = swap_begin_iterator;
+		source.first_group = swap_first_group;
+		source.groups_with_erasures_list_head = swap_groups_with_erasures_list_head;
+		source.total_number_of_elements = swap_total_number_of_elements;
+		source.total_capacity = swap_total_capacity;
+		source.pointer_allocator_pair.min_elements_per_group = swap_min_elements_per_group;
+		source.group_allocator_pair.max_elements_per_group = swap_max_elements_per_group;
 	}
 
 };	// colony
