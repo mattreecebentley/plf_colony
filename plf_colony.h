@@ -1052,7 +1052,7 @@ private:
 	{
 		#if defined(PLF_COLONY_TYPE_TRAITS_SUPPORT) && !(defined(__GNUC__) && (defined(__haswell__) || defined(__skylake__) || defined(__silvermont__) || defined(__sandybridge__) || defined(__ivybridge__) || defined(__broadwell__)))
 			// this is faster under gcc if CPU is core2 and below, faster on MSVC/clang in-general:
-			if (std::is_trivial<group_pointer_type>::value && std::is_trivial<aligned_pointer_type>::value && std::is_trivial<skipfield_pointer_type>::value && NULL == 0) // if all pointer types are trivial, and NULL is (almost always) zero, we can just nuke it from orbit with memset:
+			if (std::is_trivial<group_pointer_type>::value && std::is_trivial<aligned_pointer_type>::value && std::is_trivial<skipfield_pointer_type>::value && NULL == (void*) 0) // if all pointer types are trivial, and NULL is (almost always) zero, we can just nuke it from orbit with memset:
 			{
 				std::memset(this, 0, offsetof(colony, pointer_allocator_pair));
 			}
