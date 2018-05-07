@@ -104,6 +104,7 @@
 			#define PLF_COLONY_INITIALIZER_LIST_SUPPORT
 		#endif
 		#if __GLIBCXX__ >= 20160111
+			#define PLF_COLONY_NOEXCEPT noexcept
 			#define PLF_COLONY_NOEXCEPT_MOVE_ASSIGNMENT(the_allocator) noexcept(std::allocator_traits<the_allocator>::is_always_equal::value)
 			#define PLF_COLONY_NOEXCEPT_SWAP(the_allocator) noexcept(std::allocator_traits<the_allocator>::propagate_on_container_swap::value)
 		#elif __GLIBCXX__ >= 20120322
