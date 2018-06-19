@@ -909,7 +909,7 @@ public:
 
 
 
-		colony_reverse_iterator (const typename colony::iterator &source) PLF_COLONY_NOEXCEPT:
+		explicit colony_reverse_iterator (const typename colony::iterator &source) PLF_COLONY_NOEXCEPT:
 			it(source)
 		{}
 
