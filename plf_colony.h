@@ -2656,9 +2656,9 @@ public:
 	inline void reinitialize(const skipfield_type min_allocation_amount, const skipfield_type max_allocation_amount) PLF_COLONY_NOEXCEPT
 	{
 		assert((min_allocation_amount > 2) & (min_allocation_amount <= max_allocation_amount));
+		clear();
 		pointer_allocator_pair.min_elements_per_group = min_allocation_amount;
 		group_allocator_pair.max_elements_per_group = max_allocation_amount;
-		clear();
 	}
 
 
