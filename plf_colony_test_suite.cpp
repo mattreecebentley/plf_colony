@@ -120,9 +120,8 @@
 
 #include <functional> // std::greater
 #include <vector> // range-insert testing
-#include <iostream>
 #include <algorithm> // std::find
-#include <cstdio> // log redirection
+#include <cstdio> // log redirection, printf
 #include <cstdlib> // abort
 
 #ifdef PLF_MOVE_SEMANTICS_SUPPORT
@@ -135,28 +134,28 @@
 
 void title1(const char *title_text)
 {
-	std::cout << std::endl << std::endl << std::endl << "*** " << title_text << " ***" << std::endl;
-	std::cout << "===========================================" << std::endl << std::endl << std::endl;
+	printf("\n\n\n*** %s ***\n", title_text);
+	printf("===========================================\n\n\n");
 }
 
 void title2(const char *title_text)
 {
-	std::cout << std::endl << std::endl << "--- " << title_text << " ---" << std::endl << std::endl;
+	printf("\n\n--- %s ---\n\n", title_text);
 }
 
 
 void failpass(const char *test_type, bool condition)
 {
-	std::cout << test_type << ": ";
+	printf("%s: ", test_type);
 
 	if (condition)
 	{
-		std::cout << "Pass\n";
+		printf("Pass\n");
 	}
 	else
 	{
-		std::cout << "Fail" << std::endl;
-		std::cin.get();
+		printf("Fail\n");
+		getchar();
 		abort();
 	}
 }
@@ -218,7 +217,7 @@ unsigned int xor_rand()
 
 int main()
 {
-	freopen("error.log","w", stderr);
+	freopen("error.log","w", stderr); // For catching assertion failure info when run outside of a command line prompt
 
 	using namespace std;
 	using namespace plf;
@@ -932,8 +931,8 @@ int main()
 
 					if (i_colony.size() != counter)
 					{
-						std::cout << "Fail. loop counter: " << loop_counter << ", internal_loop_counter: " << internal_loop_counter << "." << std::endl;
-						std::cin.get(); 
+						printf("Fuzz-test range-erase randomly Fail: loop counter: %u, , internal_loop_counter: %u.\n", loop_counter, internal_loop_counter);
+						getchar(); 
 						abort(); 
 					}
 					
@@ -1122,6 +1121,47 @@ int main()
 		#endif
 
 
+		{
+			title2("Misc function tests");
+			
+			colony<int> colony1;
+			colony1.change_group_sizes(50, 100);
+			
+			colony1.insert(27);
+			
+			failpass("Change_group_sizes min-size test", colony1.capacity() == 50);
+			
+			for (int counter = 0; counter != 100; ++counter)
+			{
+				colony1.insert(counter);
+			}
+			
+			failpass("Change_group_sizes max-size test", colony1.capacity() == 200);
+			
+			colony1.reinitialize(200, 2000);
+			
+			colony1.insert(27);
+			
+			failpass("Reinitialize min-size test", colony1.capacity() == 200);
+			
+			for (int counter = 0; counter != 3300; ++counter)
+			{
+				colony1.insert(counter);
+			}
+
+			failpass("Reinitialize max-size test", colony1.capacity() == 5200);			
+
+			colony1.change_group_sizes(500, 500);
+			
+			failpass("Change_group_sizes resize test", colony1.capacity() == 3500);
+			
+			colony1.change_minimum_group_size(200);
+			colony1.change_maximum_group_size(200);
+			
+			failpass("Change_maximum_group_size resize test", colony1.capacity() == 3400);
+			
+		}
+		
 		{
 			title2("Splice tests");
 			
@@ -1463,7 +1503,7 @@ int main()
 		
 	}
 	title1("Test Suite PASS - Press ENTER to Exit");
-	cin.get();
+	getchar();
 
 	return 0;
 }
