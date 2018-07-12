@@ -3798,10 +3798,17 @@ public:
 				std::memcpy(reinterpret_cast<void *>(this), reinterpret_cast<void *>(&source), sizeof(colony));
 				std::memcpy(reinterpret_cast<void *>(&source), reinterpret_cast<void *>(&temp), sizeof(colony));
 			}
+			#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
+				else if (std::is_move_assignable<group_pointer_type>::value && std::is_move_assignable<aligned_pointer_type>::value && std::is_move_assignable<skipfield_pointer_type>::value && std::is_move_constructible<group_pointer_type>::value && std::is_move_constructible<aligned_pointer_type>::value && std::is_move_constructible<skipfield_pointer_type>::value)
+				{
+					colony temp(std::move(source));
+					source = std::move(*this);
+					*this = std::move(temp);
+				}
+			#endif
 			else
 		#endif
 		{
-			// The below is faster than doing a move-swap, by a significant margin:
 			const iterator						swap_end_iterator = end_iterator, swap_begin_iterator = begin_iterator;
 			const group_pointer_type		swap_first_group = first_group, swap_groups_with_erasures_list_head = groups_with_erasures_list_head;
 			const size_type					swap_total_number_of_elements = total_number_of_elements, swap_total_capacity = total_capacity;
