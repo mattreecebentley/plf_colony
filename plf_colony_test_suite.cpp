@@ -1,3 +1,5 @@
+#define PLF_COLONY_TEST_DEBUG
+
 #if defined(_MSC_VER)
 	#define PLF_FORCE_INLINE __forceinline
 
@@ -711,6 +713,8 @@ int main()
 					}
 				}
 
+				unsigned int internal_loop_counter = 0;
+
 				for (colony<int>::iterator the_iterator = i_colony.begin(); the_iterator != i_colony.end();)
 				{
 					if ((xor_rand() & 7) == 0)
@@ -722,11 +726,14 @@ int main()
 					{
 						++the_iterator;
 					}
+
+					++internal_loop_counter;
 				}
 			}
 
 			failpass("Multiple sequential small insert/erase commands test", count == i_colony.size());
 		}
+
 
 		{
 			title2("Range-erase tests");
@@ -931,7 +938,14 @@ int main()
 
 					if (i_colony.size() != counter)
 					{
-						printf("Fuzz-test range-erase randomly Fail: loop counter: %u, , internal_loop_counter: %u.\n", loop_counter, internal_loop_counter);
+						printf("Fuzz-test range-erase randomly Fail: loop counter: %u, internal_loop_counter: %u.\n", loop_counter, internal_loop_counter);
+						getchar(); 
+						abort(); 
+					}
+					
+					if (i_colony.size() != i_colony.group_size_sum())
+					{
+						printf("Fuzz-test range-erase randomly Fail - group_size_sum failure: loop counter: %u, internal_loop_counter: %u, size: %u, group_size_sum: %u.\n", loop_counter, internal_loop_counter, static_cast<unsigned int>(i_colony.size()), static_cast<unsigned int>(i_colony.group_size_sum()));
 						getchar(); 
 						abort(); 
 					}
@@ -947,12 +961,104 @@ int main()
 			}
 
 			failpass("Fuzz-test range-erase randomly until empty", i_colony.size() == 0);
+
+
+
+			for (unsigned int loop_counter = 0; loop_counter != 50; ++loop_counter)
+			{
+				i_colony.clear();
+				internal_loop_counter = 0;
+				
+				i_colony.insert(10000, 10); // fill-insert
+				
+				while (!i_colony.empty())
+				{
+					it2 = it1 = i_colony.begin();
+
+					size = static_cast<unsigned int>(i_colony.size());
+					range1 = xor_rand() % size;
+					range2 = range1 + 1 + (xor_rand() % (size - range1));
+					i_colony.advance(it1, range1);
+					i_colony.advance(it2, range2);
+
+					i_colony.erase(it1, it2);
+
+					counter = 0;
+
+					for (colony<int>::iterator it = i_colony.begin(); it != i_colony.end(); ++it)
+					{
+						++counter;
+					}
+
+					if (i_colony.size() != i_colony.group_size_sum())
+					{
+						printf("Fuzz-test range-erase + fill-insert randomly Fails during erase - group_size_sum failure: loop counter: %u, internal_loop_counter: %u, size: %u, group_size_sum: %u.\n", loop_counter, internal_loop_counter, static_cast<unsigned int>(i_colony.size()), static_cast<unsigned int>(i_colony.group_size_sum()));
+						getchar(); 
+						abort(); 
+					}
+					
+					if (i_colony.size() != counter)
+					{
+						printf("Fuzz-test range-erase + fill-insert randomly Fails during erase: loop counter: %u, internal_loop_counter: %u.\n", loop_counter, internal_loop_counter);
+						getchar(); 
+						abort(); 
+					}
+					
+					if (i_colony.size() > 100)
+					{ // Test to make sure our stored erased_locations are valid & fill-insert is functioning properly in these scenarios
+						const unsigned int extra_size = xor_rand() % 128; 
+						i_colony.insert(extra_size, 5);
+
+						if (i_colony.size() != i_colony.group_size_sum())
+						{
+							printf("Fuzz-test range-erase + fill-insert randomly Fails during insert - group_size_sum failure: loop counter: %u, internal_loop_counter: %u, size: %u, group_size_sum: %u.\n", loop_counter, internal_loop_counter, static_cast<unsigned int>(i_colony.size()), static_cast<unsigned int>(i_colony.group_size_sum()));
+							getchar(); 
+							abort(); 
+						}
+						
+						if (i_colony.size() != counter + extra_size)
+						{
+							printf("Fuzz-test range-erase + fill-insert randomly Fails during fill-insert: loop counter: %u, internal_loop_counter: %u.\n", loop_counter, internal_loop_counter);
+							getchar(); 
+							abort(); 
+						}
+
+						counter = 0;
+
+						for (colony<int>::iterator it = i_colony.begin(); it != i_colony.end(); ++it)
+						{
+							++counter;
+						}
+
+						if (i_colony.size() != counter)
+						{
+							printf("Fuzz-test range-erase + fill-insert randomly Fails during counter-test fill-insert: loop counter: %u, internal_loop_counter: %u.\n", loop_counter, internal_loop_counter);
+							getchar(); 
+							abort(); 
+						}
+					}
+
+					++internal_loop_counter;
+				}
+			}
+
+			failpass("Fuzz-test range-erase + fill-insert randomly until empty", i_colony.size() == 0);
+
+			i_colony.erase(i_colony.begin(), i_colony.end());
+
+			failpass("Range-erase when colony is empty test (crash test)", i_colony.size() == 0);
+
+			i_colony.insert(10, 1);
+
+			i_colony.erase(i_colony.begin(), i_colony.begin());
+
+			failpass("Range-erase when range is empty test (crash test)", i_colony.size() == 10);
 		}
 
 
 		{
 			title2("Sort tests");
-			
+
 			colony<int> i_colony;
 			
 			i_colony.reserve(50000);
@@ -1346,6 +1452,9 @@ int main()
 			{
 				colony<int> colony1, colony2;
 				
+				colony1.change_group_sizes(200, 200);
+				colony2.change_group_sizes(200, 200);
+				
 				for(int number = 0; number != 100; ++number)
 				{
 					colony1.insert(number + 150);
@@ -1381,6 +1490,9 @@ int main()
 			{
 				colony<int> colony1, colony2;
 				
+				colony1.reinitialize(200, 200);
+				colony2.reinitialize(200, 200);
+
 				for(int number = 0; number != 100; ++number)
 				{
 					colony1.insert(100 - number);
