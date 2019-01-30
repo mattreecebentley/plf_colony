@@ -225,9 +225,7 @@ int main()
 	using namespace plf;
 
 
-	unsigned int looper = 0;
-
-	while (++looper != 100)
+	for (unsigned int looper = 0; looper != 100; ++looper)
 	{
 		{
 			title1("Colony");
@@ -425,6 +423,10 @@ int main()
 			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
 				p_colony2 = std::move(p_colony);
 				failpass("Move test", p_colony2.size() == 400);
+
+				p_colony.insert(&ten);
+
+				failpass("Insert to post-moved-colony test", p_colony.size() == 1);
 
 				colony<int *> p_colony5(p_colony2);
 				colony<int *> p_colony6(std::move(p_colony5), p_colony2.get_allocator());
@@ -1611,7 +1613,7 @@ int main()
 				failpass("Post-splice insert-and-erase randomly till-empty test", colony1.size() == 0);
 			}
 		}
-		
+
 		
 	}
 	title1("Test Suite PASS - Press ENTER to Exit");
