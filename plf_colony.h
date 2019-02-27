@@ -307,7 +307,7 @@ private:
 
 		#ifdef PLF_COLONY_VARIADICS_SUPPORT
 			group(const skipfield_type elements_per_group, group_pointer_type const previous = NULL):
-				last_endpoint(reinterpret_cast<aligned_pointer_type>(PLF_COLONY_ALLOCATE_INITIALIZATION(uchar_allocator_type, ((elements_per_group * (sizeof(aligned_element_type))) + ((elements_per_group + 1) * sizeof(skipfield_type))), (previous == NULL) ? 0 : previous->elements))), /* allocating to here purely because it is first in the struct sequence - actual pointer is elements, last_endpoint is only initialised to element's base value initially, then incremented by one below */
+				last_endpoint(reinterpret_cast<aligned_pointer_type>(PLF_COLONY_ALLOCATE_INITIALIZATION(uchar_allocator_type, ((elements_per_group * (sizeof(aligned_element_type))) + ((elements_per_group + 1u) * sizeof(skipfield_type))), (previous == NULL) ? 0 : previous->elements))), /* allocating to here purely because it is first in the struct sequence - actual pointer is elements, last_endpoint is only initialised to element's base value initially, then incremented by one below */
 				next_group(NULL),
 				elements(last_endpoint++),
 				skipfield(reinterpret_cast<skipfield_pointer_type>(elements + elements_per_group)),
@@ -319,7 +319,7 @@ private:
 				group_number((previous == NULL) ? 0 : previous->group_number + 1)
 			{
 				// Static casts to unsigned int from short not necessary as C++ automatically promotes lesser types for arithmetic purposes.
-				std::memset(&*skipfield, 0, sizeof(skipfield_type) * (elements_per_group + 1)); // &* to avoid problems with non-trivial pointers
+				std::memset(&*skipfield, 0, sizeof(skipfield_type) * (elements_per_group + 1u)); // &* to avoid problems with non-trivial pointers
 			}
 
 		#else
@@ -357,7 +357,7 @@ private:
 		~group() PLF_COLONY_NOEXCEPT
 		{
 			// Null check not necessary (for copied group as above) as delete will also perform a null check.
-			PLF_COLONY_DEALLOCATE(uchar_allocator_type, (*this), reinterpret_cast<uchar_pointer_type>(elements), (capacity * sizeof(aligned_element_type)) + ((capacity + 1) * sizeof(skipfield_type)));
+			PLF_COLONY_DEALLOCATE(uchar_allocator_type, (*this), reinterpret_cast<uchar_pointer_type>(elements), (capacity * sizeof(aligned_element_type)) + ((capacity + 1u) * sizeof(skipfield_type)));
 		}
 	};
 
@@ -1423,7 +1423,7 @@ public:
 					PLF_COLONY_CONSTRUCT(element_allocator_type, (*this), reinterpret_cast<pointer>(new_location.element_pointer), element);
 
 					// Update skipblock:
-					const skipfield_type new_value = *(new_location.skipfield_pointer) - 1;
+					const skipfield_type new_value = static_cast<skipfield_type>(*(new_location.skipfield_pointer) - 1u);
 
 					if (new_value != 0) // ie. skipfield was not 1, ie. a single-node skipblock, with no additional nodes to update
 					{
