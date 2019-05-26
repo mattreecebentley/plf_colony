@@ -219,7 +219,8 @@ unsigned int xor_rand()
 
 int main()
 {
-	freopen("error.log","w", stderr); // For catching assertion failure info when run outside of a command line prompt
+	if (!freopen("error.log","w", stderr)) // For catching assertion failure info when run outside of a command line prompt
+		return fprintf(stderr, "Can't redirect to error.log: %s\n", strerror(errno)), 1;
 
 	using namespace std;
 	using namespace plf;
