@@ -211,20 +211,20 @@ void failpass(const char *test_type, bool condition)
 
 
 
-int global_counter = 0;
+	int global_counter = 0;
 
-struct small_struct_non_trivial
-{
-	double *empty_field_1;
-	double unused_number;
-	unsigned int empty_field2;
-	double *empty_field_3;
-	int number;
-	unsigned int empty_field4;
+	struct small_struct_non_trivial
+	{
+		double *empty_field_1;
+		double unused_number;
+		unsigned int empty_field2;
+		double *empty_field_3;
+		int number;
+		unsigned int empty_field4;
 
-	small_struct_non_trivial(const int num) PLF_NOEXCEPT: number(num) {};
-	~small_struct_non_trivial() { ++global_counter; };
-};
+		small_struct_non_trivial(const int num) PLF_NOEXCEPT: number(num) {};
+		~small_struct_non_trivial() { ++global_counter; };
+	};
 
 
 
@@ -940,8 +940,8 @@ int main()
 					size = static_cast<unsigned int>(i_colony.size());
 					range1 = xor_rand() % size;
 					range2 = range1 + 1 + (xor_rand() % (size - range1));
-					i_colony.advance(it1, range1);
-					i_colony.advance(it2, range2);
+					i_colony.advance(it1, static_cast<int>(range1));
+					i_colony.advance(it2, static_cast<int>(range2));
 
 					i_colony.erase(it1, it2);
 
@@ -994,8 +994,8 @@ int main()
 					size = static_cast<unsigned int>(i_colony.size());
 					range1 = xor_rand() % size;
 					range2 = range1 + 1 + (xor_rand() % (size - range1));
-					i_colony.advance(it1, range1);
-					i_colony.advance(it2, range2);
+					i_colony.advance(it1, static_cast<int>(range1));
+					i_colony.advance(it2, static_cast<int>(range2));
 
 					i_colony.erase(it1, it2);
 
@@ -1176,8 +1176,8 @@ int main()
 					size = static_cast<unsigned int>(ss_nt.size());
 					range1 = xor_rand() % size;
 					range2 = range1 + 1 + (xor_rand() % (size - range1));
-					ss_nt.advance(ss_it1, range1);
-					ss_nt.advance(ss_it2, range2);
+					ss_nt.advance(ss_it1, static_cast<int>(range1));
+					ss_nt.advance(ss_it2, static_cast<int>(range2));
 
 					ss_nt.erase(ss_it1, ss_it2);
 
@@ -1788,7 +1788,7 @@ int main()
 			}
 		}
 
-
+		
 	}
 	title1("Test Suite PASS - Press ENTER to Exit");
 	getchar();
