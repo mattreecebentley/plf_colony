@@ -211,20 +211,20 @@ void failpass(const char *test_type, bool condition)
 
 
 
-	int global_counter = 0;
+int global_counter = 0;
 
-	struct small_struct_non_trivial
-	{
-		double *empty_field_1;
-		double unused_number;
-		unsigned int empty_field2;
-		double *empty_field_3;
-		int number;
-		unsigned int empty_field4;
+struct small_struct_non_trivial
+{
+	double *empty_field_1;
+	double unused_number;
+	unsigned int empty_field2;
+	double *empty_field_3;
+	int number;
+	unsigned int empty_field4;
 
-		small_struct_non_trivial(const int num) PLF_NOEXCEPT: number(num) {};
-		~small_struct_non_trivial() { ++global_counter; };
-	};
+	small_struct_non_trivial(const int num) PLF_NOEXCEPT: number(num) {};
+	~small_struct_non_trivial() { ++global_counter; };
+};
 
 
 
@@ -320,6 +320,9 @@ int main()
 				failpass("Iterator/Const iterator equality operator test", prev_iterator == prev_iterator2);
 			#endif
 			
+			prev_iterator = p_colony.begin();
+			p_colony.advance(prev_iterator, 5);
+			failpass("Iterator/Const iterator equality operator test 2", prev_iterator == next_iterator);
 			
 			colony<int *> p_colony2;
 			p_colony2 = p_colony;
