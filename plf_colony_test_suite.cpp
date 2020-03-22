@@ -39,6 +39,10 @@
 		#define PLF_INITIALIZER_LIST_SUPPORT
 	#endif
 
+	#if defined(_MSVC_LANG) && (_MSVC_LANG > 201703L)
+		#define PLF_SPACESHIP
+	#endif
+
 
 #elif defined(__cplusplus) && __cplusplus >= 201103L
 	#define PLF_FORCE_INLINE // note: GCC creates faster code without forcing inline
