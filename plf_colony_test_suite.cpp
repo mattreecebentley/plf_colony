@@ -39,10 +39,6 @@
 		#define PLF_INITIALIZER_LIST_SUPPORT
 	#endif
 
-	#if defined(_MSVC_LANG) && (_MSVC_LANG > 201703L)
-		#define PLF_SPACESHIP
-	#endif
-
 
 #elif defined(__cplusplus) && __cplusplus >= 201103L
 	#define PLF_FORCE_INLINE // note: GCC creates faster code without forcing inline
@@ -598,7 +594,7 @@ int main()
 
 
 			i_colony.clear();
-			i_colony.change_minimum_group_size(10000);
+			i_colony.set_minimum_block_capacity(10000);
 
 			i_colony.insert(30000, 1); // fill-insert 30000 elements
 
@@ -766,7 +762,7 @@ int main()
 
 
 			i_colony.clear();
-			i_colony.change_minimum_group_size(3);
+			i_colony.set_minimum_block_capacity(3);
 
 			const unsigned int temp_capacity2 = static_cast<unsigned int>(i_colony.capacity());
 			i_colony.reserve(1000);
@@ -1405,12 +1401,7 @@ int main()
 
 			failpass("Reserve + fill + fill + reserve + fill test", i_colony2.size() == 12060 && total == 12060);
 
-			#ifdef PLF_INITIALIZER_LIST_SUPPORT
-				i_colony = {5, 4, 3, 2, 1};
-				
-				failpass("Initializer-list operator = test", i_colony.size() == 5 && *i_colony.begin() == 5);
-			#endif
-			
+
 		}
 
 
@@ -1471,7 +1462,7 @@ int main()
 			title2("Misc function tests");
 
 			colony<int> colony1;
-			colony1.change_group_sizes(50, 100);
+			colony1.set_block_capacity_limits(50, 100);
 
 			colony1.insert(27);
 
@@ -1497,12 +1488,12 @@ int main()
 
 			failpass("Reinitialize max-size test", colony1.capacity() == 5200);
 
-			colony1.change_group_sizes(500, 500);
+			colony1.set_block_capacity_limits(500, 500);
 
 			failpass("Change_group_sizes resize test", colony1.capacity() == 3500);
 
-			colony1.change_minimum_group_size(200);
-			colony1.change_maximum_group_size(200);
+			colony1.set_minimum_block_capacity(200);
+			colony1.set_maximum_block_capacity(200);
 
 			failpass("Change_maximum_group_size resize test", colony1.capacity() == 3400);
 
@@ -1692,8 +1683,8 @@ int main()
 			{
 				colony<int> colony1, colony2;
 
-				colony1.change_group_sizes(200, 200);
-				colony2.change_group_sizes(200, 200);
+				colony1.set_block_capacity_limits(200, 200);
+				colony2.set_block_capacity_limits(200, 200);
 
 				for(int number = 0; number != 100; ++number)
 				{
