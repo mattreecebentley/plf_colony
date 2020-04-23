@@ -1999,7 +1999,7 @@ private:
 				#ifdef PLF_COLONY_ALIGNMENT_SUPPORT
 					if PLF_COLONY_CONSTEXPR (sizeof(aligned_element_type) != sizeof(element_type))
 					{
-						alignas (alignof(aligned_element_type)) const element_type aligned_copy = element; // to avoid potentially violating memory boundaries in line below, create an initial copy object of same (but aligned) type
+						alignas (alignof(aligned_element_type)) element_type aligned_copy = element; // to avoid potentially violating memory boundaries in line below, create an initial copy object of same (but aligned) type
 						std::fill_n(end_iterator.element_pointer, number_of_elements, *(reinterpret_cast<aligned_pointer_type>(&aligned_copy)));
 					}
 					else
