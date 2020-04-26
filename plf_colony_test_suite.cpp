@@ -774,10 +774,10 @@ int main()
 			failpass("Non-beginning increment + erase test", i_colony.size() == 300001);
 
 			colony<int>::iterator temp_iterator = i_colony.begin();
-			i_colony.advance(temp_iterator, 2); // Advance test 1
+			i_colony.advance(temp_iterator, 20); // Advance test 1
 
 			unsigned int index = static_cast<unsigned int>(i_colony.get_index_from_iterator(temp_iterator));
-			failpass("Advance + iterator-to-index test", index == 2);
+			failpass("Advance + iterator-to-index test", index == 20);
 
 			i_colony.erase(temp_iterator);
 			temp_iterator = i_colony.begin(); // Check edge-case with advance when erasures present in initial group
