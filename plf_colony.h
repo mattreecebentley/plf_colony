@@ -2516,7 +2516,7 @@ public:
 	{
 		assert(iterator1 <= iterator2);
 
-		iterator current = iterator1;
+		const_iterator current = iterator1;
 
 		if (current.group_pointer != iterator2.group_pointer) // ie. if start and end iterators are in separate groups
 		{
@@ -2701,7 +2701,7 @@ public:
 			size_type number_of_group_erasures = 0;
 			// Schema: first erased all non-erased elements until end of group & remove all skipblocks post-iterator2 from the free_list. Then, either update preceding skipblock or create new one:
 
-			const iterator current_saved = current;
+			const const_iterator current_saved = current;
 
 			#ifdef PLF_COLONY_TYPE_TRAITS_SUPPORT // if trivially-destructible, and C++11 or higher, and no erasures in group, skip while loop below and just jump straight to the location
 				if ((std::is_trivially_destructible<element_type>::value) & (current.group_pointer->free_list_head == std::numeric_limits<skipfield_type>::max()))
@@ -3046,9 +3046,9 @@ public:
 			return false;
 		}
 
-		for (iterator lh_iterator = begin_iterator, rh_iterator = rh.begin_iterator; lh_iterator != end_iterator;)
+		for (const_iterator lh_iterator = begin_iterator, rh_iterator = rh.begin_iterator; lh_iterator != end_iterator; ++lh_iterator, ++rh_iterator)
 		{
-			if (*rh_iterator++ != *lh_iterator++)
+			if (*lh_iterator != *rh_iterator)
 			{
 				return false;
 			}
@@ -3903,9 +3903,9 @@ public:
 		pointer *element_pointer = element_pointers;
 
 		// Construct pointers to all elements in the colony in sequence:
-		for (iterator current_element = begin_iterator; current_element != end_iterator; ++current_element)
+		for (iterator current_element = begin_iterator; current_element != end_iterator; ++current_element, ++element_pointer)
 		{
-			PLF_COLONY_CONSTRUCT(pointer_allocator_type, pointer_allocator_pair, element_pointer++, &*current_element);
+			PLF_COLONY_CONSTRUCT(pointer_allocator_type, pointer_allocator_pair, element_pointer, &*current_element);
 		}
 
 		// Now, sort the pointers by the values they point to:
