@@ -2688,6 +2688,7 @@ public:
 		// If not erasing entire final group, 1. Destruct elements (if non-trivial destructor) and add locations to group free list. 2. process skipfield.
 		// If erasing entire group, 1. Destruct elements (if non-trivial destructor), 2. if no elements left in colony, clear() 3. otherwise reset end_iterator and remove group from groups-with-erasures list (if free list of erasures present)
 
+		// Two scenarios at this point: either (a) we have processed several groups above and are now at the final group, or (b) iterator1 and iterator2 are in the same group, so we need to check whether the current element pointer is at the first unerased element in the group (second conditional below):
 		if (iterator2.element_pointer != end_iterator.element_pointer || current.element_pointer != current.group_pointer->elements + *(current.group_pointer->skipfield)) // ie. not erasing entire group
 		{
 			size_type number_of_group_erasures = 0;
@@ -2821,12 +2822,24 @@ public:
 			}
 
 
-			if ((total_number_of_elements -= current.group_pointer->number_of_elements) != 0) // ie. previous_group != NULL
+			if ((total_number_of_elements -= current.group_pointer->number_of_elements) != 0) // ie. previous_group != NULL or next_group != NULL
 			{
 				current.group_pointer->previous_group->next_group = current.group_pointer->next_group;
-				end_iterator.group_pointer = current.group_pointer->previous_group;
-				end_iterator.element_pointer = current.group_pointer->previous_group->last_endpoint;
-				end_iterator.skipfield_pointer = current.group_pointer->previous_group->skipfield + current.group_pointer->previous_group->capacity;
+
+				if (current.group_pointer == end_iterator.group_pointer)
+				{
+					end_iterator.group_pointer = current.group_pointer->previous_group;
+					end_iterator.element_pointer = end_iterator.group_pointer->last_endpoint;
+					end_iterator.skipfield_pointer = end_iterator.group_pointer->skipfield + end_iterator.group_pointer->capacity;
+				}
+				else if (current.group_pointer == begin_iterator.group_pointer)
+				{
+					begin_iterator.group_pointer = current.group_pointer->next_group;
+					const skipfield_type skip = *(begin_iterator.group_pointer->skipfield);
+					begin_iterator.element_pointer = begin_iterator.group_pointer->elements + skip;
+					begin_iterator.skipfield_pointer = begin_iterator.group_pointer->skipfield + skip;
+				}
+
 				total_capacity -= current.group_pointer->capacity;
 
 				if (current.group_pointer->free_list_head != std::numeric_limits<skipfield_type>::max())
