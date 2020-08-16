@@ -1282,6 +1282,57 @@ int main()
 
 
 		{
+			title2("Sort tests");
+
+			colony<int> i_colony;
+
+			i_colony.reserve(50000);
+
+			for (unsigned int temp = 0; temp != 50000; ++temp)
+			{
+				i_colony.insert(xor_rand() & 65535);
+			}
+
+			i_colony.sort();
+
+			bool sorted = true;
+			int previous = 0;
+
+			for (colony<int>::iterator current = i_colony.begin(); current != i_colony.end(); ++current)
+			{
+				if (previous > *current)
+				{
+					sorted = false;
+					break;
+				}
+
+				previous = *current;
+			}
+
+			failpass("Less-than sort test", sorted);
+
+			i_colony.sort(std::greater<int>());
+
+			previous = 65536;
+
+			for (colony<int>::iterator current = i_colony.begin(); current != i_colony.end(); ++current)
+			{
+				if (previous < *current)
+				{
+					sorted = false;
+					break;
+				}
+
+				previous = *current;
+			}
+
+			failpass("Greater-than sort test", sorted);
+		}
+
+
+
+
+		{
 			title2("Different insertion-style tests");
 
 			#ifdef PLF_INITIALIZER_LIST_SUPPORT
