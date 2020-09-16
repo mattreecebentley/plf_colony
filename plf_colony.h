@@ -181,7 +181,7 @@
 
 
 
-#include <algorithm> // std::fill_n, std::sort
+#include <algorithm> // std::fill_n
 
 #include <cstring>	// memset, memcpy
 #include <cassert>	// assert
@@ -4037,15 +4037,13 @@ public:
 			PLF_COLONY_SORT_FUNCTION(sort_array, sort_array + total_number_of_elements, sort_dereferencer<comparison_function>(compare));
 		#endif
 
-		// This special value indicates that the element being pointed to in that tuple has been sorted already:
-		PLF_COLONY_CONSTEXPR const size_type sorted = std::numeric_limits<size_type>::max(); // Also improves performance for pre-constexpr compilers
 
 		// Sort the actual elements via the tuple array:
 		index = 0;
 
 		for (item_index_tuple *current_tuple = sort_array; current_tuple != tuple_pointer; ++current_tuple, ++index)
 		{
-			if (current_tuple->original_index != index && current_tuple->original_index != sorted)
+			if (current_tuple->original_index != index)
 			{
 				#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 					element_type end_value = std::move(*(current_tuple->original_location));
@@ -4085,7 +4083,7 @@ public:
 
 					destination_index = source_index;
 					source_index = sort_array[destination_index].original_index;
-					sort_array[destination_index].original_index = sorted;
+					sort_array[destination_index].original_index = destination_index;
 				} while (source_index != index);
 
 				#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
