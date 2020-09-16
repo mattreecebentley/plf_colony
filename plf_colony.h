@@ -4047,16 +4047,8 @@ public:
 			{
 				#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 					element_type end_value = std::move(*(current_tuple->original_location));
-
-					#ifdef PLF_COLONY_TYPE_TRAITS_SUPPORT
-						if PLF_COLONY_CONSTEXPR ((!std::is_move_assignable<element_type>::value) && (!std::is_trivially_destructible<element_type>::value))
-						{
-							(*(current_tuple->original_location)).~element_type();
-						}
-					#endif
 				#else
 					element_type end_value = *(current_tuple->original_location);
-					(*(current_tuple->original_location)).~element_type();
 				#endif
 
 				size_type destination_index = index;
@@ -4066,19 +4058,8 @@ public:
 				{
 					#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 						*(sort_array[destination_index].original_location) = std::move(*(sort_array[source_index].original_location));
-
-						#ifdef PLF_COLONY_TYPE_TRAITS_SUPPORT
-							if PLF_COLONY_CONSTEXPR ((!std::is_move_assignable<element_type>::value) && (!std::is_trivially_destructible<element_type>::value))
-							{
-								(*(sort_array[source_index].original_location)).~element_type();
-							}
-						#endif
 					#else
-						{
-							element_type * const source = sort_array[source_index].original_location;
-							*(sort_array[destination_index].original_location) = *source;
-							source->~element_type();
-						}
+						*(sort_array[destination_index].original_location) = *(sort_array[source_index].original_location);
 					#endif
 
 					destination_index = source_index;
@@ -4088,16 +4069,8 @@ public:
 
 				#ifdef PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 					*(sort_array[destination_index].original_location) = std::move(end_value);
-
-					#ifdef PLF_COLONY_TYPE_TRAITS_SUPPORT
-						if PLF_COLONY_CONSTEXPR ((!std::is_move_assignable<element_type>::value) && (!std::is_trivially_destructible<element_type>::value))
-						{
-							end_value.~element_type();
-						}
-					#endif
 				#else
 					*(sort_array[destination_index].original_location) = end_value;
-					end_value.~element_type();
 				#endif
 			}
 		}
