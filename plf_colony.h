@@ -3898,6 +3898,7 @@ public:
 		source.begin_iterator.group_pointer->previous_group = end_iterator.group_pointer;
 		end_iterator = source.end_iterator;
 		total_number_of_elements += source.total_number_of_elements;
+		total_capacity += source.total_capacity;
 		source.blank();
 	}
 
