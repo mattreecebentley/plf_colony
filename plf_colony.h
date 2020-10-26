@@ -500,8 +500,6 @@ public:
 #endif
 		{
 			assert(group_pointer != NULL); // covers uninitialised colony_iterator
-			assert(!(element_pointer == group_pointer->last_endpoint && group_pointer->next_group != NULL)); // Assert that iterator is not already at end()
-
 			skipfield_type skip = *(++skipfield_pointer);
 
 			if ((element_pointer += static_cast<size_type>(skip) + 1u) == group_pointer->last_endpoint && group_pointer->next_group != NULL) // ie. beyond end of available data
@@ -550,7 +548,6 @@ public:
 		colony_iterator & operator -- ()
 		{
 			assert(group_pointer != NULL);
-			assert(!(element_pointer == group_pointer->elements && group_pointer->previous_group == NULL)); // Assert that we are not already at begin() - this is not required to be tested in the code below as we don't need a special condition to progress to begin(), like we do with end() in operator ++
 
 			if (element_pointer != group_pointer->elements) // ie. not already at beginning of group
 			{
@@ -817,7 +814,6 @@ public:
 			colony::skipfield_pointer_type &skipfield_pointer = it.skipfield_pointer;
 
 			assert(group_pointer != NULL);
-			assert(!(element_pointer == group_pointer->elements - 1 && group_pointer->previous_group == NULL)); // Assert that we are not already at rend()
 
 			if (element_pointer != group_pointer->elements) // ie. not already at beginning of group
 			{
@@ -859,7 +855,6 @@ public:
 
 		inline PLF_COLONY_FORCE_INLINE colony_reverse_iterator & operator -- ()
 		{
-			assert(!(it.element_pointer == it.group_pointer->last_endpoint - 1 && it.group_pointer->next_group == NULL)); // ie. Check that we are not already at rbegin()
 			++it;
 			return *this;
 		}
@@ -2908,7 +2903,7 @@ public:
 
 
 
-	inline size_type approximate_memory_use() const PLF_COLONY_NOEXCEPT
+	inline size_type memory() const PLF_COLONY_NOEXCEPT
 	{
 		return
 			sizeof(*this) + // sizeof colony basic structure
