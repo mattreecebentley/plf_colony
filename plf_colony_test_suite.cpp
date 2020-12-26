@@ -89,6 +89,7 @@
 	#include <utility> // std::move
 #endif
 
+#include "plf_pcgrand.h"
 #include "plf_colony.h"
 
 
@@ -193,26 +194,6 @@ struct small_struct_non_trivial
 };
 
 
-
-
-
-// Fast xorshift+128 random number generator function (original: https://codingforspeed.com/using-faster-psudo-random-generator-xorshift/)
-unsigned int xor_rand()
-{
-	static unsigned int x = 123456789;
-	static unsigned int y = 362436069;
-	static unsigned int z = 521288629;
-	static unsigned int w = 88675123;
-
-	const unsigned int t = x ^ (x << 11);
-
-	// Rotate the static values (w rotation in return statement):
-	x = y;
-	y = z;
-	z = w;
-
-	return w = w ^ (w >> 19) ^ (t ^ (t >> 8));
-}
 
 
 
@@ -533,7 +514,7 @@ int main()
 			{
 				for (colony<int>::iterator the_iterator = i_colony.begin(); the_iterator != i_colony.end();)
 				{
-					if ((xor_rand() & 7) == 0)
+					if ((pcg_rand() & 7) == 0)
 					{
 						the_iterator = i_colony.erase(the_iterator);
 					}
@@ -560,7 +541,7 @@ int main()
 			{
 				for (colony<int>::iterator the_iterator = i_colony.begin(); the_iterator != i_colony.end();)
 				{
-					if ((xor_rand() & 7) == 0)
+					if ((pcg_rand() & 7) == 0)
 					{
 						the_iterator = i_colony.erase(the_iterator);
 						++count2;
@@ -605,7 +586,7 @@ int main()
 			{
 				for (colony<int>::iterator the_iterator = i_colony.begin(); the_iterator != i_colony.end();)
 				{
-					if ((xor_rand() & 3) == 0)
+					if ((pcg_rand() & 3) == 0)
 					{
 						++the_iterator;
 						i_colony.insert(1);
@@ -637,7 +618,12 @@ int main()
 			i_colony.insert(250000, 10);
 
 			colony<int>::iterator end_iterator = i_colony.end();
+			colony<int>::iterator end_iterator2 = i_colony.end();
 			advance(end_iterator, -250000);
+
+			for (unsigned int count = 0; count != 250000; ++count, --end_iterator2){}
+			failpass("Large multi-decrement iterator test 1", end_iterator == end_iterator2);
+
 
 			for (colony<int>::iterator the_iterator = i_colony.begin(); the_iterator != end_iterator;)
 			{
@@ -645,6 +631,7 @@ int main()
 			}
 
 			failpass("Large multi-decrement iterator test", i_colony.size() == 250000);
+
 
 
 			i_colony.insert(250000, 10);
@@ -733,7 +720,7 @@ int main()
 			{
 				for (unsigned int loop = 0; loop != 10; ++loop)
 				{
-					if ((xor_rand() & 7) == 0)
+					if ((pcg_rand() & 7) == 0)
 					{
 						i_colony.insert(1);
 						++count;
@@ -744,7 +731,7 @@ int main()
 
 				for (colony<int>::iterator the_iterator = i_colony.begin(); the_iterator != i_colony.end();)
 				{
-					if ((xor_rand() & 7) == 0)
+					if ((pcg_rand() & 7) == 0)
 					{
 						the_iterator = i_colony.erase(the_iterator);
 						--count;
@@ -902,7 +889,7 @@ int main()
 
 			for (colony<int>::iterator it = i_colony.begin(); it < i_colony.end(); ++it)
 			{
-				if ((xor_rand() & 1) == 0)
+				if ((pcg_rand() & 1) == 0)
 				{
 					it = i_colony.erase(it);
 				}
@@ -951,8 +938,8 @@ int main()
 					it2 = it1 = i_colony.begin();
 
 					size = static_cast<unsigned int>(i_colony.size());
-					range1 = xor_rand() % size;
-					range2 = range1 + 1 + (xor_rand() % (size - range1));
+					range1 = pcg_rand() % size;
+					range2 = range1 + 1 + (pcg_rand() % (size - range1));
 					advance(it1, static_cast<int>(range1));
 					advance(it2, static_cast<int>(range2));
 
@@ -1005,8 +992,8 @@ int main()
 					it2 = it1 = i_colony.begin();
 
 					size = static_cast<unsigned int>(i_colony.size());
-					range1 = xor_rand() % size;
-					range2 = range1 + 1 + (xor_rand() % (size - range1));
+					range1 = pcg_rand() % size;
+					range2 = range1 + 1 + (pcg_rand() % (size - range1));
 					advance(it1, static_cast<int>(range1));
 					advance(it2, static_cast<int>(range2));
 
@@ -1035,7 +1022,7 @@ int main()
 
 					if (i_colony.size() > 100)
 					{ // Test to make sure our stored erased_locations are valid & fill-insert is functioning properly in these scenarios
-						const unsigned int extra_size = xor_rand() & 127;
+						const unsigned int extra_size = pcg_rand() & 127;
 						i_colony.insert(extra_size, 5);
 
 						if (i_colony.size() != i_colony.group_size_sum())
@@ -1128,8 +1115,8 @@ int main()
 					ss_it2 = ss_it1 = ss_nt.begin();
 
 					size = static_cast<unsigned int>(ss_nt.size());
-					range1 = xor_rand() % size;
-					range2 = range1 + 1 + (xor_rand() % (size - range1));
+					range1 = pcg_rand() % size;
+					range2 = range1 + 1 + (pcg_rand() % (size - range1));
 					advance(ss_it1, static_cast<int>(range1));
 					advance(ss_it2, static_cast<int>(range2));
 
@@ -1181,7 +1168,7 @@ int main()
 
 			for (unsigned int temp = 0; temp != 50000; ++temp)
 			{
-				i_colony.insert(xor_rand() & 65535);
+				i_colony.insert(pcg_rand() & 65535);
 			}
 
 			i_colony.sort();
@@ -1359,7 +1346,7 @@ int main()
 
 			for (unsigned int internal_loop_counter = 0; internal_loop_counter != 10; ++internal_loop_counter)
 			{
-				const unsigned int capacity = xor_rand() & 65535;
+				const unsigned int capacity = pcg_rand() & 65535;
 				i_colony.assign(capacity, 1);
 
 				total = 0;
@@ -1418,7 +1405,7 @@ int main()
 
 			for (unsigned int internal_loop_counter = 0; internal_loop_counter != 10; ++internal_loop_counter)
 			{
-				const unsigned int capacity = xor_rand() & 65535;
+				const unsigned int capacity = pcg_rand() & 65535;
 				i_vector.assign(capacity, 1);
 				i_colony.assign(i_vector.begin(), i_vector.end());
 
@@ -1660,7 +1647,7 @@ int main()
 
 				for (colony<int>::iterator current = colony2.begin(); current != colony2.end();)
 				{
-					if ((xor_rand() & 7) == 0)
+					if ((pcg_rand() & 7) == 0)
 					{
 						current = colony2.erase(current);
 					}
@@ -1704,7 +1691,7 @@ int main()
 
 				for (colony<int>::iterator current = colony2.begin(); current != colony2.end();)
 				{
-					if ((xor_rand() & 3) == 0)
+					if ((pcg_rand() & 3) == 0)
 					{
 						current = colony2.erase(current);
 					}
@@ -1717,7 +1704,7 @@ int main()
 
 				for (colony<int>::iterator current = colony1.begin(); current != colony1.end();)
 				{
-					if ((xor_rand() & 1) == 0)
+					if ((pcg_rand() & 1) == 0)
 					{
 						current = colony1.erase(current);
 					}
@@ -1837,7 +1824,7 @@ int main()
 
 				for (colony<int>::iterator current = colony2.begin(); current != colony2.end();)
 				{
-					if ((xor_rand() & 1) == 0)
+					if ((pcg_rand() & 1) == 0)
 					{
 						current = colony2.erase(current);
 					}
@@ -1850,7 +1837,7 @@ int main()
 
 				for (colony<int>::iterator current = colony1.begin(); current != colony1.end();)
 				{
-					if ((xor_rand() & 1) == 0)
+					if ((pcg_rand() & 1) == 0)
 					{
 						current = colony1.erase(current);
 					}
@@ -1887,11 +1874,11 @@ int main()
 				{
 					for (colony<int>::iterator current = colony1.begin(); current != colony1.end();)
 					{
-						if ((xor_rand() & 3) == 0)
+						if ((pcg_rand() & 3) == 0)
 						{
 							current = colony1.erase(current);
 						}
-						else if ((xor_rand() & 7) == 0)
+						else if ((pcg_rand() & 7) == 0)
 						{
 							colony1.insert(433);
 							++current;
@@ -1931,7 +1918,7 @@ int main()
 
 			for(int count = 0; count != 1000; ++count)
 			{
-				i_colony.insert((xor_rand() & 1));
+				i_colony.insert((pcg_rand() & 1));
 			}
 
 			i_colony2 = i_colony;
