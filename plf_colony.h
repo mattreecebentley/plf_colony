@@ -1343,7 +1343,7 @@ public:
 
 
 		template<bool is_const>
-		colony_reverse_iterator (const colony_iterator<is_const> &source) PLF_COLONY_NOEXCEPT:
+		explicit colony_reverse_iterator (const colony_iterator<is_const> &source) PLF_COLONY_NOEXCEPT:
 			it(source)
 		{}
 
@@ -1712,7 +1712,7 @@ public:
 
 	// Default constuctor:
 
-	colony() PLF_COLONY_NOEXCEPT:
+	colony():
 		allocator_type(allocator_type()),
 		groups_with_erasures_list_head(NULL),
 		unused_groups(NULL),
@@ -1726,7 +1726,7 @@ public:
 
 
 
-	explicit colony(const plf::limits capacities) PLF_COLONY_NOEXCEPT:
+	explicit colony(const plf::limits capacities):
 		allocator_type(allocator_type()),
 		groups_with_erasures_list_head(NULL),
 		unused_groups(NULL),
@@ -1782,8 +1782,7 @@ public:
 		total_capacity(0),
 		tuple_allocator_pair(static_cast<skipfield_type>((source.tuple_allocator_pair.min_group_capacity > source.total_size) ? source.tuple_allocator_pair.min_group_capacity : ((source.total_size > source.group_allocator_pair.max_group_capacity) ? source.group_allocator_pair.max_group_capacity : source.total_size))), // min group size is set to value closest to total number of elements in source colony in order to not create unnecessary small groups in the range-insert below, then reverts to the original min group size afterwards. This effectively saves a call to reserve.
 		group_allocator_pair(source.group_allocator_pair.max_group_capacity)
-	{
-		check_skipfield_conformance();
+	{ // can skip checking for skipfield conformance here as the skipfields must be equal between the destination and source, and source will have already had theirs checked. Same applies for other copy and move constructors below
 		range_assign(source.begin_iterator, source.total_size);
 		tuple_allocator_pair.min_group_capacity = source.tuple_allocator_pair.min_group_capacity; // reset to correct value for future clear() or erasures
 	}
@@ -1800,8 +1799,7 @@ public:
 		total_capacity(0),
 		tuple_allocator_pair(static_cast<skipfield_type>((source.tuple_allocator_pair.min_group_capacity > source.total_size) ? source.tuple_allocator_pair.min_group_capacity : ((source.total_size > source.group_allocator_pair.max_group_capacity) ? source.group_allocator_pair.max_group_capacity : source.total_size))),
 		group_allocator_pair(source.group_allocator_pair.max_group_capacity)
-	{
-		check_skipfield_conformance();
+	{ 
 		range_assign(source.begin_iterator, source.total_size);
 		tuple_allocator_pair.min_group_capacity = source.tuple_allocator_pair.min_group_capacity;
 	}
@@ -1851,7 +1849,6 @@ public:
 			tuple_allocator_pair(source.tuple_allocator_pair.min_group_capacity),
 			group_allocator_pair(source.group_allocator_pair.max_group_capacity)
 		{
-			check_skipfield_conformance();
 			assert(&source != this);
 			source.blank();
 		}
@@ -1871,7 +1868,6 @@ public:
 			tuple_allocator_pair(source.tuple_allocator_pair.min_group_capacity),
 			group_allocator_pair(source.group_allocator_pair.max_group_capacity)
 		{
-			check_skipfield_conformance();
 			assert(&source != this);
 			source.blank();
 		}
