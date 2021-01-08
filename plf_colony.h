@@ -1024,7 +1024,8 @@ public:
 
 					while (iterator1.skipfield_pointer != endpoint)
 					{
-						iterator1.skipfield_pointer += *(++iterator1.skipfield_pointer);
+						++iterator1.skipfield_pointer;
+						iterator1.skipfield_pointer += *iterator1.skipfield_pointer;
 						++distance;
 					}
 				}
@@ -1054,7 +1055,8 @@ public:
 			{
 				while (iterator1.skipfield_pointer != iterator2.skipfield_pointer)
 				{
-					iterator1.skipfield_pointer += *(++iterator1.skipfield_pointer);
+					++iterator1.skipfield_pointer;
+					iterator1.skipfield_pointer += *iterator1.skipfield_pointer;
 					++distance;
 				}
 			}
@@ -3924,7 +3926,6 @@ public:
 	inline size_type memory() const PLF_COLONY_NOEXCEPT
 	{
 		size_type mem = sizeof(*this); // sizeof colony basic structure
-
 		end_iterator.group_pointer->next_group = unused_groups; // temporarily link the main groups and unused_groups (reserved groups) in order to only have one loop below instead of several
 
 		for(group_pointer_type current = begin_iterator.group_pointer; current != NULL; current = current->next_group)
