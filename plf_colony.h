@@ -44,30 +44,26 @@
 	#if _MSC_VER >= 1900
 		#define PLF_COLONY_ALIGNMENT_SUPPORT
 		#define PLF_COLONY_NOEXCEPT noexcept
-		#define PLF_COLONY_NOEXCEPT_SWAP(the_allocator) noexcept(std::allocator_traits<the_allocator>::propagate_on_container_swap::value || std::allocator_traits<the_allocator>::is_always_equal::value)
-		#define PLF_COLONY_NOEXCEPT_SPLICE(the_allocator) noexcept(std::allocator_traits<the_allocator>::is_always_equal::value)
-		#define PLF_COLONY_NOEXCEPT_MOVE_ASSIGNMENT(the_allocator) noexcept(std::allocator_traits<the_allocator>::propagate_on_container_move_assignment::value || std::allocator_traits<the_allocator>::is_always_equal::value)
 	#else
 		#define PLF_COLONY_NOEXCEPT throw()
-		#define PLF_COLONY_NOEXCEPT_SWAP(the_allocator)
-		#define PLF_COLONY_NOEXCEPT_SPLICE(the_allocator)
-		#define PLF_COLONY_NOEXCEPT_MOVE_ASSIGNMENT(the_allocator)
 	#endif
 
 	#if defined(_MSVC_LANG) && (_MSVC_LANG >= 201703L)
 		#define PLF_COLONY_CONSTEXPR constexpr
+		#define PLF_COLONY_IS_ALWAYS_EQUAL_SUPPORT
 	#else
 		#define PLF_COLONY_CONSTEXPR
 	#endif
+
 	#if defined(_MSVC_LANG) && (_MSVC_LANG > 201703L)
 		#define PLF_COLONY_CPP20_SUPPORT
 	#endif
 #elif defined(__cplusplus) && __cplusplus >= 201103L // C++11 support, at least
 	#define PLF_COLONY_FORCE_INLINE // note: GCC and clang create faster code without forcing inline
-	#define PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 
 	#if defined(__GNUC__) && defined(__GNUC_MINOR__) && !defined(__clang__) // If compiler is GCC/G++
 		#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 3) || __GNUC__ > 4 // 4.2 and below do not support variadic templates
+			#define PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 			#define PLF_COLONY_VARIADICS_SUPPORT
 			#define PLF_COLONY_STATIC_ASSERT(check, message) static_assert(check, message)
 		#else
@@ -90,51 +86,41 @@
 		#if __GNUC__ >= 5 // GCC v4.9 and below do not support std::is_trivially_copyable
 			#define PLF_COLONY_TYPE_TRAITS_SUPPORT
 		#endif
-		#if __GNUC__ > 6 && __cplusplus >= 201703L
-			#define PLF_COLONY_NOEXCEPT_MOVE_ASSIGNMENT(the_allocator) noexcept(std::allocator_traits<the_allocator>::propagate_on_container_move_assignment::value || std::allocator_traits<the_allocator>::is_always_equal::value)
-			#define PLF_COLONY_NOEXCEPT_SWAP(the_allocator) noexcept(std::allocator_traits<the_allocator>::propagate_on_container_swap::value || std::allocator_traits<the_allocator>::is_always_equal::value)
-			#define PLF_COLONY_NOEXCEPT_SPLICE(the_allocator) noexcept(std::allocator_traits<the_allocator>::is_always_equal::value)
-		#else
-			#define PLF_COLONY_NOEXCEPT_MOVE_ASSIGNMENT(the_allocator)
-			#define PLF_COLONY_NOEXCEPT_SWAP(the_allocator)
-			#define PLF_COLONY_NOEXCEPT_SPLICE(the_allocator)
+		#if __GNUC__ > 6
+			#define PLF_COLONY_IS_ALWAYS_EQUAL_SUPPORT
 		#endif
 	#elif defined(__clang__) && !defined(__GLIBCXX__) && !defined(_LIBCPP_CXX03_LANG)
-		#if __has_feature(cxx_alignas) && __has_feature(cxx_alignof)
-			#define PLF_COLONY_ALIGNMENT_SUPPORT
-		#endif
-		#if __has_feature(cxx_noexcept)
-			#define PLF_COLONY_NOEXCEPT noexcept
-		#else
-			#define PLF_COLONY_NOEXCEPT throw()
-		#endif
-		#if (__clang_major__ >= 3)
+		#if __clang_major__ >= 3 // clang versions < 3 don't support __has_feature() or traits
 			#define PLF_COLONY_ALLOCATOR_TRAITS_SUPPORT
 			#define PLF_COLONY_TYPE_TRAITS_SUPPORT
-			#define PLF_COLONY_NOEXCEPT_SWAP(the_allocator) noexcept(std::allocator_traits<the_allocator>::propagate_on_container_swap::value || std::allocator_traits<the_allocator>::is_always_equal::value)
-			#define PLF_COLONY_NOEXCEPT_SPLICE(the_allocator) noexcept(std::allocator_traits<the_allocator>::is_always_equal::value)
-			#define PLF_COLONY_NOEXCEPT_MOVE_ASSIGNMENT(the_allocator) noexcept(std::allocator_traits<the_allocator>::propagate_on_container_move_assignment::value || std::allocator_traits<the_allocator>::is_always_equal::value)
-		#else
-			#define PLF_COLONY_NOEXCEPT_SWAP(the_allocator)
-			#define PLF_COLONY_NOEXCEPT_SPLICE(the_allocator)
-			#define PLF_COLONY_NOEXCEPT_MOVE_ASSIGNMENT(the_allocator)
-		#endif
-		#if __has_feature(cxx_rvalue_references) && !defined(_LIBCPP_HAS_NO_RVALUE_REFERENCES)
-			#define PLF_COLONY_MOVE_SEMANTICS_SUPPORT
-		#endif
-		#if __has_feature(cxx_static_assert)
-			#define PLF_COLONY_STATIC_ASSERT(check, message) static_assert(check, message)
-		#else
-			#define PLF_COLONY_STATIC_ASSERT(check, message) assert(check)
-		#endif
-		#if __has_feature(cxx_variadic_templates) && !defined(_LIBCPP_HAS_NO_VARIADICS)
-			#define PLF_COLONY_VARIADICS_SUPPORT
-		#endif
-		#if ((__clang_major__ == 3 && __clang_minor__ >= 1) || __clang_major__ > 3)
-			#define PLF_COLONY_INITIALIZER_LIST_SUPPORT
+
+			#if __has_feature(cxx_alignas) && __has_feature(cxx_alignof)
+				#define PLF_COLONY_ALIGNMENT_SUPPORT
+			#endif
+			#if __has_feature(cxx_noexcept)
+				#define PLF_COLONY_NOEXCEPT noexcept
+				#define PLF_COLONY_IS_ALWAYS_EQUAL_SUPPORT
+			#else
+				#define PLF_COLONY_NOEXCEPT throw()
+			#endif
+			#if __has_feature(cxx_rvalue_references) && !defined(_LIBCPP_HAS_NO_RVALUE_REFERENCES)
+				#define PLF_COLONY_MOVE_SEMANTICS_SUPPORT
+			#endif
+			#if __has_feature(cxx_static_assert)
+				#define PLF_COLONY_STATIC_ASSERT(check, message) static_assert(check, message)
+			#else
+				#define PLF_COLONY_STATIC_ASSERT(check, message) assert(check)
+			#endif
+			#if __has_feature(cxx_variadic_templates) && !defined(_LIBCPP_HAS_NO_VARIADICS)
+				#define PLF_COLONY_VARIADICS_SUPPORT
+			#endif
+			#if (__clang_major__ == 3 && __clang_minor__ >= 1) || __clang_major__ > 3
+				#define PLF_COLONY_INITIALIZER_LIST_SUPPORT
+			#endif
 		#endif
 	#elif defined(__GLIBCXX__) // Using another compiler type with libstdc++ - we are assuming full c++11 compliance for compiler - which may not be true
 		#if __GLIBCXX__ >= 20080606
+			#define PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 			#define PLF_COLONY_VARIADICS_SUPPORT
 			#define PLF_COLONY_STATIC_ASSERT(check, message) static_assert(check, message)
 		#else
@@ -156,52 +142,51 @@
 			#define PLF_COLONY_TYPE_TRAITS_SUPPORT
 		#endif
 		#if __GLIBCXX__ >= 20160111
-			#define PLF_COLONY_NOEXCEPT_MOVE_ASSIGNMENT(the_allocator) noexcept(std::allocator_traits<the_allocator>::propagate_on_container_move_assignment::value || std::allocator_traits<the_allocator>::is_always_equal::value)
-			#define PLF_COLONY_NOEXCEPT_SWAP(the_allocator) noexcept(std::allocator_traits<the_allocator>::propagate_on_container_swap::value || std::allocator_traits<the_allocator>::is_always_equal::value)
-			#define PLF_COLONY_NOEXCEPT_SPLICE(the_allocator) noexcept(std::allocator_traits<the_allocator>::is_always_equal::value)
-		#else
-			#define PLF_COLONY_NOEXCEPT_MOVE_ASSIGNMENT(the_allocator)
-			#define PLF_COLONY_NOEXCEPT_SWAP(the_allocator)
-			#define PLF_COLONY_NOEXCEPT_SPLICE(the_allocator)
+			#define PLF_COLONY_IS_ALWAYS_EQUAL_SUPPORT
 		#endif
-	#elif (defined(_LIBCPP_CXX03_LANG) || defined(_LIBCPP_HAS_NO_RVALUE_REFERENCES) || defined(_LIBCPP_HAS_NO_VARIADICS)) // Special case for checking C++11 support with libCPP
+	#elif defined(_LIBCPP_CXX03_LANG) || defined(_LIBCPP_HAS_NO_RVALUE_REFERENCES) // Special case for checking C++11 support with libCPP
 		#define PLF_COLONY_STATIC_ASSERT(check, message) assert(check)
 		#define PLF_COLONY_NOEXCEPT throw()
-		#define PLF_COLONY_NOEXCEPT_MOVE_ASSIGNMENT(the_allocator)
-		#define PLF_COLONY_NOEXCEPT_SWAP(the_allocator)
-		#define PLF_COLONY_NOEXCEPT_SPLICE(the_allocator)
-	#else // Assume type traits and initializer support for other compilers and standard libraries
+		#if !defined(_LIBCPP_HAS_NO_VARIADICS)
+			#define PLF_COLONY_VARIADICS_SUPPORT
+		#endif
+	#else // Assume type traits and initializer support for other compilers and standard library implementations
+		#define PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 		#define PLF_COLONY_STATIC_ASSERT(check, message) static_assert(check, message)
 		#define PLF_COLONY_VARIADICS_SUPPORT
 		#define PLF_COLONY_TYPE_TRAITS_SUPPORT
-		#define PLF_COLONY_MOVE_SEMANTICS_SUPPORT
 		#define PLF_COLONY_ALLOCATOR_TRAITS_SUPPORT
 		#define PLF_COLONY_ALIGNMENT_SUPPORT
 		#define PLF_COLONY_INITIALIZER_LIST_SUPPORT
 		#define PLF_COLONY_NOEXCEPT noexcept
-		#define PLF_COLONY_NOEXCEPT_MOVE_ASSIGNMENT(the_allocator) noexcept
-		#define PLF_COLONY_NOEXCEPT_SWAP(the_allocator) noexcept
-		#define PLF_COLONY_NOEXCEPT_SPLICE(the_allocator) noexcept
+		#define PLF_COLONY_IS_ALWAYS_EQUAL_SUPPORT
 	#endif
 
-	#if __cplusplus >= 201703L && ((defined(__clang__) && ((__clang_major__ == 3 && __clang_minor__ == 9) || __clang_major__ > 3))	 ||	(defined(__GNUC__) && __GNUC__ >= 7)	||   (!defined(__clang__) && !defined(__GNUC__))) // assume correct C++17 implementation for non-GNU/clang compilers
+	#if __cplusplus >= 201703L && ((defined(__clang__) && ((__clang_major__ == 3 && __clang_minor__ == 9) || __clang_major__ > 3)) || (defined(__GNUC__) && __GNUC__ >= 7) || (!defined(__clang__) && !defined(__GNUC__))) // assume correct C++17 implementation for non-gcc/clang compilers
 		#define PLF_COLONY_CONSTEXPR constexpr
 	#else
 		#define PLF_COLONY_CONSTEXPR
 	#endif
-	#if __cplusplus > 201703L && ((defined(__clang__) && (__clang_major__ >= 10)) || (defined(__GNUC__) && __GNUC__ >= 10) || (!defined(__clang__) && !defined(__GNUC__))) // assume correct C++20 implementation for other compilers
+
+	#if __cplusplus > 201703L && ((defined(__clang__) && (__clang_major__ >= 10)) || (defined(__GNUC__) && __GNUC__ >= 10) || (!defined(__clang__) && !defined(__GNUC__)))
 		#define PLF_COLONY_CPP20_SUPPORT
 	#endif
 #else
-	#define PLF_COLONY_STATIC_ASSERT(check, message) assert(check)
 	#define PLF_COLONY_FORCE_INLINE
+	#define PLF_COLONY_STATIC_ASSERT(check, message) assert(check)
 	#define PLF_COLONY_NOEXCEPT throw()
-	#define PLF_COLONY_NOEXCEPT_SWAP(the_allocator)
-	#define PLF_COLONY_NOEXCEPT_SPLICE(the_allocator)
-	#define PLF_COLONY_NOEXCEPT_MOVE_ASSIGNMENT(the_allocator)
 	#define PLF_COLONY_CONSTEXPR
 #endif
 
+#if (__cplusplus >= 201703L || (defined(_MSVC_LANG) && (_MSVC_LANG >= 201703L))) && defined(PLF_COLONY_IS_ALWAYS_EQUAL_SUPPORT)
+	#define PLF_COLONY_NOEXCEPT_MOVE_ASSIGNMENT(the_allocator) noexcept(std::allocator_traits<the_allocator>::propagate_on_container_move_assignment::value || std::allocator_traits<the_allocator>::is_always_equal::value)
+	#define PLF_COLONY_NOEXCEPT_SWAP(the_allocator) noexcept(std::allocator_traits<the_allocator>::propagate_on_container_swap::value || std::allocator_traits<the_allocator>::is_always_equal::value)
+	#define PLF_COLONY_NOEXCEPT_SPLICE(the_allocator) noexcept(std::allocator_traits<the_allocator>::is_always_equal::value)
+#else
+	#define PLF_COLONY_NOEXCEPT_MOVE_ASSIGNMENT(the_allocator)
+	#define PLF_COLONY_NOEXCEPT_SWAP(the_allocator)
+	#define PLF_COLONY_NOEXCEPT_SPLICE(the_allocator)
+#endif
 
 
 
@@ -3922,7 +3907,6 @@ public:
 	inline size_type memory() const PLF_COLONY_NOEXCEPT
 	{
 		size_type mem = sizeof(*this); // sizeof colony basic structure
-
 		end_iterator.group_pointer->next_group = unused_groups; // temporarily link the main groups and unused_groups (reserved groups) in order to only have one loop below instead of several
 
 		for(group_pointer_type current = begin_iterator.group_pointer; current != NULL; current = current->next_group)
@@ -4620,6 +4604,7 @@ namespace std
 #undef PLF_COLONY_CONSTEXPR
 #undef PLF_COLONY_CPP20_SUPPORT
 #undef PLF_COLONY_STATIC_ASSERT
+#undef PLF_COLONY_IS_ALWAYS_EQUAL_SUPPORT
 
 #undef PLF_COLONY_CONSTRUCT
 #undef PLF_COLONY_DESTROY

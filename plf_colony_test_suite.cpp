@@ -1,17 +1,9 @@
 #define PLF_COLONY_TEST_DEBUG
 
 #if defined(_MSC_VER)
-	#if _MSC_VER >= 1900
-		#define PLF_ALIGNMENT_SUPPORT
-		#define PLF_NOEXCEPT noexcept
-	#else
-		#define PLF_NOEXCEPT throw()
-	#endif
-
 	#if _MSC_VER >= 1600
 		#define PLF_MOVE_SEMANTICS_SUPPORT
 	#endif
-
 	#if _MSC_VER >= 1700
 		#define PLF_TYPE_TRAITS_SUPPORT
 	#endif
@@ -28,52 +20,51 @@
 
 	#if defined(__GNUC__) && defined(__GNUC_MINOR__) && !defined(__clang__) // If compiler is GCC/G++
 		#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 3) || __GNUC__ > 4 // 4.2 and below do not support variadic templates
+			#define PLF_MOVE_SEMANTICS_SUPPORT
 			#define PLF_VARIADICS_SUPPORT
 		#endif
 		#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 4) || __GNUC__ > 4 // 4.3 and below do not support initializer lists
 			#define PLF_INITIALIZER_LIST_SUPPORT
 		#endif
-		#if (__GNUC__ == 4 && __GNUC_MINOR__ < 6) || __GNUC__ < 4
-			#define PLF_NOEXCEPT throw()
-		#else
-			#define PLF_NOEXCEPT noexcept
-		#endif
 		#if __GNUC__ >= 5 // GCC v4.9 and below do not support std::is_trivially_copyable
 			#define PLF_TYPE_TRAITS_SUPPORT
 		#endif
-	#elif defined(__GLIBCXX__) // Using another compiler type with libstdc++ - we are assuming full c++11 compliance for compiler - which may not be true
-		#if __GLIBCXX__ >= 20080606 	// libstdc++ 4.2 and below do not support variadic templates
+	#elif defined(__clang__) && !defined(__GLIBCXX__) && !defined(_LIBCPP_CXX03_LANG) // clang versions < 3 don't support __has_feature()
+		#if defined (__clang_major__) && (__clang_major__ >= 3)
+			#define PLF_TYPE_TRAITS_SUPPORT
+
+			#if __has_feature(cxx_rvalue_references) && !defined(_LIBCPP_HAS_NO_RVALUE_REFERENCES)
+				#define PLF_MOVE_SEMANTICS_SUPPORT
+			#endif
+			#if __has_feature(cxx_variadic_templates) && !defined(_LIBCPP_HAS_NO_VARIADICS)
+				#define PLF_VARIADICS_SUPPORT
+			#endif
+			#if (__clang_major__ == 3 && __clang_minor__ >= 1) || __clang_major__ > 3
+				#define PLF_INITIALIZER_LIST_SUPPORT
+			#endif
+		#endif
+	#elif defined(__GLIBCXX__)
+		#if __GLIBCXX__ >= 20080606
+			#define PLF_MOVE_SEMANTICS_SUPPORT
 			#define PLF_VARIADICS_SUPPORT
 		#endif
-		#if __GLIBCXX__ >= 20090421 	// libstdc++ 4.3 and below do not support initializer lists
+		#if __GLIBCXX__ >= 20090421
 			#define PLF_INITIALIZER_LIST_SUPPORT
 		#endif
-		#if __GLIBCXX__ >= 20160111
-			#define PLF_NOEXCEPT noexcept
-		#elif __GLIBCXX__ >= 20120322
-			#define PLF_NOEXCEPT noexcept
-		#else
-			#define PLF_NOEXCEPT throw()
-		#endif
-		#if __GLIBCXX__ >= 20150422 // libstdc++ v4.9 and below do not support std::is_trivially_copyable
+		#if __GLIBCXX__ >= 20150422
 			#define PLF_TYPE_TRAITS_SUPPORT
 		#endif
-	#elif (defined(_LIBCPP_CXX03_LANG) || defined(_LIBCPP_HAS_NO_RVALUE_REFERENCES) || defined(_LIBCPP_HAS_NO_VARIADICS)) // Special case for checking C++11 support with libCPP
-		#define PLF_STATIC_ASSERT(check, message) assert(check)
-		#define PLF_NOEXCEPT throw()
-	#else // Assume type traits and initializer support for other compilers and standard libraries
+	#elif !(defined(_LIBCPP_CXX03_LANG) || defined(_LIBCPP_HAS_NO_RVALUE_REFERENCES) || defined(_LIBCPP_HAS_NO_VARIADICS))
+		// Assume full support for other compilers and standard libraries
 		#define PLF_VARIADICS_SUPPORT
 		#define PLF_TYPE_TRAITS_SUPPORT
 		#define PLF_MOVE_SEMANTICS_SUPPORT
 		#define PLF_INITIALIZER_LIST_SUPPORT
-		#define PLF_NOEXCEPT noexcept
 	#endif
 
 	#if __cplusplus > 201703L && ((defined(__clang__) && (__clang_major__ >= 10)) || (defined(__GNUC__) && __GNUC__ >= 10) || (!defined(__clang__) && !defined(__GNUC__))) // assume correct C++20 implementation for other compilers
 		#define PLF_CPP20_SUPPORT
 	#endif
-#else
-	#define PLF_NOEXCEPT throw()
 #endif
 
 
@@ -158,7 +149,7 @@ void failpass(const char *test_type, bool condition)
 		int number;
 		unsigned int empty_field4;
 
-		small_struct(const int num) PLF_NOEXCEPT: number(num) {};
+		small_struct(const int num) : number(num) {};
 	};
 
 
@@ -189,7 +180,7 @@ struct small_struct_non_trivial
 	int number;
 	unsigned int empty_field4;
 
-	small_struct_non_trivial(const int num) PLF_NOEXCEPT: number(num) {}
+	small_struct_non_trivial(const int num) : number(num) {}
 	~small_struct_non_trivial() { ++global_counter; }
 };
 
