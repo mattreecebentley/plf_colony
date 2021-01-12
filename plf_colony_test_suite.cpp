@@ -2,68 +2,68 @@
 
 #if defined(_MSC_VER)
 	#if _MSC_VER >= 1600
-		#define PLF_MOVE_SEMANTICS_SUPPORT
+		#define PLF_TEST_MOVE_SEMANTICS_SUPPORT
 	#endif
 	#if _MSC_VER >= 1700
-		#define PLF_TYPE_TRAITS_SUPPORT
+		#define PLF_TEST_TYPE_TRAITS_SUPPORT
 	#endif
 	#if _MSC_VER >= 1800
-		#define PLF_VARIADICS_SUPPORT // Variadics, in this context, means both variadic templates and variadic macros are supported
-		#define PLF_INITIALIZER_LIST_SUPPORT
+		#define PLF_TEST_VARIADICS_SUPPORT // Variadics, in this context, means both variadic templates and variadic macros are supported
+		#define PLF_TEST_INITIALIZER_LIST_SUPPORT
 	#endif
 
 	#if defined(_MSVC_LANG) && (_MSVC_LANG > 201703L)
-		#define PLF_CPP20_SUPPORT
+		#define PLF_TEST_CPP20_SUPPORT
 	#endif
 #elif defined(__cplusplus) && __cplusplus >= 201103L // C++11 support, at least
-	#define PLF_MOVE_SEMANTICS_SUPPORT
+	#define PLF_TEST_MOVE_SEMANTICS_SUPPORT
 
 	#if defined(__GNUC__) && defined(__GNUC_MINOR__) && !defined(__clang__) // If compiler is GCC/G++
 		#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 3) || __GNUC__ > 4 // 4.2 and below do not support variadic templates
-			#define PLF_MOVE_SEMANTICS_SUPPORT
-			#define PLF_VARIADICS_SUPPORT
+			#define PLF_TEST_MOVE_SEMANTICS_SUPPORT
+			#define PLF_TEST_VARIADICS_SUPPORT
 		#endif
 		#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 4) || __GNUC__ > 4 // 4.3 and below do not support initializer lists
-			#define PLF_INITIALIZER_LIST_SUPPORT
+			#define PLF_TEST_INITIALIZER_LIST_SUPPORT
 		#endif
 		#if __GNUC__ >= 5 // GCC v4.9 and below do not support std::is_trivially_copyable
-			#define PLF_TYPE_TRAITS_SUPPORT
+			#define PLF_TEST_TYPE_TRAITS_SUPPORT
 		#endif
-	#elif defined(__clang__) && !defined(__GLIBCXX__) && !defined(_LIBCPP_CXX03_LANG) // clang versions < 3 don't support __has_feature()
-		#if defined (__clang_major__) && (__clang_major__ >= 3)
-			#define PLF_TYPE_TRAITS_SUPPORT
+	#elif defined(__clang__) && !defined(__GLIBCXX__) && !defined(_LIBCPP_CXX03_LANG)
+		#if __clang_major__ >= 3 // clang versions < 3 don't support __has_feature() or traits
+			#define PLF_TEST_TYPE_TRAITS_SUPPORT
 
 			#if __has_feature(cxx_rvalue_references) && !defined(_LIBCPP_HAS_NO_RVALUE_REFERENCES)
-				#define PLF_MOVE_SEMANTICS_SUPPORT
+				#define PLF_TEST_MOVE_SEMANTICS_SUPPORT
 			#endif
 			#if __has_feature(cxx_variadic_templates) && !defined(_LIBCPP_HAS_NO_VARIADICS)
-				#define PLF_VARIADICS_SUPPORT
+				#define PLF_TEST_VARIADICS_SUPPORT
 			#endif
 			#if (__clang_major__ == 3 && __clang_minor__ >= 1) || __clang_major__ > 3
-				#define PLF_INITIALIZER_LIST_SUPPORT
+				#define PLF_TEST_INITIALIZER_LIST_SUPPORT
 			#endif
 		#endif
 	#elif defined(__GLIBCXX__)
 		#if __GLIBCXX__ >= 20080606
-			#define PLF_MOVE_SEMANTICS_SUPPORT
-			#define PLF_VARIADICS_SUPPORT
+			#define PLF_TEST_MOVE_SEMANTICS_SUPPORT
+			#define PLF_TEST_VARIADICS_SUPPORT
 		#endif
 		#if __GLIBCXX__ >= 20090421
-			#define PLF_INITIALIZER_LIST_SUPPORT
+			#define PLF_TEST_INITIALIZER_LIST_SUPPORT
 		#endif
 		#if __GLIBCXX__ >= 20150422
-			#define PLF_TYPE_TRAITS_SUPPORT
+			#define PLF_TEST_TYPE_TRAITS_SUPPORT
 		#endif
 	#elif !(defined(_LIBCPP_CXX03_LANG) || defined(_LIBCPP_HAS_NO_RVALUE_REFERENCES) || defined(_LIBCPP_HAS_NO_VARIADICS))
 		// Assume full support for other compilers and standard libraries
-		#define PLF_VARIADICS_SUPPORT
-		#define PLF_TYPE_TRAITS_SUPPORT
-		#define PLF_MOVE_SEMANTICS_SUPPORT
-		#define PLF_INITIALIZER_LIST_SUPPORT
+		#define PLF_TEST_VARIADICS_SUPPORT
+		#define PLF_TEST_TYPE_TRAITS_SUPPORT
+		#define PLF_TEST_MOVE_SEMANTICS_SUPPORT
+		#define PLF_TEST_INITIALIZER_LIST_SUPPORT
 	#endif
 
 	#if __cplusplus > 201703L && ((defined(__clang__) && (__clang_major__ >= 10)) || (defined(__GNUC__) && __GNUC__ >= 10) || (!defined(__clang__) && !defined(__GNUC__))) // assume correct C++20 implementation for other compilers
-		#define PLF_CPP20_SUPPORT
+		#define PLF_TEST_CPP20_SUPPORT
 	#endif
 #endif
 
@@ -121,7 +121,7 @@ void failpass(const char *test_type, bool condition)
 
 
 
-#ifdef PLF_VARIADICS_SUPPORT
+#ifdef PLF_TEST_VARIADICS_SUPPORT
 	struct perfect_forwarding_test
 	{
 		const bool success;
@@ -395,7 +395,7 @@ int main()
 
 			failpass("Negative multiple iteration test", total == 200);
 
-			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+			#ifdef PLF_TEST_MOVE_SEMANTICS_SUPPORT
 				p_colony2 = std::move(p_colony);
 				failpass("Move test", p_colony2.size() == 400);
 
@@ -458,7 +458,7 @@ int main()
 
 			failpass("Iterator != test", it2 != it1);
 
-			#ifdef PLF_CPP20_SUPPORT
+			#ifdef PLF_TEST_CPP20_SUPPORT
 				failpass("Iterator <=> test 1", (it2 <=> it1) == 1);
 
 				failpass("Iterator <=> test 2", (it1 <=> it2) == -1);
@@ -1204,7 +1204,7 @@ int main()
 		{
 			title2("Different insertion-style tests");
 
-			#ifdef PLF_INITIALIZER_LIST_SUPPORT
+			#ifdef PLF_TEST_INITIALIZER_LIST_SUPPORT
 				colony<int> i_colony({1, 2, 3});
 
 				failpass("Initializer-list constructor test", i_colony.size() == 3);
@@ -1376,7 +1376,7 @@ int main()
 
 			i_colony.assign(i_vector.begin(), i_vector.end());
 
-			plf::colony<int>::iterator it = i_colony.begin();
+			colony<int>::iterator it = i_colony.begin();
 			bool fail = false;
 
 			for (int counter = 1; counter != 11; ++counter, ++it)
@@ -1427,7 +1427,7 @@ int main()
 
 			i_colony.clear();
 
-			#ifdef PLF_INITIALIZER_LIST_SUPPORT
+			#ifdef PLF_TEST_INITIALIZER_LIST_SUPPORT
 				i_colony.assign({1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 				it = i_colony.begin();
 
@@ -1447,7 +1447,7 @@ int main()
 		}
 
 
-		#ifdef PLF_VARIADICS_SUPPORT
+		#ifdef PLF_TEST_VARIADICS_SUPPORT
 		{
 			title2("Perfect Forwarding tests");
 
@@ -1488,7 +1488,7 @@ int main()
 		{
 			title2("Non-copyable type test");
 
-			plf::colony<non_copyable_type> temp;
+			colony<non_copyable_type> temp;
 
 			temp.emplace(1);
 			temp.emplace(2);
@@ -1889,10 +1889,10 @@ int main()
 		{
 			title2("erase_if tests");
 
-			plf::colony<int> i_colony(100, 100);
+			colony<int> i_colony(100, 100);
 
 			i_colony.insert(100, 200);
-			plf::colony<int> i_colony2 = i_colony;
+			colony<int> i_colony2 = i_colony;
 
 			erase(i_colony, 100);
 			int total = std::accumulate(i_colony.begin(), i_colony.end(), 0);
@@ -1931,7 +1931,7 @@ int main()
 				i_colony.insert(count);
 			}
 
-			#ifdef PLF_MOVE_SEMANTICS_SUPPORT // approximating checking for C++11 here
+			#ifdef PLF_TEST_MOVE_SEMANTICS_SUPPORT // approximating checking for C++11 here
 				erase_if(i_colony, std::bind(std::greater<int>(), std::placeholders::_1, 499));
 			#else // C++03 or lower
 				erase_if(i_colony, std::bind2nd(std::greater<int>(), 499));
