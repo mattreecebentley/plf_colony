@@ -4199,6 +4199,13 @@ public:
 
 
 
+	const_iterator get_iterator_from_pointer(const const_pointer element_pointer) const PLF_NOEXCEPT
+	{
+		return const_iterator(get_iterator_from_pointer(const_cast<pointer>(element_pointer)));
+	}
+
+
+
 	inline allocator_type get_allocator() const PLF_NOEXCEPT
 	{
 		return allocator_type();
