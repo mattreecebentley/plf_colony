@@ -1996,14 +1996,14 @@ public:
 
 
 
-	inline reverse_iterator rbegin() const PLF_NOEXCEPT
+	inline reverse_iterator rbegin() PLF_NOEXCEPT
 	{
 		return (end_iterator.group_pointer != NULL) ? ++reverse_iterator(end_iterator) : reverse_iterator(begin_iterator.group_pointer, begin_iterator.element_pointer - 1, begin_iterator.skipfield_pointer - 1);
 	}
 
 
 
-	inline reverse_iterator rend() const PLF_NOEXCEPT
+	inline reverse_iterator rend() PLF_NOEXCEPT
 	{
 		return reverse_iterator(begin_iterator.group_pointer, begin_iterator.element_pointer - 1, begin_iterator.skipfield_pointer - 1);
 	}
@@ -4214,7 +4214,10 @@ public:
 
 
 
-	iterator get_iterator_from_pointer(const pointer element_pointer) const PLF_NOEXCEPT
+private:
+
+	template <bool is_const>
+	colony_iterator<is_const> get_it(const pointer element_pointer) const PLF_NOEXCEPT
 	{
 		if (total_size != 0) // Necessary here to prevent a pointer matching to an empty colony with one memory block retained with the skipfield wiped (see erase())
 		{
@@ -4224,12 +4227,28 @@ public:
 				if (reinterpret_cast<aligned_pointer_type>(element_pointer) >= current_group->elements && reinterpret_cast<aligned_pointer_type>(element_pointer) < reinterpret_cast<aligned_pointer_type>(current_group->skipfield))
 				{
 					const skipfield_pointer_type skipfield_pointer = current_group->skipfield + (reinterpret_cast<aligned_pointer_type>(element_pointer) - current_group->elements);
-					return (*skipfield_pointer == 0) ? iterator(current_group, reinterpret_cast<aligned_pointer_type>(element_pointer), skipfield_pointer) : end_iterator; // If element has been erased, return end()
+					return (*skipfield_pointer == 0) ? colony_iterator<is_const>(current_group, reinterpret_cast<aligned_pointer_type>(element_pointer), skipfield_pointer) : colony_iterator<is_const>(end_iterator); // If element has been erased, return end()
 				}
 			}
 		}
 
 		return end_iterator;
+	}
+
+
+
+public:
+
+	inline iterator get_iterator(const pointer element_pointer) PLF_NOEXCEPT
+	{
+		return get_it<false>(element_pointer);
+	}
+
+
+
+	inline const_iterator get_const_iterator(const const_pointer element_pointer) const PLF_NOEXCEPT
+	{
+		return get_it<true>(const_cast<pointer>(element_pointer));
 	}
 
 

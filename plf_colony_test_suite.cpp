@@ -676,9 +676,11 @@ int main()
 
 			failpass("Advance + iterator-to-index test", index == 500);
 
-			colony<int>::iterator temp2 = i_colony.get_iterator_from_pointer(&(*temp_iterator));
+			colony<int>::iterator temp2 = i_colony.get_iterator(&(*temp_iterator));
+			colony<int>::const_iterator temp3 = i_colony.get_const_iterator(const_cast<colony<int>::const_pointer>(&(*temp_iterator)));
 
 			failpass("Pointer-to-iterator test", temp2 != i_colony.end());
+			failpass("Const_pointer-to-const_iterator test", temp3 != i_colony.end());
 
 			temp2 = i_colony.begin();
 			advance(temp2, 500);
