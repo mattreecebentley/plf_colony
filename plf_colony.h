@@ -2337,14 +2337,14 @@ public:
 							#ifdef PLF_TYPE_TRAITS_SUPPORT
 								if PLF_CONSTEXPR (std::is_nothrow_move_constructible<element_type>::value)
 								{
-									PLF_CONSTRUCT(allocator_type, *this, reinterpret_cast<pointer>(next_group->elements), element);
+									PLF_CONSTRUCT(allocator_type, *this, reinterpret_cast<pointer>(next_group->elements), std::move(element));
 								}
 								else
 							#endif
 							{
 								try
 								{
-									PLF_CONSTRUCT(allocator_type, *this, reinterpret_cast<pointer>(next_group->elements), element);
+									PLF_CONSTRUCT(allocator_type, *this, reinterpret_cast<pointer>(next_group->elements), std::move(element));
 								}
 								catch (...)
 								{
@@ -2358,7 +2358,7 @@ public:
 						else
 						{
 							next_group = unused_groups_head;
-							PLF_CONSTRUCT(allocator_type, *this, reinterpret_cast<pointer>(next_group->elements), element);
+							PLF_CONSTRUCT(allocator_type, *this, reinterpret_cast<pointer>(next_group->elements), std::move(element));
 							unused_groups_head = next_group->next_group;
 							next_group->reset(1, NULL, end_iterator.group_pointer, end_iterator.group_pointer->group_number + 1u);
 						}
