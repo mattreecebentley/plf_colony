@@ -168,7 +168,7 @@
 		#define PLF_CONSTEXPR
 	#endif
 
-	#if __cplusplus > 201703L && ((defined(__clang__) && (__clang_major__ >= 10)) || (defined(__GNUC__) && __GNUC__ >= 10) || (!defined(__clang__) && !defined(__GNUC__)))
+	#if __cplusplus > 201703L && ((defined(__clang__) && (__clang_major__ >= 13)) || (defined(__GNUC__) && __GNUC__ >= 10) || (!defined(__clang__) && !defined(__GNUC__)))
 		#define PLF_CPP20_SUPPORT
 	#endif
 #else
@@ -181,11 +181,9 @@
 #if defined(PLF_IS_ALWAYS_EQUAL_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT) && defined(PLF_ALLOCATOR_TRAITS_SUPPORT) && (__cplusplus >= 201703L || (defined(_MSVC_LANG) && (_MSVC_LANG >= 201703L)))
 	#define PLF_NOEXCEPT_MOVE_ASSIGN(the_allocator) noexcept(std::allocator_traits<the_allocator>::propagate_on_container_move_assignment::value || std::allocator_traits<the_allocator>::is_always_equal::value)
 	#define PLF_NOEXCEPT_SWAP(the_allocator) noexcept(std::allocator_traits<the_allocator>::propagate_on_container_swap::value || std::allocator_traits<the_allocator>::is_always_equal::value)
-	#define PLF_NOEXCEPT_SPLICE(the_allocator) noexcept(std::allocator_traits<the_allocator>::is_always_equal::value)
 #else
 	#define PLF_NOEXCEPT_MOVE_ASSIGN(the_allocator)
 	#define PLF_NOEXCEPT_SWAP(the_allocator)
-	#define PLF_NOEXCEPT_SPLICE(the_allocator)
 #endif
 
 #undef PLF_IS_ALWAYS_EQUAL_SUPPORT
@@ -2073,37 +2071,35 @@ private:
 
 			#ifdef PLF_TYPE_TRAITS_SUPPORT
 				if PLF_CONSTEXPR (!std::is_trivially_destructible<element_type>::value)
-				{
 			#endif // If compiler doesn't support traits, iterate regardless - trivial destructors will not be called, hopefully compiler will optimise the 'destruct' loop out for POD types
-			if (total_size != 0)
 			{
-				while (true) // Erase elements without bothering to update skipfield - much faster:
+				if (total_size != 0)
 				{
-					const aligned_pointer_type end_pointer = begin_iterator.group_pointer->last_endpoint;
-
-					do
+					while (true) // Erase elements without bothering to update skipfield - much faster:
 					{
-						PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(begin_iterator.element_pointer));
-						begin_iterator.element_pointer += static_cast<size_type>(*++begin_iterator.skipfield_pointer) + 1u;
-						begin_iterator.skipfield_pointer += *begin_iterator.skipfield_pointer;
-					} while(begin_iterator.element_pointer != end_pointer); // ie. beyond end of available data
+						const aligned_pointer_type end_pointer = begin_iterator.group_pointer->last_endpoint;
 
-					const group_pointer_type next_group = begin_iterator.group_pointer->next_group;
-					deallocate_group(begin_iterator.group_pointer);
-					begin_iterator.group_pointer = next_group;
+						do
+						{
+							PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(begin_iterator.element_pointer));
+							begin_iterator.element_pointer += static_cast<size_type>(*++begin_iterator.skipfield_pointer) + 1u;
+							begin_iterator.skipfield_pointer += *begin_iterator.skipfield_pointer;
+						} while(begin_iterator.element_pointer != end_pointer); // ie. beyond end of available data
 
-					if (next_group == unused_groups_head)
-					{
-						break;
+						const group_pointer_type next_group = begin_iterator.group_pointer->next_group;
+						deallocate_group(begin_iterator.group_pointer);
+						begin_iterator.group_pointer = next_group;
+
+						if (next_group == unused_groups_head)
+						{
+							break;
+						}
+
+						begin_iterator.element_pointer = next_group->elements + *(next_group->skipfield);
+						begin_iterator.skipfield_pointer = next_group->skipfield + *(next_group->skipfield);
 					}
-
-					begin_iterator.element_pointer = next_group->elements + *(next_group->skipfield);
-					begin_iterator.skipfield_pointer = next_group->skipfield + *(next_group->skipfield);
 				}
 			}
-			#ifdef PLF_TYPE_TRAITS_SUPPORT
-			}
-			#endif
 
 			while (begin_iterator.group_pointer != NULL)
 			{
@@ -2478,13 +2474,13 @@ public:
 						unused_groups_head = next_group->next_group;
 						next_group->reset(1, NULL, end_iterator.group_pointer, end_iterator.group_pointer->group_number + 1u);
 					}
-	
+
 					end_iterator.group_pointer->next_group = next_group;
 					end_iterator.group_pointer = next_group;
 					end_iterator.element_pointer = next_group->last_endpoint;
 					end_iterator.skipfield_pointer = next_group->skipfield + 1;
 					++total_size;
-	
+
 					return iterator(next_group, next_group->elements, next_group->skipfield); /* returns value before incrementation */
 				}
 				else
@@ -3928,16 +3924,16 @@ public:
 
 	inline size_type memory() const PLF_NOEXCEPT
 	{
-		size_type mem = sizeof(*this); // sizeof colony basic structure
+		size_type memory_use = sizeof(*this); // sizeof colony basic structure
 		end_iterator.group_pointer->next_group = unused_groups_head; // temporarily link the main groups and unused groups (reserved groups) in order to only have one loop below instead of several
 
 		for(group_pointer_type current = begin_iterator.group_pointer; current != NULL; current = current->next_group)
 		{
-			mem += sizeof(group) + (PLF_GROUP_ALIGNED_BLOCK_SIZE(current->capacity) * sizeof(aligned_allocation_struct)); // add memory block sizes and the size of the group structs themselves. The original calculation, including divisor, is necessary in order to correctly round up the number of allocations
+			memory_use += sizeof(group) + (PLF_GROUP_ALIGNED_BLOCK_SIZE(current->capacity) * sizeof(aligned_allocation_struct)); // add memory block sizes and the size of the group structs themselves. The original calculation, including divisor, is necessary in order to correctly round up the number of allocations
 		}
 
 		end_iterator.group_pointer->next_group = NULL; // unlink main groups and unused groups
-		return mem;
+		return memory_use;
 	}
 
 
@@ -4246,7 +4242,7 @@ public:
 
 
 
-	void splice(colony &source) PLF_NOEXCEPT_SPLICE(allocator_type)
+	void splice(colony &source)
 	{
 		// Process: if there are unused memory spaces at the end of the current back group of the chain, convert them
 		// to skipped elements and add the locations to the group's free list.
@@ -4278,16 +4274,18 @@ public:
 		}
 
 
-		// Correct group sizes if necessary:
-		if (source.tuple_allocator_pair.min_group_capacity < tuple_allocator_pair.min_group_capacity)
+		// Throw if incompatible group capacity found:
+		if (source.tuple_allocator_pair.min_group_capacity < tuple_allocator_pair.min_group_capacity || source.group_allocator_pair.max_group_capacity > group_allocator_pair.max_group_capacity)
 		{
-			tuple_allocator_pair.min_group_capacity = source.tuple_allocator_pair.min_group_capacity;
+			for (group_pointer_type current_group = source.begin_iterator.group_pointer; current_group != NULL; current_group = current_group->next_group)
+			{
+				if (current_group->capacity < tuple_allocator_pair.min_group_capacity || current_group->capacity > group_allocator_pair.max_group_capacity)
+				{
+					throw std::length_error("A source memory block capacity is outside of the destination's minimum or maximum memory block capacity limits - please change either the source or the destination's min/max block capacity limits using reshape() before calling splice() in this case");
+				}
+			}
 		}
 
-		if (source.group_allocator_pair.max_group_capacity > group_allocator_pair.max_group_capacity)
-		{
-			group_allocator_pair.max_group_capacity = source.group_allocator_pair.max_group_capacity;
-		}
 
 		// Add source list of groups-with-erasures to destination list of groups-with-erasures:
 		if (source.groups_with_erasures_list_head != NULL)
@@ -4734,7 +4732,6 @@ namespace std
 #undef PLF_VARIADICS_SUPPORT
 #undef PLF_MOVE_SEMANTICS_SUPPORT
 #undef PLF_NOEXCEPT
-#undef PLF_NOEXCEPT_SPLICE
 #undef PLF_NOEXCEPT_SWAP
 #undef PLF_NOEXCEPT_MOVE_ASSIGN
 #undef PLF_CONSTEXPR
