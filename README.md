@@ -1,4 +1,4 @@
-# plf_colony
+# plf::colony
 An unordered data container providing fast iteration/insertion/erasure while maintaining pointer/iterator/reference validity to non-erased elements.
 Documentation and function descriptions here: https://plflib.org/colony.htm#functions
 
