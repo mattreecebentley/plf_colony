@@ -1,6 +1,6 @@
 #define PLF_COLONY_TEST_DEBUG
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
 	#if _MSC_VER >= 1600
 		#define PLF_TEST_MOVE_SEMANTICS_SUPPORT
 	#endif

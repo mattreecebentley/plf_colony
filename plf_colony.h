@@ -24,7 +24,7 @@
 
 // Compiler-specific defines:
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
 	#define PLF_FORCE_INLINE __forceinline
 
 	#if _MSC_VER >= 1600
@@ -565,7 +565,7 @@ public:
 
 
 
-#if defined(_MSC_VER) && _MSC_VER <= 1600 // MSVC 2010 needs a bit of a helping hand when it comes to optimizing
+#if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__) && _MSC_VER <= 1600 // MSVC 2010 needs a bit of a helping hand when it comes to optimizing
 		inline PLF_FORCE_INLINE colony_iterator & operator ++ ()
 #else
 		colony_iterator & operator ++ ()
