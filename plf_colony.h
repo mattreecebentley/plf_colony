@@ -218,7 +218,7 @@
 #include <cstring>	// memset, memcpy, size_t
 #include <limits>  // std::numeric_limits
 #include <memory>	// std::allocator
-#include <iterator> // std::bidirectional_iterator_tag, iterator_traits, make_move_iterator
+#include <iterator> // std::bidirectional_iterator_tag, iterator_traits, make_move_iterator, std::distance for range insert
 #include <stdexcept> // std::length_error
 
 
@@ -3047,6 +3047,7 @@ public:
  	template <class iterator_type>
  	inline void insert (const typename plf_enable_if_c<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type first, const iterator_type last)
  	{
+		using std::distance;
  		range_insert(first, static_cast<size_type>(distance(first, last)));
  	}
 
@@ -3073,6 +3074,7 @@ public:
 		template <class iterator_type>
 		inline void insert (const std::move_iterator<iterator_type> first, const std::move_iterator<iterator_type> last)
 		{
+			using std::distance;
 			range_insert(first, static_cast<size_type>(distance(first.base(),last.base())));
 		}
 	#endif
@@ -3842,8 +3844,24 @@ public:
 	template <class iterator_type>
 	inline void assign(const typename plf_enable_if_c<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type first, const iterator_type last)
 	{
+		using std::distance;
 		range_assign(first, static_cast<size_type>(distance(first,last)));
 	}
+
+
+
+	// Range insert for differing iterator types eg. sentinels:
+
+	#ifdef PLF_CPP20_SUPPORT
+		template <class iterator_type1, class iterator_type2>
+			requires (!std::same_as<iterator_type1, iterator_type2> && std::equality_comparable_with<iterator_type1, iterator_type2> && !std::integral<iterator_type1> && !std::integral<iterator_type2>)
+		inline void assign (const iterator_type1 first, const iterator_type2 last)
+		{
+			size_type distance = 0;
+			for(iterator_type1 current = first; current != last; ++current, ++distance) {};
+			range_assign(first, distance);
+		}
+	#endif
 
 
 
@@ -3853,6 +3871,7 @@ public:
 		template <class iterator_type>
 		inline void assign (const std::move_iterator<iterator_type> first, const std::move_iterator<iterator_type> last)
 		{
+			using std::distance;
 			range_assign(first, static_cast<size_type>(distance(first.base(),last.base())));
 		}
 	#endif
@@ -4201,6 +4220,8 @@ private:
 	template <bool is_const>
 	colony_iterator<is_const> get_it(const pointer element_pointer) const PLF_NOEXCEPT
 	{
+		typedef colony_iterator<is_const> iterator_type;
+		
 		if (total_size != 0) // Necessary here to prevent a pointer matching to an empty colony with one memory block retained with the skipfield wiped (see erase())
 		{
 			 // Start with last group first, as will be the largest group in most cases:
@@ -4209,7 +4230,7 @@ private:
 				if (reinterpret_cast<aligned_pointer_type>(element_pointer) >= current_group->elements && reinterpret_cast<aligned_pointer_type>(element_pointer) < reinterpret_cast<aligned_pointer_type>(current_group->skipfield))
 				{
 					const skipfield_pointer_type skipfield_pointer = current_group->skipfield + (reinterpret_cast<aligned_pointer_type>(element_pointer) - current_group->elements);
-					return (*skipfield_pointer == 0) ? colony_iterator<is_const>(current_group, reinterpret_cast<aligned_pointer_type>(element_pointer), skipfield_pointer) : static_cast<colony_iterator<is_const>>(end_iterator); // If element has been erased, return end()
+					return (*skipfield_pointer == 0) ? iterator_type(current_group, reinterpret_cast<aligned_pointer_type>(element_pointer), skipfield_pointer) : static_cast<iterator_type>(end_iterator); // If element has been erased, return end()
 				}
 			}
 		}
