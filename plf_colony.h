@@ -2931,7 +2931,7 @@ private:
 
 
 	template <class iterator_type>
-	void range_insert (iterator_type it, size_type size)
+	void range_insert (iterator_type it, size_type size) // this is near-identical to the fill insert, with the only alteration being incrementing an iterator for construction, rather than using a const element. And the fill etc function calls are changed to range_fill to match this pattern. comments have been removed, see fill insert for code explanations
 	{
 		if (size == 0)
 		{
@@ -2952,8 +2952,7 @@ private:
 
 		reserve(total_size + size);
 
-		// Use up erased locations if available:
-		while(groups_with_erasures_list_head != NULL) // skipblock loop: breaks when colony is exhausted of reusable skipblocks, or returns if size == 0
+		while(groups_with_erasures_list_head != NULL)
 		{
 			aligned_pointer_type const element_pointer = groups_with_erasures_list_head->elements + groups_with_erasures_list_head->free_list_head;
 			skipfield_pointer_type const skipfield_pointer = groups_with_erasures_list_head->skipfield + groups_with_erasures_list_head->free_list_head;
@@ -2967,17 +2966,17 @@ private:
 
 			if (skipblock_size <= size)
 			{
-				groups_with_erasures_list_head->free_list_head = *(reinterpret_cast<skipfield_pointer_type>(element_pointer)); // set free list head to previous free list node
+				groups_with_erasures_list_head->free_list_head = *(reinterpret_cast<skipfield_pointer_type>(element_pointer));
 				it = range_fill_skipblock(it, element_pointer, skipfield_pointer, skipblock_size);
 				size -= skipblock_size;
 
-				if (groups_with_erasures_list_head->free_list_head != std::numeric_limits<skipfield_type>::max()) // ie. there are more skipblocks to be filled in this group
+				if (groups_with_erasures_list_head->free_list_head != std::numeric_limits<skipfield_type>::max())
 				{
-					*(reinterpret_cast<skipfield_pointer_type>(groups_with_erasures_list_head->elements + groups_with_erasures_list_head->free_list_head) + 1) = std::numeric_limits<skipfield_type>::max(); // set 'next' index of new free list head to 'end' (numeric max)
+					*(reinterpret_cast<skipfield_pointer_type>(groups_with_erasures_list_head->elements + groups_with_erasures_list_head->free_list_head) + 1) = std::numeric_limits<skipfield_type>::max();
 				}
 				else
 				{
-					groups_with_erasures_list_head = groups_with_erasures_list_head->erasures_list_next_group; // change groups
+					groups_with_erasures_list_head = groups_with_erasures_list_head->erasures_list_next_group;
 				}
 
 				if (size == 0)
@@ -2985,24 +2984,22 @@ private:
 					return;
 				}
 			}
-			else // skipblock is larger than remaining number of elements
+			else
 			{
-				const skipfield_type prev_index = *(reinterpret_cast<skipfield_pointer_type>(element_pointer)); // save before element location is overwritten
+				const skipfield_type prev_index = *(reinterpret_cast<skipfield_pointer_type>(element_pointer));
 				it = range_fill_skipblock(it, element_pointer, skipfield_pointer, static_cast<skipfield_type>(size));
 				const skipfield_type new_skipblock_size = static_cast<skipfield_type>(skipblock_size - size);
 
-				// Update skipfield (earlier nodes already memset'd in fill_skipblock function):
 				*(skipfield_pointer + size) = new_skipblock_size;
 				*(skipfield_pointer + skipblock_size - 1) = new_skipblock_size;
-				groups_with_erasures_list_head->free_list_head = static_cast<skipfield_type>(groups_with_erasures_list_head->free_list_head + size); // set free list head to new start node
+				groups_with_erasures_list_head->free_list_head = static_cast<skipfield_type>(groups_with_erasures_list_head->free_list_head + size);
 
-				// Update free list with new head:
 				*(reinterpret_cast<skipfield_pointer_type>(element_pointer + size)) = prev_index;
 				*(reinterpret_cast<skipfield_pointer_type>(element_pointer + size) + 1) = std::numeric_limits<skipfield_type>::max();
 
 				if (prev_index != std::numeric_limits<skipfield_type>::max())
 				{
-					*(reinterpret_cast<skipfield_pointer_type>(groups_with_erasures_list_head->elements + prev_index) + 1) = groups_with_erasures_list_head->free_list_head; // set 'next' index of previous skipblock to new start of skipblock
+					*(reinterpret_cast<skipfield_pointer_type>(groups_with_erasures_list_head->elements + prev_index) + 1) = groups_with_erasures_list_head->free_list_head;
 				}
 
 				return;
@@ -3010,8 +3007,6 @@ private:
 		}
 
 
-		// Use up remaining available element locations in end group:
-		// This variable is either the remaining capacity of the group or the number of elements yet to be filled, whichever is smaller:
 		const skipfield_type group_remainder = (static_cast<skipfield_type>(
 			reinterpret_cast<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer) >= size) ?
 			static_cast<skipfield_type>(size) :
@@ -3023,7 +3018,7 @@ private:
 			end_iterator.group_pointer->last_endpoint = end_iterator.element_pointer;
 			end_iterator.group_pointer->size = static_cast<skipfield_type>(end_iterator.group_pointer->size + group_remainder);
 
-			if (size == group_remainder) // Ie. remaining capacity was >= remaining elements to be filled
+			if (size == group_remainder)
 			{
 				end_iterator.skipfield_pointer = end_iterator.group_pointer->skipfield + end_iterator.group_pointer->size;
 				return;
@@ -3033,7 +3028,6 @@ private:
 		}
 
 
-		// Use unused groups:
 		end_iterator.group_pointer->next_group = unused_groups_head;
 		range_fill_unused_groups(size, it, end_iterator.group_pointer->group_number + 1, end_iterator.group_pointer, unused_groups_head);
 	}
@@ -4221,7 +4215,7 @@ private:
 	colony_iterator<is_const> get_it(const pointer element_pointer) const PLF_NOEXCEPT
 	{
 		typedef colony_iterator<is_const> iterator_type;
-		
+
 		if (total_size != 0) // Necessary here to prevent a pointer matching to an empty colony with one memory block retained with the skipfield wiped (see erase())
 		{
 			 // Start with last group first, as will be the largest group in most cases:
