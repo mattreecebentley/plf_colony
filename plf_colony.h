@@ -191,23 +191,23 @@
 
 #ifdef PLF_ALLOCATOR_TRAITS_SUPPORT
 	#ifdef PLF_VARIADICS_SUPPORT
-		#define PLF_CONSTRUCT(the_allocator, allocator_instance, location, ...)	std::allocator_traits<the_allocator>::construct(allocator_instance, location, __VA_ARGS__)
+		#define PLF_CONSTRUCT(the_allocator, allocator_instance, location, ...) std::allocator_traits<the_allocator>::construct(allocator_instance, location, __VA_ARGS__)
 	#else
 		#define PLF_CONSTRUCT(the_allocator, allocator_instance, location, data)	std::allocator_traits<the_allocator>::construct(allocator_instance, location, data)
 	#endif
 
-	#define PLF_DESTROY(the_allocator, allocator_instance, location) 				std::allocator_traits<the_allocator>::destroy(allocator_instance, location)
-	#define PLF_ALLOCATE(the_allocator, allocator_instance, size, hint) 			std::allocator_traits<the_allocator>::allocate(allocator_instance, size, hint)
-	#define PLF_DEALLOCATE(the_allocator, allocator_instance, location, size) 	std::allocator_traits<the_allocator>::deallocate(allocator_instance, location, size)
+	#define PLF_DESTROY(the_allocator, allocator_instance, location)				std::allocator_traits<the_allocator>::destroy(allocator_instance, location)
+	#define PLF_ALLOCATE(the_allocator, allocator_instance, size, hint)			std::allocator_traits<the_allocator>::allocate(allocator_instance, size, hint)
+	#define PLF_DEALLOCATE(the_allocator, allocator_instance, location, size)	std::allocator_traits<the_allocator>::deallocate(allocator_instance, location, size)
 #else
 	#ifdef PLF_VARIADICS_SUPPORT
-		#define PLF_CONSTRUCT(the_allocator, allocator_instance, location, ...)		(allocator_instance).construct(location, __VA_ARGS__)
+		#define PLF_CONSTRUCT(the_allocator, allocator_instance, location, ...) 	(allocator_instance).construct(location, __VA_ARGS__)
 	#else
 		#define PLF_CONSTRUCT(the_allocator, allocator_instance, location, data)	(allocator_instance).construct(location, data)
 	#endif
 
-	#define PLF_DESTROY(the_allocator, allocator_instance, location) 				(allocator_instance).destroy(location)
-	#define PLF_ALLOCATE(the_allocator, allocator_instance, size, hint)	 		(allocator_instance).allocate(size, hint)
+	#define PLF_DESTROY(the_allocator, allocator_instance, location)				(allocator_instance).destroy(location)
+	#define PLF_ALLOCATE(the_allocator, allocator_instance, size, hint)			(allocator_instance).allocate(size, hint)
 	#define PLF_DEALLOCATE(the_allocator, allocator_instance, location, size)	(allocator_instance).deallocate(location, size)
 #endif
 
@@ -217,7 +217,7 @@
 #include <cassert>	// assert
 #include <cstring>	// memset, memcpy, size_t
 #include <limits>  // std::numeric_limits
-#include <memory>	// std::allocator
+#include <memory> // std::allocator
 #include <iterator> // std::bidirectional_iterator_tag, iterator_traits, make_move_iterator, std::distance for range insert
 #include <stdexcept> // std::length_error
 
@@ -255,7 +255,7 @@ enum colony_priority { performance, memory_use };
 
 
 
-template <class element_type, class allocator_type = std::allocator<element_type>, plf::colony_priority priority = plf::performance> class colony : private allocator_type	// Empty base class optimisation (EBCO) - inheriting allocator functions
+template <class element_type, class allocator_type = std::allocator<element_type>, plf::colony_priority priority = plf::performance> class colony : private allocator_type // Empty base class optimisation (EBCO) - inheriting allocator functions
 {
 	// Type-switching pattern:
 	template <bool flag, class is_true, class is_false> struct choose;
@@ -274,20 +274,20 @@ template <class element_type, class allocator_type = std::allocator<element_type
 
 public:
 	// Standard container typedefs:
-	typedef element_type	value_type;
+	typedef element_type value_type;
 
 	#ifdef PLF_ALIGNMENT_SUPPORT
-		typedef typename std::aligned_storage<sizeof(element_type), (sizeof(element_type) >= (sizeof(skipfield_type) * 2) || alignof(element_type) >= (sizeof(skipfield_type) * 2)) ? alignof(element_type) : (sizeof(skipfield_type) * 2)>::type	aligned_element_type;
+		typedef typename std::aligned_storage<sizeof(element_type), (sizeof(element_type) >= (sizeof(skipfield_type) * 2) || alignof(element_type) >= (sizeof(skipfield_type) * 2)) ? alignof(element_type) : (sizeof(skipfield_type) * 2)>::type aligned_element_type;
 	#else
 		typedef element_type aligned_element_type;
 	#endif
 
 	#ifdef PLF_ALLOCATOR_TRAITS_SUPPORT
-		typedef typename std::allocator_traits<allocator_type>::size_type				size_type;
+		typedef typename std::allocator_traits<allocator_type>::size_type 			size_type;
 		typedef typename std::allocator_traits<allocator_type>::difference_type 	difference_type;
 		typedef element_type &																		reference;
 		typedef const element_type &																const_reference;
-		typedef typename std::allocator_traits<allocator_type>::pointer 				pointer;
+		typedef typename std::allocator_traits<allocator_type>::pointer				pointer;
 		typedef typename std::allocator_traits<allocator_type>::const_pointer		const_pointer;
 	#else
 		typedef typename allocator_type::size_type			size_type;
@@ -302,12 +302,12 @@ public:
 	// Iterator declarations:
 	template <bool is_const> class			colony_iterator;
 	typedef colony_iterator<false>			iterator;
-	typedef colony_iterator<true>			const_iterator;
+	typedef colony_iterator<true> 		const_iterator;
 	friend class colony_iterator<false>; // Using above typedef name here is illegal under C++03
 	friend class colony_iterator<true>;
 
-	template <bool r_is_const> class		colony_reverse_iterator;
-	typedef colony_reverse_iterator<false>	reverse_iterator;
+	template <bool r_is_const> class 	colony_reverse_iterator;
+	typedef colony_reverse_iterator<false> reverse_iterator;
 	typedef colony_reverse_iterator<true>	const_reverse_iterator;
 	friend class colony_reverse_iterator<false>;
 	friend class colony_reverse_iterator<true>;
@@ -342,25 +342,25 @@ private:
 		typedef typename std::allocator_traits<allocator_type>::template rebind_alloc<aligned_element_type>		aligned_element_allocator_type;
 		typedef typename std::allocator_traits<allocator_type>::template rebind_alloc<group>							group_allocator_type;
 		typedef typename std::allocator_traits<allocator_type>::template rebind_alloc<skipfield_type>				skipfield_allocator_type;
-		typedef typename std::allocator_traits<allocator_type>::template rebind_alloc<aligned_allocation_struct>	aligned_struct_allocator_type;
-		typedef typename std::allocator_traits<allocator_type>::template rebind_alloc<item_index_tuple>				tuple_allocator_type;
-		typedef typename std::allocator_traits<allocator_type>::template rebind_alloc<unsigned char>					uchar_allocator_type;
+		typedef typename std::allocator_traits<allocator_type>::template rebind_alloc<aligned_allocation_struct> aligned_struct_allocator_type;
+		typedef typename std::allocator_traits<allocator_type>::template rebind_alloc<item_index_tuple> 			tuple_allocator_type;
+		typedef typename std::allocator_traits<allocator_type>::template rebind_alloc<unsigned char> 				uchar_allocator_type;
 
 		typedef typename std::allocator_traits<aligned_element_allocator_type>::pointer	aligned_pointer_type; // pointer to the overaligned element type, not the original element type
-		typedef typename std::allocator_traits<group_allocator_type>::pointer 				group_pointer_type;
-		typedef typename std::allocator_traits<skipfield_allocator_type>::pointer 			skipfield_pointer_type;
+		typedef typename std::allocator_traits<group_allocator_type>::pointer				group_pointer_type;
+		typedef typename std::allocator_traits<skipfield_allocator_type>::pointer			skipfield_pointer_type;
 		typedef typename std::allocator_traits<aligned_struct_allocator_type>::pointer	aligned_struct_pointer_type;
 		typedef typename std::allocator_traits<tuple_allocator_type>::pointer				tuple_pointer_type;
 	#else
-		typedef typename allocator_type::template rebind<aligned_element_type>::other		aligned_element_allocator_type;	// In case compiler supports alignment but not allocator_traits
-		typedef typename allocator_type::template rebind<group>::other							group_allocator_type;
-		typedef typename allocator_type::template rebind<skipfield_type>::other				skipfield_allocator_type;
+		typedef typename allocator_type::template rebind<aligned_element_type>::other 	aligned_element_allocator_type;	// In case compiler supports alignment but not allocator_traits
+		typedef typename allocator_type::template rebind<group>::other 						group_allocator_type;
+		typedef typename allocator_type::template rebind<skipfield_type>::other 			skipfield_allocator_type;
 		typedef typename allocator_type::template rebind<char>::other							aligned_struct_allocator_type;
 		typedef typename allocator_type::template rebind<item_index_tuple>::other			tuple_allocator_type;
 		typedef typename allocator_type::template rebind<unsigned char>::other				uchar_allocator_type;
 
-		typedef typename aligned_element_allocator_type::pointer	aligned_pointer_type;
-		typedef typename group_allocator_type::pointer 				group_pointer_type;
+		typedef typename aligned_element_allocator_type::pointer aligned_pointer_type;
+		typedef typename group_allocator_type::pointer				group_pointer_type;
 		typedef typename skipfield_allocator_type::pointer 		skipfield_pointer_type;
 		typedef typename aligned_struct_allocator_type::pointer	aligned_struct_pointer_type;
 		typedef typename tuple_allocator_type::pointer				tuple_pointer_type;
@@ -371,16 +371,16 @@ private:
 	// Colony groups:
 	struct group : private aligned_struct_allocator_type	// ebco - inherit allocator functions
 	{
-		aligned_pointer_type					last_endpoint; 			// The address that is one past the highest cell number that's been used so far in this group - does not change with erase command but may change with insert (if no previously-erased locations are available) - is necessary because an iterator cannot access the colony's end_iterator. Most-used variable in colony use (operator ++, --) so first in struct. If the colony has been completely filled at some point, it will be == reinterpret_cast<aligned_pointer_type>(skipfield)
+		aligned_pointer_type 				last_endpoint; 			// The address that is one past the highest cell number that's been used so far in this group - does not change with erase command but may change with insert (if no previously-erased locations are available) - is necessary because an iterator cannot access the colony's end_iterator. Most-used variable in colony use (operator ++, --) so first in struct. If the colony has been completely filled at some point, it will be == reinterpret_cast<aligned_pointer_type>(skipfield)
 		group_pointer_type					next_group; 				// Next group in the intrusive list of all groups. NULL if no next group
-		const aligned_pointer_type			elements; 					// Element storage
-		const skipfield_pointer_type		skipfield; 					// Skipfield storage. The element and skipfield arrays are allocated contiguously in this implementation, hence the skipfield pointer also functions as a 'one-past-end' pointer for the elements array. There will always be one additional skipfield node allocated compared to the number of elements. This is to ensure a faster ++ iterator operation (fewer checks are required when this is present). The extra node is unused and always zero, but checked, and not having it will result in out-of-bounds memory errors.
-		group_pointer_type					previous_group; 			// previous group in the linked list of all groups. NULL if no preceding group
-		skipfield_type							free_list_head; 			// The index of the last erased element in the group. The last erased element will, in turn, contain the number of the index of the next erased element, and so on. If this is == maximum skipfield_type value then free_list is empty ie. no erasures have occurred in the group (or if they have, the erased locations have subsequently been reused via insert()).
-		const skipfield_type					capacity; 					// The element capacity of this particular group - can also be calculated from reinterpret_cast<aligned_pointer_type>(group->skipfield) - group->elements, however this space is effectively free due to struct padding and the default sizeof skipfield_type, and calculating it once is cheaper
-		skipfield_type							size; 						// indicates total number of active elements in group - changes with insert and erase commands - used to check for empty group in erase function, as an indication to remove the group
+		const aligned_pointer_type 		elements;					// Element storage
+		const skipfield_pointer_type		skipfield;					// Skipfield storage. The element and skipfield arrays are allocated contiguously in this implementation, hence the skipfield pointer also functions as a 'one-past-end' pointer for the elements array. There will always be one additional skipfield node allocated compared to the number of elements. This is to ensure a faster ++ iterator operation (fewer checks are required when this is present). The extra node is unused and always zero, but checked, and not having it will result in out-of-bounds memory errors.
+		group_pointer_type					previous_group;			// previous group in the linked list of all groups. NULL if no preceding group
+		skipfield_type 						free_list_head;			// The index of the last erased element in the group. The last erased element will, in turn, contain the number of the index of the next erased element, and so on. If this is == maximum skipfield_type value then free_list is empty ie. no erasures have occurred in the group (or if they have, the erased locations have subsequently been reused via insert()).
+		const skipfield_type 				capacity;					// The element capacity of this particular group - can also be calculated from reinterpret_cast<aligned_pointer_type>(group->skipfield) - group->elements, however this space is effectively free due to struct padding and the default sizeof skipfield_type, and calculating it once is cheaper
+		skipfield_type 						size; 						// indicates total number of active elements in group - changes with insert and erase commands - used to check for empty group in erase function, as an indication to remove the group
 		group_pointer_type					erasures_list_next_group; // The next group in the singly-linked list of groups with erasures ie. with active erased-element free lists
-		size_type								group_number; 				// Used for comparison (> < >= <= <=>) iterator operators (used by distance function and user)
+		size_type								group_number;				// Used for comparison (> < >= <= <=>) iterator operators (used by distance function and user)
 
 
 		#ifdef PLF_VARIADICS_SUPPORT
@@ -463,15 +463,15 @@ public:
 	{
 	private:
 		group_pointer_type		group_pointer;
-		aligned_pointer_type		element_pointer;
+		aligned_pointer_type 	element_pointer;
 		skipfield_pointer_type	skipfield_pointer;
 
 	public:
-		typedef std::bidirectional_iterator_tag 	iterator_category;
+		typedef std::bidirectional_iterator_tag	iterator_category;
 		typedef typename colony::value_type 		value_type;
-		typedef typename colony::difference_type 	difference_type;
+		typedef typename colony::difference_type	difference_type;
 		typedef typename choose<is_const, typename colony::const_pointer, typename colony::pointer>::type		pointer;
-		typedef typename choose<is_const, typename colony::const_reference, typename colony::reference>::type	reference;
+		typedef typename choose<is_const, typename colony::const_reference, typename colony::reference>::type reference;
 
 		friend class colony;
 		friend class colony_reverse_iterator<false>;
@@ -670,10 +670,10 @@ public:
 		#ifdef PLF_CPP20_SUPPORT
 			template <bool is_const_it>
 			inline int operator <=> (const colony_iterator<is_const_it> &rh) const PLF_NOEXCEPT
-	 		{
-	 			return (element_pointer == rh.element_pointer) ? 0 : ((*this > rh) ? 1 : -1);
-	 		}
-	 	#endif
+			{
+				return (element_pointer == rh.element_pointer) ? 0 : ((*this > rh) ? 1 : -1);
+			}
+		#endif
 
 
 
@@ -743,8 +743,8 @@ public:
 				// For all subsequent groups, we follow this logic:
 				// 1. If distance is larger than the total number of non-erased elements in a group, we skip that group and subtract the number of elements in that group from distance
 				// 2. If distance is smaller than the total number of non-erased elements in a group, then:
-				//	  a. if there're no erased elements in the group we simply add distance to group->elements to find the new location for the iterator
-				//	  b. if there are erased elements in the group, we manually iterate and subtract 1 from distance on each iteration, until the new iterator location is found ie. distance = 0
+				//   a. if there're no erased elements in the group we simply add distance to group->elements to find the new location for the iterator
+				//   b. if there are erased elements in the group, we manually iterate and subtract 1 from distance on each iteration, until the new iterator location is found ie. distance = 0
 
 				// Note: incrementing element_pointer is avoided until necessary to avoid needless calculations
 
@@ -1105,9 +1105,9 @@ public:
 		iterator it;
 
 	public:
-		typedef std::bidirectional_iterator_tag 	iterator_category;
+		typedef std::bidirectional_iterator_tag	iterator_category;
 		typedef typename colony::value_type 		value_type;
-		typedef typename colony::difference_type 	difference_type;
+		typedef typename colony::difference_type	difference_type;
 		typedef typename choose<r_is_const, typename colony::const_pointer, typename colony::pointer>::type		pointer;
 		typedef typename choose<r_is_const, typename colony::const_reference, typename colony::reference>::type	reference;
 
@@ -1305,11 +1305,11 @@ public:
 
 		#ifdef PLF_CPP20_SUPPORT
 			template <bool is_const_it>
-	 		inline int operator <=> (const colony_reverse_iterator<is_const_it> &rh) const PLF_NOEXCEPT
-	 		{
-	 			return (rh.it <=> it);
-	 		}
-	 	#endif
+			inline int operator <=> (const colony_reverse_iterator<is_const_it> &rh) const PLF_NOEXCEPT
+			{
+				return (rh.it <=> it);
+			}
+		#endif
 
 
 
@@ -1651,7 +1651,7 @@ private:
 
 	// Colony Member variables:
 
-	iterator					end_iterator, begin_iterator;
+	iterator 				end_iterator, begin_iterator;
 	group_pointer_type	groups_with_erasures_list_head,	// Head of the singly-linked list of groups which have erased-element memory locations available for re-use
 								unused_groups_head;					// Head of singly-linked list of groups retained by erase() or created by reserve()
 	size_type				total_size, total_capacity;
@@ -1677,7 +1677,7 @@ private:
 
 	inline void check_capacities_conformance(plf::colony_limits capacities) const
 	{
-  		if (capacities.min < 2 || capacities.min > capacities.max || capacities.max > std::numeric_limits<skipfield_type>::max())
+		if (capacities.min < 2 || capacities.min > capacities.max || capacities.max > std::numeric_limits<skipfield_type>::max())
 		{
 			throw std::length_error("Supplied memory block capacities outside of allowable ranges");
 		}
@@ -1926,6 +1926,30 @@ public:
 		check_capacities_conformance(capacities);
 		assign<iterator_type>(first, last);
 	}
+
+
+
+	// Range constructor - differing iterators:
+
+	#ifdef PLF_CPP20_SUPPORT
+		template <class iterator_type1, class iterator_type2>
+			requires (!std::same_as<iterator_type1, iterator_type2> && std::equality_comparable_with<iterator_type1, iterator_type2> && !std::integral<iterator_type1> && !std::integral<iterator_type2>)
+		colony(const iterator_type1 &first, const iterator_type2 &last, const plf::colony_limits capacities = plf::colony_limits(PLF_MIN_BLOCK_CAPACITY, std::numeric_limits<skipfield_type>::max()), const allocator_type &alloc = allocator_type()):
+			allocator_type(alloc),
+			groups_with_erasures_list_head(NULL),
+			unused_groups_head(NULL),
+			total_size(0),
+			total_capacity(0),
+			tuple_allocator_pair(static_cast<skipfield_type>(capacities.min)),
+			group_allocator_pair(static_cast<skipfield_type>(capacities.max))
+		{
+			#ifndef PLF_ALIGNMENT_SUPPORT
+				check_skipfield_conformance();
+			#endif
+			check_capacities_conformance(capacities);
+			assign<iterator_type1, iterator_type2>(first, last);
+		}
+	#endif
 
 
 
@@ -3038,12 +3062,12 @@ public:
 
 	// Range insert:
 
- 	template <class iterator_type>
- 	inline void insert (const typename plf_enable_if_c<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type first, const iterator_type last)
- 	{
+	template <class iterator_type>
+	inline void insert (const typename plf_enable_if_c<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type first, const iterator_type last)
+	{
 		using std::distance;
- 		range_insert(first, static_cast<size_type>(distance(first, last)));
- 	}
+		range_insert(first, static_cast<size_type>(distance(first, last)));
+	}
 
 
 
@@ -3787,7 +3811,7 @@ private:
 
 		begin_iterator.element_pointer = begin_iterator.group_pointer->elements;
 		begin_iterator.skipfield_pointer = begin_iterator.group_pointer->skipfield;
-  		groups_with_erasures_list_head = NULL;
+		groups_with_erasures_list_head = NULL;
 		total_size = 0;
 	}
 
@@ -4511,9 +4535,9 @@ public:
 
 	struct colony_data : public uchar_allocator_type
 	{
-		aligned_pointer_type * const block_pointers;				// array of pointers to element memory blocks
+		aligned_pointer_type * const block_pointers; 			// array of pointers to element memory blocks
 		unsigned char * * const bitfield_pointers;				// array of pointers to bitfields in the form of unsigned char arrays representing whether an element is erased or not (0 for erased).
-		size_t * const block_capacities;								// array of the number of elements in each memory block
+		size_t * const block_capacities; 							// array of the number of elements in each memory block
 		const size_t number_of_blocks;								// size of each of the arrays above
 
 
@@ -4612,7 +4636,7 @@ public:
 			else
 		#endif
 		{
-			const iterator						swap_end_iterator = end_iterator, swap_begin_iterator = begin_iterator;
+			const iterator 					swap_end_iterator = end_iterator, swap_begin_iterator = begin_iterator;
 			const group_pointer_type		swap_groups_with_erasures_list_head = groups_with_erasures_list_head, swap_unused_groups_head = unused_groups_head;
 			const size_type					swap_total_size = total_size, swap_total_capacity = total_capacity;
 			const skipfield_type 			swap_min_group_capacity = tuple_allocator_pair.min_group_capacity, swap_max_group_capacity = group_allocator_pair.max_group_capacity;
@@ -4637,7 +4661,7 @@ public:
 		}
 	}
 
-};	// colony
+}; // colony
 
 
 
@@ -4689,8 +4713,8 @@ namespace std
 	typename plf::colony<element_type, allocator_type, priority>::size_type erase_if(plf::colony<element_type, allocator_type, priority> &container, predicate_function predicate)
 	{
 		typedef typename plf::colony<element_type, allocator_type, priority> colony;
-		typedef typename colony::const_iterator 	const_iterator;
-		typedef typename colony::size_type 			size_type;
+		typedef typename colony::const_iterator	const_iterator;
+		typedef typename colony::size_type			size_type;
 		size_type count = 0;
 
 		for(const_iterator current = container.begin(), end = container.end(); current != end;)

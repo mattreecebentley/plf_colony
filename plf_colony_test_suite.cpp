@@ -248,6 +248,21 @@ int main()
 			failpass("Iterator + distance test", distance(p_colony.begin(), plus_twenty) == 20);
 			failpass("Iterator - distance test", distance(plus_two_hundred, p_colony.begin()) == -200);
 
+			#ifdef PLF_TEST_CPP20_SUPPORT
+				colony<int *>::const_iterator plus_two_hundred_c = plus_two_hundred;
+				colony<int *> colony_copy(plus_twenty, plus_two_hundred_c);
+
+				total = 0;
+
+				for(colony<int *>::iterator the_iterator = p_colony.begin(); the_iterator != p_colony.end(); ++the_iterator)
+				{
+					++total;
+				}
+
+				failpass("Range-constructor with differing iterator types test", total == 180);
+			#endif
+
+
 			colony<int *>::iterator next_iterator = next(p_colony.begin(), 5);
 			colony<int *>::const_iterator prev_iterator = prev(p_colony.cend(), 300);
 
