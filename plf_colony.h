@@ -1193,7 +1193,7 @@ public:
 
 
 
-		inline PLF_FORCE_INLINE pointer * operator -> () const PLF_NOEXCEPT
+		inline PLF_FORCE_INLINE pointer operator -> () const PLF_NOEXCEPT
 		{
 			return reinterpret_cast<pointer>(it.element_pointer);
 		}
@@ -1777,7 +1777,7 @@ public:
 		group_allocator_pair(source.group_allocator_pair.max_group_capacity)
 	{ // can skip checking for skipfield conformance here as the skipfields must be equal between the destination and source, and source will have already had theirs checked. Same applies for other copy and move constructors below
 		range_assign(source.begin_iterator, source.total_size);
-		tuple_allocator_pair.min_group_capacity = source.tuple_allocator_pair.min_group_capacity; // reset to correct value for future clear() or erasures
+		tuple_allocator_pair.min_group_capacity = source.tuple_allocator_pair.min_group_capacity; // reset to correct value for future operations
 	}
 
 
@@ -2196,6 +2196,14 @@ private:
 public:
 
 
+	inline PLF_FORCE_INLINE void reset()
+	{
+		destroy_all_data();
+		blank();
+	}
+
+
+
 	iterator insert(const element_type &element)
 	{
 		if (end_iterator.element_pointer != NULL)
@@ -2300,7 +2308,7 @@ public:
 				}
 				catch (...)
 				{
-					clear();
+					reset();
 					throw;
 				}
 			}
@@ -2417,7 +2425,7 @@ public:
 					}
 					catch (...)
 					{
-						clear();
+						reset();
 						throw;
 					}
 				}
@@ -2536,7 +2544,7 @@ public:
 					}
 					catch (...)
 					{
-						clear();
+						reset();
 						throw;
 					}
 				}
@@ -3562,7 +3570,7 @@ public:
 		// Final group:
 		// Code explanation:
 		// If not erasing entire final group, 1. Destruct elements (if non-trivial destructor) and add locations to group free list. 2. process skipfield.
-		// If erasing entire group, 1. Destruct elements (if non-trivial destructor), 2. if no elements left in colony, clear() 3. otherwise reset end_iterator and remove group from groups-with-erasures list (if free list of erasures present)
+		// If erasing entire group, 1. Destruct elements (if non-trivial destructor), 2. if no elements left in colony, reset the group 3. otherwise reset end_iterator and remove group from groups-with-erasures list (if free list of erasures present)
 
 		if (iterator2.element_pointer != end_iterator.element_pointer || current.element_pointer != current.group_pointer->elements + *(current.group_pointer->skipfield)) // ie. not erasing entire group
 		{
@@ -3825,7 +3833,7 @@ public:
 	{
 		if (size == 0)
 		{
-			clear();
+			reset();
 			return;
 		}
 
@@ -3844,7 +3852,7 @@ private:
 	{
 		if (size == 0)
 		{
-			clear();
+			reset();
 			return;
 		}
 
@@ -4037,10 +4045,34 @@ public:
 
 
 
-	inline PLF_FORCE_INLINE void clear() PLF_NOEXCEPT
+	void clear() PLF_NOEXCEPT
 	{
-		destroy_all_data();
-		blank();
+		if (total_size == 0)
+		{
+			return;
+		}
+
+		// Destroy all elements if element type is non-trivial:
+		#ifdef PLF_TYPE_TRAITS_SUPPORT
+			if PLF_CONSTEXPR (!std::is_trivially_destructible<element_type>::value)
+		#endif
+		{
+			for (iterator current = begin_iterator; current != end_iterator; ++current)
+			{
+				PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(current.element_pointer));
+			}
+		}
+
+		if (begin_iterator.group_pointer != end_iterator.group_pointer)
+		{ // Move all other groups onto the unused_groups list
+			end_iterator.group_pointer->next_group = unused_groups_head;
+			unused_groups_head = begin_iterator.group_pointer->next_group;
+			end_iterator.group_pointer = begin_iterator.group_pointer; // other parts of iterator reset in the function below
+		}
+
+		reset_only_group_left(begin_iterator.group_pointer);
+		groups_with_erasures_list_head = NULL;
+		total_size = 0;
 	}
 
 
@@ -4131,7 +4163,7 @@ public:
 		}
 		else if (total_size == 0)
 		{
-			clear();
+			reset();
 			return;
 		}
 
@@ -4299,7 +4331,7 @@ public:
 			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
 				*this = std::move(source);
 			#else
-				clear();
+				reset();
 				swap(source);
 			#endif
 

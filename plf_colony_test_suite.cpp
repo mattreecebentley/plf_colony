@@ -534,7 +534,7 @@ int main()
 			failpass("Erase randomly till-empty test", i_colony.size() == 0);
 
 
-			i_colony.clear();
+			i_colony.reset();
 			i_colony.reshape(plf::colony_limits(10000, i_colony.block_limits().max));
 
 			i_colony.insert(30000, 1); // fill-insert 30000 elements
@@ -711,12 +711,12 @@ int main()
 			failpass("Total erase test", i_colony.empty());
 
 
-			i_colony.clear();
+			i_colony.reset();
 			i_colony.reshape(plf::colony_limits(3, i_colony.block_limits().max));
 
 			const unsigned int temp_capacity2 = static_cast<unsigned int>(i_colony.capacity());
 			i_colony.reserve(100000);
-			failpass("Colony reserve test", temp_capacity2 != i_colony.capacity());
+			failpass("Post-reset reserve test", temp_capacity2 != i_colony.capacity());
 
 			i_colony.insert(110000, 1);
 
@@ -837,7 +837,7 @@ int main()
 				++counter;
 			}
 
-			failpass("Range-erase from begin() test 1", counter == 545 && i_colony.size() == 545);
+			failpass("Range-erase from begin()", counter == 545 && i_colony.size() == 545);
 
 
 
@@ -855,7 +855,7 @@ int main()
 				++counter;
 			}
 
-			failpass("Range-erase to end() test 1", counter == 345 && i_colony.size() == 345);
+			failpass("Range-erase to end()", counter == 345 && i_colony.size() == 345);
 
 
 
@@ -1254,7 +1254,7 @@ int main()
 			#endif
 
 			i_colony3.clear();
-			i_colony2.clear();
+			i_colony2.reset();
 			i_colony2.reserve(50000);
 			i_colony2.insert(60000, 1);
 
