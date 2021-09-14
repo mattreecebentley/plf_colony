@@ -55,7 +55,7 @@
 		#define PLF_CONSTEXPR
 	#endif
 
-	#if defined(_MSVC_LANG) && (_MSVC_LANG > 201703L) && _MSC_VER >= 1923
+	#if defined(_MSVC_LANG) && (_MSVC_LANG > 201703L) && _MSC_VER >= 1920
 		#define PLF_CPP20_SUPPORT
 	#endif
 #elif defined(__cplusplus) && __cplusplus >= 201103L // C++11 support, at least
@@ -598,8 +598,6 @@ public:
 		}
 
 
-
-	public:
 
 		colony_iterator & operator -- ()
 		{
@@ -1653,7 +1651,7 @@ private:
 
 	iterator 				end_iterator, begin_iterator;
 	group_pointer_type	groups_with_erasures_list_head,	// Head of the singly-linked list of groups which have erased-element memory locations available for re-use
-								unused_groups_head;					// Head of singly-linked list of groups retained by erase() or created by reserve()
+								unused_groups_head;					// Head of singly-linked list of groups retained by erase()/clear() or created by reserve()
 	size_type				total_size, total_capacity;
 
 	struct ebco_pair2 : tuple_allocator_type // Packaging the element pointer allocator with a lesser-used member variable, for empty-base-class optimisation
@@ -1687,7 +1685,7 @@ private:
 	#ifndef PLF_ALIGNMENT_SUPPORT
 		inline void check_skipfield_conformance() const PLF_NOEXCEPT
 		{
-			PLF_STATIC_ASSERT(sizeof(element_type) >= sizeof(skipfield_type) * 2, "Element type is not large enough to accomodate colony requirements under C++98/03. Change to C++11 or above, or use a larger type."); // eg. under C++98/03, aligned_storage is not available, so sizeof(skipfield type) * 2 must be larger or equal to sizeof(element_type), otherwise the doubly-linked free lists of erased element indexes will not work correctly. So if you're storing chars, for example, and the skipfield type is unsigned short (currently default for this implementation), the compiler will flag you with this assert. Which means you cannot store char or unsigned char in colony under C++03, and if storing short or unsigned short you must use the priority::memory_use parameter in your template instantiation. Or just use C++11 and above.
+			PLF_STATIC_ASSERT(sizeof(element_type) >= sizeof(skipfield_type) * 2, "Element type is not large enough to accomodate colony requirements under C++98/03. Change to C++11 or above, or use a larger type."); // ie. under C++98/03, aligned_storage is not available, so sizeof(skipfield type) * 2 must be larger or equal to sizeof(element_type), otherwise the doubly-linked free lists of erased element indexes will not work correctly. So if you're storing chars, for example, and the skipfield type is unsigned short (currently default for this implementation), the compiler will flag you with this assert. Which means you cannot store char or unsigned char in colony under C++03, and if storing short or unsigned short you must use the priority::memory_use parameter in your template instantiation. Or just use C++11 and above.
 		}
 	#endif
 
@@ -3186,19 +3184,19 @@ public:
 			if PLF_CONSTEXPR (!std::is_trivially_destructible<element_type>::value) // This if-statement should be removed by the compiler on resolution of element_type. For some optimizing compilers this step won't be necessary (for MSVC 2013 it makes a difference)
 		#endif
 		{
-			PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(it.element_pointer)); // Destruct element
+			PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(it.element_pointer));
 		}
 
 		--total_size;
 
-		if (it.group_pointer->size-- != 1) // ie. non-empty group at this point in time, don't consolidate - optimization note: GCC optimizes postfix - 1 comparison better than prefix - 1 comparison in many cases.
+		if (it.group_pointer->size-- != 1) // ie. non-empty group at this point in time, don't consolidate - optimization note: GCC optimizes postfix - 1 comparison better than prefix - 1 comparison in some cases.
 		{
 			// Code logic for following section:
 			// ---------------------------------
-			// If current skipfield node has no skipped node on either side, continue as usual
-			// If node only has skipped node on left, set current node and start node of the skipblock to left node value + 1.
-			// If node only has skipped node on right, make this node the start node of the skipblock and update end node
-			// If node has skipped nodes on left and right, set start node of left skipblock and end node of right skipblock to the values of the left + right nodes + 1
+			// If current skipfield node has no skipblock on either side, create new skipblock of size 1
+			// If node only has skipblock on left, set current node and start node of the skipblock to left node value + 1.
+			// If node only has skipblock on right, make this node the start node of the skipblock and update end node
+			// If node has skipblocks on left and right, set start node of left skipblock and end node of right skipblock to the values of the left + right nodes + 1
 
 			// Optimization explanation:
 			// The contextual logic below is the same as that in the insert() functions but in this case the value of the current skipfield node will always be
@@ -3417,7 +3415,7 @@ public:
 								if PLF_CONSTEXPR (!std::is_trivially_destructible<element_type>::value)
 							#endif
 							{
-								PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(current.element_pointer)); // Destruct element
+								PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(current.element_pointer));
 							}
 
 							++number_of_group_erasures;
@@ -3444,7 +3442,7 @@ public:
 								{
 									while (current.element_pointer != end) // miniloop - avoid checking skipfield for rest of elements in group, as there are no more skipped elements now
 									{
-										PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(current.element_pointer++)); // Destruct element
+										PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(current.element_pointer++));
 									}
 								}
 
@@ -3521,7 +3519,7 @@ public:
 
 					do
 					{
-						PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(current.element_pointer)); // Destruct element
+						PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(current.element_pointer));
 						const skipfield_type skip = *(++current.skipfield_pointer);
 						current.element_pointer += static_cast<size_type>(skip) + 1u;
 						current.skipfield_pointer += skip;
@@ -3595,7 +3593,7 @@ public:
 							if PLF_CONSTEXPR (!std::is_trivially_destructible<element_type>::value)
 						#endif
 						{
-							PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(current.element_pointer)); // Destruct element
+							PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(current.element_pointer));
 						}
 
 						++number_of_group_erasures;
@@ -3622,7 +3620,7 @@ public:
 							{
 								while (current.element_pointer != iterator2.element_pointer)
 								{
-									PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(current.element_pointer++)); // Destruct element
+									PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(current.element_pointer++));
 								}
 							}
 
@@ -4595,9 +4593,6 @@ public:
 	};
 
 
-	typedef colony_data hive_data;
-
-
 
 private:
 
@@ -4694,17 +4689,6 @@ public:
 	}
 
 }; // colony
-
-
-
-// Set up hive as alias of colony:
-#if defined(__cplusplus) && __cplusplus >= 201103L
-	typedef colony_limits hive_limits;
-	typedef colony_priority hive_priority;
-
-	template <class element_type, class allocator_type = std::allocator<element_type>, plf::hive_priority priority = plf::performance>
-	using hive = plf::colony<element_type, allocator_type, priority>;
-#endif
 
 
 
