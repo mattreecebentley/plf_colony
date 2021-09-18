@@ -12,7 +12,7 @@
 		#define PLF_TEST_INITIALIZER_LIST_SUPPORT
 	#endif
 
-	#if defined(_MSVC_LANG) && (_MSVC_LANG > 201703L) && _MSC_VER >= 1920
+	#if defined(_MSVC_LANG) && (_MSVC_LANG >= 202002L) && _MSC_VER >= 1929
 		#define PLF_TEST_CPP20_SUPPORT
 	#endif
 #elif defined(__cplusplus) && __cplusplus >= 201103L // C++11 support, at least
@@ -62,7 +62,7 @@
 		#define PLF_TEST_INITIALIZER_LIST_SUPPORT
 	#endif
 
-	#if __cplusplus > 201703L && ((defined(__clang__) && (__clang_major__ >= 13)) || (defined(__GNUC__) && __GNUC__ >= 10) || (!defined(__clang__) && !defined(__GNUC__))) // assume correct C++20 implementation for other compilers
+	#if __cplusplus > 201704L && ((defined(__clang__) && (__clang_major__ >= 13)) || (defined(__GNUC__) && __GNUC__ >= 10) || (!defined(__clang__) && !defined(__GNUC__))) // assume correct C++20 implementation for other compilers
 		#define PLF_TEST_CPP20_SUPPORT
 	#endif
 #endif

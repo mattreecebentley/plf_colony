@@ -55,7 +55,7 @@
 		#define PLF_CONSTEXPR
 	#endif
 
-	#if defined(_MSVC_LANG) && (_MSVC_LANG > 201703L) && _MSC_VER >= 1920
+	#if defined(_MSVC_LANG) && (_MSVC_LANG >= 202002L) && _MSC_VER >= 1929
 		#define PLF_CPP20_SUPPORT
 	#endif
 #elif defined(__cplusplus) && __cplusplus >= 201103L // C++11 support, at least
@@ -168,7 +168,7 @@
 		#define PLF_CONSTEXPR
 	#endif
 
-	#if __cplusplus > 201703L && ((defined(__clang__) && (__clang_major__ >= 13)) || (defined(__GNUC__) && __GNUC__ >= 10) || (!defined(__clang__) && !defined(__GNUC__)))
+	#if __cplusplus > 201704L && ((defined(__clang__) && (__clang_major__ >= 13)) || (defined(__GNUC__) && __GNUC__ >= 10) || (!defined(__clang__) && !defined(__GNUC__)))
 		#define PLF_CPP20_SUPPORT
 	#endif
 #else
@@ -242,6 +242,35 @@
 
 namespace plf
 {
+
+
+#if defined(PLF_CPP20_SUPPORT) && !defined(PLF_CONCEPTS_DEFINED)
+	#define PLF_CONCEPTS_DEFINED
+	template<class type1>
+	concept convertable_to_bool = std::convertible_to<type1, bool>;
+
+
+
+	template<class type1>
+	concept boolean_testable = convertable_to_bool<type1> &&
+	   requires (type1 &&b)
+	{
+		{ !std::forward<type1>(b) } -> convertable_to_bool;
+	};
+
+
+
+	template<class type1, class type2>
+	concept actually_equality_comparable_with =
+		requires(const std::remove_reference_t<type1> &t1, const std::remove_reference_t<type2> &t2)
+	{
+		{ t1 == t2 } -> boolean_testable;
+		{ t1 != t2 } -> boolean_testable;
+		{ t2 == t1 } -> boolean_testable;
+		{ t2 != t1 } -> boolean_testable;
+	};
+#endif
+
 
 
 struct colony_limits // for use in block_capacity setting/getting functions and constructors
