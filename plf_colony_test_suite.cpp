@@ -298,6 +298,10 @@ int main()
 
 			failpass("Inequality operator test", p_colony2 != p_colony3);
 
+			#ifdef PLF_TEST_CPP20_SUPPORT
+				failpass("Spaceship operator test", (p_colony2 <=> p_colony3) != 0);
+			#endif
+
 			numtotal = 0;
 			total = 0;
 

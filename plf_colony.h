@@ -213,7 +213,7 @@
 
 
 
-#include <algorithm> // std::fill_n, std::sort
+#include <algorithm> // std::fill_n, std::sort, lexicographical_compare
 #include <cassert>	// assert
 #include <cstring>	// memset, memcpy, size_t
 #include <limits>  // std::numeric_limits
@@ -3933,6 +3933,13 @@ public:
 
 
 
+	inline static PLF_CONSTEXPR size_type block_metadata_memory(const size_type block_capacity)
+	{
+		return sizeof(group) + ((block_capacity + 1) * sizeof(skipfield_type));
+	}
+
+
+
 	#ifdef PLF_COLONY_TEST_DEBUG // used for debugging during internal testing only:
 		size_type group_size_sum() const PLF_NOEXCEPT
 		{
@@ -4155,6 +4162,15 @@ public:
 
 
 
+	#ifdef PLF_CPP20_SUPPORT
+		friend auto operator <=> (const colony &lh, const colony &rh)
+		{
+			return std::lexicographical_compare_three_way(lh.begin(), lh.end(), rh.begin(), rh.end());
+		}
+	#endif
+
+
+
 	void shrink_to_fit()
 	{
 		if (total_size == total_capacity)
@@ -4194,7 +4210,7 @@ public:
 
 		if (new_capacity > max_size())
 		{
-			throw std::length_error("Capacity requested via reserve() greater than max_size()");
+			throw std::length_error("Capacity requested via reserve() greater than maximum size returned by block_limits()");
 		}
 
 		new_capacity -= total_capacity;
