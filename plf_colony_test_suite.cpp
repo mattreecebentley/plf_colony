@@ -203,9 +203,6 @@ int main()
 
 			colony<int *> p_colony;
 
-			printf("%u", sizeof(p_colony));
-			getchar();
-			
 			failpass("Colony empty", p_colony.empty());
 
 			int ten = 10;
