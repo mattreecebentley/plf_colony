@@ -231,8 +231,9 @@
 
 #ifdef PLF_CPP20_SUPPORT
 	#include <concepts>
-	#include <compare> // std::strong_ordering
+	#include <compare> // std::strong_ordering, std::to_address
 	#include <ranges>
+	#include <bit> // bit_cast
 
 	namespace plf
 	{
@@ -299,6 +300,43 @@ namespace plf
 			return a < b;
 		}
 	};
+
+
+
+	template<class element_type>
+	struct eq_to
+	{
+		const element_type value;
+
+		explicit eq_to(const element_type store_value): // no noexcept as element may allocate and potentially throw when copied
+			value(store_value)
+		{}
+
+		bool operator() (const element_type compare_value) const PLF_NOEXCEPT
+		{
+			return value == compare_value;
+		}
+	};
+
+
+
+	// To enable conversion when allocator supplies non-raw pointers:
+	template <class destination_pointer_type, class source_pointer_type>
+	static PLF_CONSTFUNC destination_pointer_type convert_pointer(const source_pointer_type source_pointer) PLF_NOEXCEPT
+	{
+		#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_CPP20_SUPPORT) // constexpr necessary to avoid a branch for every call
+			if constexpr (std::is_trivial<destination_pointer_type>::value && std::is_trivial<source_pointer_type>::value)
+			{
+				return std::bit_cast<destination_pointer_type>(source_pointer);
+			}
+			else
+			{
+				return destination_pointer_type(std::to_address(source_pointer));
+			}
+		#else
+			return destination_pointer_type(&*source_pointer);
+		#endif
+	}
 
 #endif
 
@@ -388,26 +426,6 @@ private:
 	}
 
 
-	// To enable conversion when allocator supplies non-raw pointers:
-	template <class destination_pointer_type, class source_pointer_type>
-	static PLF_CONSTFUNC destination_pointer_type convert_pointer(const source_pointer_type source_pointer) PLF_NOEXCEPT
-	{
-		#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_CPP20_SUPPORT)
-			if constexpr (std::is_trivial<destination_pointer_type>::value && std::is_trivial<source_pointer_type>::value)
-			{
-				return reinterpret_cast<destination_pointer_type>(source_pointer);
-			}
-			else
-			{
-				return destination_pointer_type(std::to_address(source_pointer));
-			}
-		#else
-			return destination_pointer_type(&*source_pointer);
-		#endif
-	}
-
-
-
 	// forward declarations for typedefs below
 	struct group;
 	struct item_index_tuple; // for use in sort()
@@ -493,7 +511,7 @@ private:
 				last_endpoint(source.last_endpoint),
 				next_group(NULL),
 				elements(last_endpoint++),
-				skipfield(reinterpret_cast<skipfield_pointer_type>(elements + source.capacity)),
+				skipfield(convert_pointer<skipfield_pointer_type>(elements + source.capacity)),
 				previous_group(source.previous_group),
 				free_list_head(std::numeric_limits<skipfield_type>::max()),
 				capacity(source.capacity),
@@ -556,7 +574,7 @@ private:
 		#ifdef PLF_TYPE_TRAITS_SUPPORT
 			if PLF_CONSTEXPR (std::is_standard_layout<colony>::value && std::allocator_traits<allocator_type>::is_always_equal::value && std::is_trivial<group_pointer_type>::value && std::is_trivial<aligned_pointer_type>::value && std::is_trivial<skipfield_pointer_type>::value)
 			{ // If all pointer types are trivial, we can just nuke the member variables from orbit with memset (NULL is always 0):
-				std::memset(static_cast<void *>(&end_iterator), 0, offsetof(colony, min_block_capacity));
+				std::memset(static_cast<void *>(this), 0, offsetof(colony, min_block_capacity));
 			}
 			else
 		#endif
@@ -2534,7 +2552,7 @@ public:
 								{
 									while (current.element_pointer != end) // miniloop - avoid checking skipfield for rest of elements in group, as there are no more skipped elements now
 									{
-										PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(current.element_pointer++));
+										PLF_DESTROY(allocator_type, *this, convert_pointer<pointer>(current.element_pointer++));
 									}
 								}
 
@@ -2620,7 +2638,7 @@ public:
 
 					do
 					{
-						PLF_DESTROY(allocator_type, *this, reinterpret_cast<pointer>(current.element_pointer));
+						PLF_DESTROY(allocator_type, *this, convert_pointer<pointer>(current.element_pointer));
 						const skipfield_type skip = *(++current.skipfield_pointer);
 						current.element_pointer += static_cast<size_type>(skip) + 1u;
 						current.skipfield_pointer += skip;
@@ -4122,9 +4140,9 @@ public:
 
 
 		colony_data(const size_type size) :
-			block_pointers(reinterpret_cast<aligned_pointer_type *>(PLF_ALLOCATE(uchar_allocator_type, *this, size * sizeof(aligned_pointer_type), NULL))),
-			bitfield_pointers(reinterpret_cast<unsigned char **>(PLF_ALLOCATE(uchar_allocator_type, *this, size * sizeof(unsigned char *), NULL))),
-			block_capacities(reinterpret_cast<size_t *>(PLF_ALLOCATE(uchar_allocator_type, *this, size * sizeof(size_t), NULL))),
+			block_pointers(convert_pointer<aligned_pointer_type *>(PLF_ALLOCATE(uchar_allocator_type, *this, size * sizeof(aligned_pointer_type), NULL))),
+			bitfield_pointers(convert_pointer<unsigned char **>(PLF_ALLOCATE(uchar_allocator_type, *this, size * sizeof(unsigned char *), NULL))),
+			block_capacities(convert_pointer<size_t *>(PLF_ALLOCATE(uchar_allocator_type, *this, size * sizeof(size_t), NULL))),
 			number_of_blocks(size)
 		{}
 
@@ -4136,9 +4154,9 @@ public:
 				PLF_DEALLOCATE(uchar_allocator_type, *this, bitfield_pointers[index], (block_capacities[index] + 7) / 8);
 			}
 
-			PLF_DEALLOCATE(uchar_allocator_type, *this, reinterpret_cast<unsigned char *>(block_pointers), number_of_blocks * sizeof(aligned_pointer_type));
-			PLF_DEALLOCATE(uchar_allocator_type, *this, reinterpret_cast<unsigned char *>(bitfield_pointers), number_of_blocks * sizeof(unsigned char *));
-			PLF_DEALLOCATE(uchar_allocator_type, *this, reinterpret_cast<unsigned char *>(block_capacities), number_of_blocks * sizeof(size_t));
+			PLF_DEALLOCATE(uchar_allocator_type, *this, convert_pointer<unsigned char *>(block_pointers), number_of_blocks * sizeof(aligned_pointer_type));
+			PLF_DEALLOCATE(uchar_allocator_type, *this, convert_pointer<unsigned char *>(bitfield_pointers), number_of_blocks * sizeof(unsigned char *));
+			PLF_DEALLOCATE(uchar_allocator_type, *this, convert_pointer<unsigned char *>(block_capacities), number_of_blocks * sizeof(size_t));
 		}
 	};
 
@@ -5428,24 +5446,6 @@ public:
 
 
 
-// Used by std::erase_if() overload below:
-template<class element_type>
-struct colony_eq_to
-{
-	const element_type value;
-
-	explicit colony_eq_to(const element_type store_value): /* may not be PLF_NOEXCEPT as the element may allocate and therefore potentially throw when copied */
-		value(store_value)
-	{}
-
-	bool operator() (const element_type compare_value) const PLF_NOEXCEPT
-	{
-		return value == compare_value;
-	}
-};
-
-
-
 } // plf namespace
 
 
@@ -5509,7 +5509,7 @@ namespace std
 	template <class element_type, class allocator_type>
 	typename plf::colony<element_type, allocator_type>::size_type erase(plf::colony<element_type, allocator_type> &container, const element_type &value)
 	{
-		return erase_if(container, plf::colony_eq_to<element_type>(value));
+		return erase_if(container, plf::eq_to<element_type>(value));
 	}
 
 
