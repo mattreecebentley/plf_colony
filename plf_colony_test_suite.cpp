@@ -2031,7 +2031,7 @@ int main()
 			// Manually sum using raw memory blocks:
 			for (unsigned int block_num = 0; block_num != data->number_of_blocks; ++block_num)
 			{
-				colony<int>::aligned_element_type *current_element = data->block_pointers[block_num];
+				colony<int>::aligned_element_struct *current_element = data->block_pointers[block_num];
 				const unsigned char *bitfield_location = data->bitfield_pointers[block_num];
 				const size_t capacity = data->block_capacities[block_num];
 

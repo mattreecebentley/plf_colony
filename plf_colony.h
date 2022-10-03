@@ -360,13 +360,6 @@ class colony : private allocator_type // Empty base class optimisation - inherit
 	typedef typename plf::conditional<(priority == plf::performance && sizeof(element_type) > 10), unsigned short, unsigned char>::type		skipfield_type; // Note: unsigned short is equivalent to uint_least16_t ie. Using 16-bit unsigned integer in best-case scenario, greater-than-16-bit unsigned integer where platform doesn't support 16-bit types. unsigned char is always == 1 byte, as opposed to uint_8, which may not be.
 
 public:
-	#ifdef PLF_ALIGNMENT_SUPPORT
-		typedef typename std::aligned_storage<sizeof(element_type), (sizeof(element_type) >= (sizeof(skipfield_type) * 2) || alignof(element_type) >= (sizeof(skipfield_type) * 2)) ? alignof(element_type) : (sizeof(skipfield_type) * 2)>::type aligned_element_type; // align element to be at-least 2*skipfield_type width in order to support free list indexes in erased element memory space
-	#else
-		typedef element_type aligned_element_type;
-	#endif
-
-
 	// Standard container typedefs:
 
 	#ifdef PLF_ALLOCATOR_TRAITS_SUPPORT
@@ -400,18 +393,33 @@ public:
 	friend colony_reverse_iterator<true>;
 
 
-
-private:
-
-	// We combine the allocation of elements and skipfield into one allocation to save performance. Memory has to be allocated as an aligned type in order to align with memory boundaries correctly (as opposed to being allocated as char or uint_8). We use the following struct for allocation of the elements/skipfield block, as it ensures that the block - and subsequently the elements - will be aligned correctly by the allocator and that we do not create much wasted space in the skipfield (unless the alignof is very large)
-
 	#ifdef PLF_ALIGNMENT_SUPPORT
-		// Using the aligned type sizeof here instead of alignof would usually result in a lot of wasted space in the skipfield unless type is overaligned (in which case sizeof wouldn't work properly).
-		struct alignas(alignof(aligned_element_type)) aligned_allocation_struct
+		// The element as allocated in memory needs to be at-least 2*skipfield_type width in order to support free list indexes in erased element memory space, so:
+	   // make the size of this struct the larger of alignof(T), sizeof(T) or 2*skipfield_type (the latter is only relevant for type char/uchar), and
+	   // make the alignment alignof(T).
+	   // This type is used mainly for correct pointer arithmetic while iterating over elements in memory.
+		struct alignas(alignof(element_type)) aligned_element_struct
 		{
-		  char data[alignof(aligned_element_type)]; // Using char as sizeof is always guaranteed to be 1 byte regardless of the number of bits in a byte on given computer, whereas for example, uint8_t would fail on machines where there are more than 8 bits in a byte eg. Texas Instruments C54x DSPs.
+			 // Using char as sizeof is always guaranteed to be 1 byte regardless of the number of bits in a byte on given computer, whereas for example, uint8_t would fail on machines where there are more than 8 bits in a byte eg. Texas Instruments C54x DSPs.
+			char data[
+			(sizeof(element_type) < (sizeof(skipfield_type) * 2)) ?
+			((sizeof(skipfield_type) * 2) < alignof(element_type) ? alignof(element_type) : (sizeof(skipfield_type) * 2)) :
+			((sizeof(element_type) < alignof(element_type)) ? alignof(element_type) : sizeof(element_type))
+			];
+		};
+
+
+		// We combine the allocation of elements and skipfield into one allocation to save performance. This memory must be allocated as an aligned type with the same alignment as T in order for the elements to align with memory boundaries correctly (which won't happen if we allocate as char or uint_8). But the larger the sizeof in the type we use for allocation, the greater the chance of creating a lot of unused memory in the skipfield portion of the allocated block. So we create a type that is sizeof(alignof(T)), as in most cases alignof(T) < sizeof(T). If alignof(t) >= sizeof(t) this makes no difference.
+		struct alignas(alignof(element_type)) aligned_allocation_struct
+		{
+		  char data[alignof(element_type)];
 		};
 	#else
+		struct aligned_element_struct
+		{
+		  char data[sizeof(element_type)];
+		};
+
 		struct aligned_allocation_struct
 		{
 		  char data;
@@ -419,10 +427,12 @@ private:
 	#endif
 
 
+private:
+
 	// Calculate the capacity of a group's elements+skipfield memory block when expressed in multiples of the value_type's alignment (rounding up).
 	static size_type get_aligned_block_capacity(const skipfield_type elements_per_group)
 	{
-		return ((elements_per_group * (sizeof(aligned_element_type) + sizeof(skipfield_type))) + sizeof(skipfield_type) + sizeof(aligned_allocation_struct) - 1) / sizeof(aligned_allocation_struct);
+		return ((elements_per_group * (sizeof(aligned_element_struct) + sizeof(skipfield_type))) + sizeof(skipfield_type) + sizeof(aligned_allocation_struct) - 1) / sizeof(aligned_allocation_struct);
 	}
 
 
@@ -432,7 +442,7 @@ private:
 
 
 	#ifdef PLF_ALLOCATOR_TRAITS_SUPPORT
-		typedef typename std::allocator_traits<allocator_type>::template rebind_alloc<aligned_element_type>		aligned_allocator_type;
+		typedef typename std::allocator_traits<allocator_type>::template rebind_alloc<aligned_element_struct>		aligned_allocator_type;
 		typedef typename std::allocator_traits<allocator_type>::template rebind_alloc<group>							group_allocator_type;
 		typedef typename std::allocator_traits<allocator_type>::template rebind_alloc<skipfield_type>				skipfield_allocator_type;
 		typedef typename std::allocator_traits<allocator_type>::template rebind_alloc<aligned_allocation_struct> aligned_struct_allocator_type;
@@ -445,7 +455,7 @@ private:
 		typedef typename std::allocator_traits<aligned_struct_allocator_type>::pointer	aligned_struct_pointer_type;
 		typedef typename std::allocator_traits<tuple_allocator_type>::pointer				tuple_pointer_type;
 	#else
-		typedef typename allocator_type::template rebind<aligned_element_type>::other 	aligned_allocator_type;	// In case compiler supports alignment but not allocator_traits
+		typedef typename allocator_type::template rebind<aligned_element_struct>::other 	aligned_allocator_type;	// In case compiler supports alignment but not allocator_traits
 		typedef typename allocator_type::template rebind<group>::other 						group_allocator_type;
 		typedef typename allocator_type::template rebind<skipfield_type>::other 			skipfield_allocator_type;
 		typedef typename allocator_type::template rebind<char>::other							aligned_struct_allocator_type;
@@ -599,7 +609,7 @@ public:
 	// Adaptive minimum based around aligned size, sizeof(group) and sizeof(colony):
 	static PLF_CONSTFUNC skipfield_type default_min_block_capacity() PLF_NOEXCEPT
 	{
-		PLF_CONSTFUNC skipfield_type adaptive_size = static_cast<skipfield_type>(((sizeof(colony) + sizeof(group)) * 2) / sizeof(aligned_element_type));
+		PLF_CONSTFUNC skipfield_type adaptive_size = static_cast<skipfield_type>(((sizeof(colony) + sizeof(group)) * 2) / sizeof(aligned_element_struct));
 		PLF_CONSTFUNC skipfield_type max_block_capacity = default_max_block_capacity(); // Necessary to check against in situations with > 64bit pointer sizes and small sizeof(T)
 		return (8 > adaptive_size) ? 8 : (adaptive_size > max_block_capacity) ? max_block_capacity : adaptive_size;
 	}
@@ -764,7 +774,8 @@ public:
 
 
 
-		colony(colony &&source) noexcept:
+		colony(colony &&source) PLF_NOEXCEPT:
+			allocator_type(std::move(static_cast<allocator_type &>(source))),
 			end_iterator(std::move(source.end_iterator)),
 			begin_iterator(std::move(source.begin_iterator)),
 			erasure_groups_head(std::move(source.erasure_groups_head)),
@@ -1658,9 +1669,9 @@ private:
 			{
 				if PLF_CONSTEXPR (std::is_trivially_copyable<element_type>::value && std::is_trivially_copy_constructible<element_type>::value) // ie. we can get away with using the cheaper fill_n here if there is no chance of an exception being thrown:
 				{
-					if PLF_CONSTEXPR (sizeof(aligned_element_type) != sizeof(element_type))
+					if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type))
 					{
-						alignas (alignof(aligned_element_type)) element_type aligned_copy = element; // to avoid potentially violating memory boundaries in line below, create an initial object copy of same (but aligned) type
+						alignas (alignof(aligned_element_struct)) element_type aligned_copy = element; // to avoid potentially violating memory boundaries in line below, create an initial object copy of same (but aligned) type
 						std::fill_n(end_iterator.element_pointer, size, *convert_pointer<aligned_pointer_type>(&aligned_copy));
 					}
 					else
@@ -1739,9 +1750,9 @@ private:
 			{
 				if PLF_CONSTEXPR (std::is_trivially_copyable<element_type>::value && std::is_trivially_copy_constructible<element_type>::value)
 				{
-					if PLF_CONSTEXPR (sizeof(aligned_element_type) != sizeof(element_type))
+					if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type))
 					{
-						alignas (alignof(aligned_element_type)) element_type aligned_copy = element;
+						alignas (alignof(aligned_element_struct)) element_type aligned_copy = element;
 						std::fill_n(location, size, *convert_pointer<aligned_pointer_type>(&aligned_copy));
 					}
 					else
@@ -3316,7 +3327,11 @@ public:
 
 	#ifdef PLF_MOVE_SEMANTICS_SUPPORT
 		// Move assignment
-		colony & operator = (colony &&source) PLF_NOEXCEPT(std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value || std::allocator_traits<allocator_type>::is_always_equal::value)
+		#ifdef PLF_ALLOCATOR_TRAITS_SUPPORT
+			colony & operator = (colony &&source) PLF_NOEXCEPT(std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value || std::allocator_traits<allocator_type>::is_always_equal::value)
+		#else
+			colony & operator = (colony &&source) PLF_NOEXCEPT
+		#endif
 		{
 			assert(&source != this);
 			destroy_all_data();
@@ -3345,7 +3360,9 @@ public:
 					min_block_capacity = source.min_block_capacity;
 					max_block_capacity = source.max_block_capacity;
 
-					if PLF_CONSTEXPR(std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value)
+					#ifdef PLF_ALLOCATOR_TRAITS_SUPPORT
+						if PLF_CONSTEXPR(std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value)
+					#endif
 					{
 						static_cast<allocator_type &>(*this) = std::move(static_cast<allocator_type &>(source));
 						// Reconstruct rebinds:
