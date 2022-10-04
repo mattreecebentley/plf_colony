@@ -417,7 +417,7 @@ public:
 	#else
 		struct aligned_element_struct
 		{
-		  char data[sizeof(element_type)];
+			char data[(sizeof(element_type) < (sizeof(skipfield_type) * 2)) ? (sizeof(skipfield_type) * 2) : sizeof(element_type)];
 		};
 
 		struct aligned_allocation_struct
