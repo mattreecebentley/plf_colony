@@ -20,8 +20,10 @@
 
 #ifndef PLF_COLONY_H
 #define PLF_COLONY_H
-#define _ENABLE_EXTENDED_ALIGNED_STORAGE // Because MSVC didn't implement aligned_storage correctly in the past and avoids changing the default behaviour in order to not break old software, we have to specify this to enable correct aligning behaviour in MSVC.
 
+#ifndef _ENABLE_EXTENDED_ALIGNED_STORAGE
+#define _ENABLE_EXTENDED_ALIGNED_STORAGE // Because MSVC didn't implement aligned_storage correctly in the past and avoids changing the default behaviour in order to not break old software, we have to specify this to enable correct aligning behaviour in MSVC.
+#endif
 
 // Compiler-specific defines:
 
