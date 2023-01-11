@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Matthew Bentley (mattreecebentley@gmail.com) www.plflib.org
+// Copyright (c) 2023, Matthew Bentley (mattreecebentley@gmail.com) www.plflib.org
 
 // zLib license (https://www.zlib.net/zlib_license.html):
 // This software is provided 'as-is', without any express or implied
@@ -22,7 +22,8 @@
 #define PLF_COLONY_H
 
 #ifndef _ENABLE_EXTENDED_ALIGNED_STORAGE
-#define _ENABLE_EXTENDED_ALIGNED_STORAGE // Because MSVC didn't implement aligned_storage correctly in the past and avoids changing the default behaviour in order to not break old software, we have to specify this to enable correct aligning behaviour in MSVC.
+	#define _ENABLE_EXTENDED_ALIGNED_STORAGE // Because MSVC didn't implement aligned_storage correctly in the past and avoids changing the default behaviour in order to not break old software, we have to specify this to enable correct aligning behaviour in MSVC.
+	#define PLF_ALIGNED_STORAGE_DEFINED // Use to signify that we need to undef the above at the end of the file, in case the code using this header relies on the aforementioned old aligned_storage behaviour
 #endif
 
 // Compiler-specific defines:
@@ -32,6 +33,14 @@
 #define PLF_NOEXCEPT_ALLOCATOR
 #define PLF_CONSTEXPR
 #define PLF_CONSTFUNC
+#define PLF_EXCEPTIONS_SUPPORT
+
+#if ((defined(__clang__) || defined(__GNUC__)) && !defined(__EXCEPTIONS)) || (defined(_MSC_VER) && !defined(_CPPUNWIND))
+	#undef PLF_EXCEPTIONS_SUPPORT
+#else
+	#include <exception> // std::terminate
+#endif
+
 
 #if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
 	#if _MSC_VER >= 1600
@@ -214,7 +223,7 @@
 #include <limits>  // std::numeric_limits
 #include <memory> // std::allocator
 #include <iterator> // std::bidirectional_iterator_tag, iterator_traits, make_move_iterator, std::distance for range insert
-#include <stdexcept> // std::length_error
+#include <stdexcept> // std::length_error, std::terminate
 
 
 #ifdef PLF_TYPE_TRAITS_SUPPORT
@@ -385,21 +394,21 @@ public:
 	template <bool is_const> class			colony_iterator;
 	typedef colony_iterator<false>			iterator;
 	typedef colony_iterator<true> 			const_iterator;
-	friend colony_iterator<false>;
-	friend colony_iterator<true>;
+	friend class colony_iterator<false>;
+	friend class colony_iterator<true>;
 
 	template <bool is_const_r> class			colony_reverse_iterator;
 	typedef colony_reverse_iterator<false>	reverse_iterator;
 	typedef colony_reverse_iterator<true>		const_reverse_iterator;
-	friend colony_reverse_iterator<false>;
-	friend colony_reverse_iterator<true>;
+	friend class colony_reverse_iterator<false>;
+	friend class colony_reverse_iterator<true>;
 
 
 	#ifdef PLF_ALIGNMENT_SUPPORT
 		// The element as allocated in memory needs to be at-least 2*skipfield_type width in order to support free list indexes in erased element memory space, so:
-	   // make the size of this struct the larger of alignof(T), sizeof(T) or 2*skipfield_type (the latter is only relevant for type char/uchar), and
-	   // make the alignment alignof(T).
-	   // This type is used mainly for correct pointer arithmetic while iterating over elements in memory.
+		// make the size of this struct the larger of alignof(T), sizeof(T) or 2*skipfield_type (the latter is only relevant for type char/uchar), and
+		// make the alignment alignof(T).
+		// This type is used mainly for correct pointer arithmetic while iterating over elements in memory.
 		struct alignas(alignof(element_type)) aligned_element_struct
 		{
 			 // Using char as sizeof is always guaranteed to be 1 byte regardless of the number of bits in a byte on given computer, whereas for example, uint8_t would fail on machines where there are more than 8 bits in a byte eg. Texas Instruments C54x DSPs.
@@ -424,7 +433,7 @@ public:
 
 		struct aligned_allocation_struct
 		{
-		  char data;
+		  char data[sizeof(skipfield_type)];
 		};
 	#endif
 
@@ -457,12 +466,12 @@ private:
 		typedef typename std::allocator_traits<aligned_struct_allocator_type>::pointer	aligned_struct_pointer_type;
 		typedef typename std::allocator_traits<tuple_allocator_type>::pointer				tuple_pointer_type;
 	#else
-		typedef typename allocator_type::template rebind<aligned_element_struct>::other 	aligned_allocator_type;	// In case compiler supports alignment but not allocator_traits
-		typedef typename allocator_type::template rebind<group>::other 						group_allocator_type;
-		typedef typename allocator_type::template rebind<skipfield_type>::other 			skipfield_allocator_type;
-		typedef typename allocator_type::template rebind<char>::other							aligned_struct_allocator_type;
-		typedef typename allocator_type::template rebind<item_index_tuple>::other			tuple_allocator_type;
-		typedef typename allocator_type::template rebind<unsigned char>::other				uchar_allocator_type;
+		typedef typename allocator_type::template rebind<aligned_element_struct>::other 		aligned_allocator_type;	// In case compiler supports alignment but not allocator_traits
+		typedef typename allocator_type::template rebind<group>::other 							group_allocator_type;
+		typedef typename allocator_type::template rebind<skipfield_type>::other 				skipfield_allocator_type;
+		typedef typename allocator_type::template rebind<aligned_allocation_struct>::other	aligned_struct_allocator_type;
+		typedef typename allocator_type::template rebind<item_index_tuple>::other				tuple_allocator_type;
+		typedef typename allocator_type::template rebind<unsigned char>::other					uchar_allocator_type;
 
 		typedef typename aligned_allocator_type::pointer 			aligned_pointer_type;
 		typedef typename group_allocator_type::pointer				group_pointer_type;
@@ -575,7 +584,11 @@ private:
 
 		if (capacities.min < hard_capacities.min || capacities.min > capacities.max || capacities.max > hard_capacities.max)
 		{
-			throw std::length_error("Supplied memory block capacities outside of block_capacity_hard_limits()");
+			#ifdef PLF_EXCEPTIONS_SUPPORT
+				throw std::length_error("Supplied memory block capacities outside of block_capacity_hard_limits()");
+			#else
+				std::terminate();
+			#endif
 		}
 	}
 
@@ -1079,19 +1092,27 @@ private:
 	{
 		group_pointer_type const new_group = PLF_ALLOCATE(group_allocator_type, group_allocator, 1, 0);
 
-		try
-		{
+		#ifdef PLF_EXCEPTIONS_SUPPORT
+			try
+			{
+				#ifdef PLF_VARIADICS_SUPPORT
+					PLF_CONSTRUCT(group_allocator_type, group_allocator, new_group, aligned_allocation_struct_allocator, elements_per_group, previous);
+				#else
+					PLF_CONSTRUCT(group_allocator_type, group_allocator, new_group, group(aligned_allocation_struct_allocator, elements_per_group, previous));
+				#endif
+			}
+			catch (...)
+			{
+				PLF_DEALLOCATE(group_allocator_type, group_allocator, new_group, 1);
+				throw;
+			}
+		#else
 			#ifdef PLF_VARIADICS_SUPPORT
 				PLF_CONSTRUCT(group_allocator_type, group_allocator, new_group, aligned_allocation_struct_allocator, elements_per_group, previous);
 			#else
 				PLF_CONSTRUCT(group_allocator_type, group_allocator, new_group, group(aligned_allocation_struct_allocator, elements_per_group, previous));
 			#endif
-		}
-		catch (...)
-		{
-			PLF_DEALLOCATE(group_allocator_type, group_allocator, new_group, 1);
-			throw;
-		}
+		#endif
 
 		return new_group;
 	}
@@ -1338,15 +1359,19 @@ public:
 						else
 					#endif
 					{
-						try
-						{
+						#ifdef PLF_EXCEPTIONS_SUPPORT
+							try
+							{
+								PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(next_group->elements), element);
+							}
+							catch (...)
+							{
+								deallocate_group(next_group);
+								throw;
+							}
+						#else
 							PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(next_group->elements), element);
-						}
-						catch (...)
-						{
-							deallocate_group(next_group);
-							throw;
-						}
+						#endif
 					}
 
 					total_capacity += new_group_size;
@@ -1389,15 +1414,19 @@ public:
 				else
 			#endif
 			{
-				try
-				{
+				#ifdef PLF_EXCEPTIONS_SUPPORT
+					try
+					{
+						PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(end_iterator.element_pointer++), element);
+					}
+					catch (...)
+					{
+						reset();
+						throw;
+					}
+				#else
 					PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(end_iterator.element_pointer++), element);
-				}
-				catch (...)
-				{
-					reset();
-					throw;
-				}
+				#endif
 			}
 
 			++end_iterator.skipfield_pointer;
@@ -1455,15 +1484,19 @@ public:
 							else
 						#endif
 						{
-							try
-							{
+							#ifdef PLF_EXCEPTIONS_SUPPORT
+								try
+								{
+									PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(next_group->elements), std::move(element));
+								}
+								catch (...)
+								{
+									deallocate_group(next_group);
+									throw;
+								}
+							#else
 								PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(next_group->elements), std::move(element));
-							}
-							catch (...)
-							{
-								deallocate_group(next_group);
-								throw;
-							}
+							#endif
 						}
 
 						total_capacity += new_group_size;
@@ -1505,15 +1538,19 @@ public:
 					else
 				#endif
 				{
-					try
-					{
+					#ifdef PLF_EXCEPTIONS_SUPPORT
+						try
+						{
+							PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(end_iterator.element_pointer++), std::move(element));
+						}
+						catch (...)
+						{
+							reset();
+							throw;
+						}
+					#else
 						PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(end_iterator.element_pointer++), std::move(element));
-					}
-					catch (...)
-					{
-						reset();
-						throw;
-					}
+					#endif
 				}
 
 				++end_iterator.skipfield_pointer;
@@ -1573,15 +1610,19 @@ public:
 							else
 						#endif
 						{
-							try
-							{
+							#ifdef PLF_EXCEPTIONS_SUPPORT
+								try
+								{
+									PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(next_group->elements), std::forward<arguments>(parameters) ...);
+								}
+								catch (...)
+								{
+									deallocate_group(next_group);
+									throw;
+								}
+							#else
 								PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(next_group->elements), std::forward<arguments>(parameters) ...);
-							}
-							catch (...)
-							{
-								deallocate_group(next_group);
-								throw;
-							}
+							#endif
 						}
 
 						total_capacity += new_group_size;
@@ -1623,15 +1664,19 @@ public:
 					else
 				#endif
 				{
-					try
-					{
+					#ifdef PLF_EXCEPTIONS_SUPPORT
+						try
+						{
+							PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(end_iterator.element_pointer++), std::forward<arguments>(parameters) ...);
+						}
+						catch (...)
+						{
+							reset();
+							throw;
+						}
+					#else
 						PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(end_iterator.element_pointer++), std::forward<arguments>(parameters) ...);
-					}
-					catch (...)
-					{
-						reset();
-						throw;
-					}
+					#endif
 				}
 
 				++end_iterator.skipfield_pointer;
@@ -1700,15 +1745,19 @@ private:
 
 			do
 			{
-				try
-				{
+				#ifdef PLF_EXCEPTIONS_SUPPORT
+					try
+					{
+						PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(end_iterator.element_pointer), element);
+					}
+					catch (...)
+					{
+						recover_from_partial_fill();
+						throw;
+					}
+				#else
 					PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(end_iterator.element_pointer), element);
-				}
-				catch (...)
-				{
-					recover_from_partial_fill();
-					throw;
-				}
+				#endif
 			} while (++end_iterator.element_pointer != fill_end);
 		}
 
@@ -1776,19 +1825,25 @@ private:
 		#endif
 		{
 			const aligned_pointer_type fill_end = location + size;
-			const skipfield_type prev_free_list_node = *convert_pointer<skipfield_pointer_type>(location); // in case of exception, grabbing indexes before free_list node is reused
+			#ifdef PLF_EXCEPTIONS_SUPPORT
+				const skipfield_type prev_free_list_node = *convert_pointer<skipfield_pointer_type>(location); // in case of exception, grabbing indexes before free_list node is reused
+			#endif
 
 			for (aligned_pointer_type current_location = location; current_location != fill_end; ++current_location)
 			{
-				try
-				{
+				#ifdef PLF_EXCEPTIONS_SUPPORT
+					try
+					{
+						PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(current_location), element);
+					}
+					catch (...)
+					{
+						recover_from_partial_skipblock_fill(location, current_location, skipfield_pointer, prev_free_list_node);
+						throw;
+					}
+				#else
 					PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(current_location), element);
-				}
-				catch (...)
-				{
-					recover_from_partial_skipblock_fill(location, current_location, skipfield_pointer, prev_free_list_node);
-					throw;
-				}
+				#endif
 			}
 		}
 
@@ -1904,10 +1959,9 @@ public:
 
 		// Use up remaining available element locations in end group:
 		// This variable is either the remaining capacity of the group or the number of elements yet to be filled, whichever is smaller:
-		const skipfield_type group_remainder = (static_cast<skipfield_type>(
-			convert_pointer<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer) >= size) ?
-			static_cast<skipfield_type>(size) :
-			static_cast<skipfield_type>(convert_pointer<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer);
+		const skipfield_type group_remainder = static_cast<skipfield_type>(
+			(static_cast<size_type>(convert_pointer<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer) >= size) ?
+			size : convert_pointer<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer);
 
 		if (group_remainder != 0)
 		{
@@ -1960,15 +2014,19 @@ private:
 
 			do
 			{
-				try
-				{
+				#ifdef PLF_EXCEPTIONS_SUPPORT
+					try
+					{
+						PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(end_iterator.element_pointer), *it++);
+					}
+					catch (...)
+					{
+						recover_from_partial_fill();
+						throw;
+					}
+				#else
 					PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(end_iterator.element_pointer), *it++);
-				}
-				catch (...)
-				{
-					recover_from_partial_fill();
-					throw;
-				}
+				#endif
 			} while (++end_iterator.element_pointer != fill_end);
 		}
 
@@ -1994,19 +2052,25 @@ private:
 			else
 		#endif
 		{
-			const skipfield_type prev_free_list_node = *convert_pointer<skipfield_pointer_type>(location); // in case of exception, grabbing indexes before free_list node is reused
+			#ifdef PLF_EXCEPTIONS_SUPPORT
+				const skipfield_type prev_free_list_node = *convert_pointer<skipfield_pointer_type>(location); // in case of exception, grabbing indexes before free_list node is reused
+			#endif
 
 			for (aligned_pointer_type current_location = location; current_location != fill_end; ++current_location)
 			{
-				try
-				{
+				#ifdef PLF_EXCEPTIONS_SUPPORT
+					try
+					{
+						PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(current_location), *it++);
+					}
+					catch (...)
+					{
+						recover_from_partial_skipblock_fill(location, current_location, skipfield_pointer, prev_free_list_node);
+						throw;
+					}
+				#else
 					PLF_CONSTRUCT(allocator_type, *this, convert_pointer<pointer>(current_location), *it++);
-				}
-				catch (...)
-				{
-					recover_from_partial_skipblock_fill(location, current_location, skipfield_pointer, prev_free_list_node);
-					throw;
-				}
+				#endif
 			}
 		}
 
@@ -2115,11 +2179,9 @@ private:
 			}
 		}
 
-
-		const skipfield_type group_remainder = (static_cast<skipfield_type>(
-			convert_pointer<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer) >= size) ?
-			static_cast<skipfield_type>(size) :
-			static_cast<skipfield_type>(convert_pointer<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer);
+		const skipfield_type group_remainder = static_cast<skipfield_type>(
+			(static_cast<size_type>(convert_pointer<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer) >= size) ?
+			size : convert_pointer<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer);
 
 		if (group_remainder != 0)
 		{
@@ -3185,7 +3247,9 @@ public:
 	void reshape(const colony_limits block_limits)
 	{
 		check_capacities_conformance(block_limits);
-		const skipfield_type original_min = min_block_capacity, original_max = max_block_capacity;
+		#ifdef PLF_EXCEPTIONS_SUPPORT
+			const skipfield_type original_min = min_block_capacity, original_max = max_block_capacity;
+		#endif
 		min_block_capacity = static_cast<skipfield_type>(block_limits.min);
 		max_block_capacity = static_cast<skipfield_type>(block_limits.max);
 
@@ -3197,21 +3261,29 @@ public:
 				#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
 					if PLF_CONSTEXPR (!(std::is_copy_constructible<element_type>::value || std::is_move_constructible<element_type>::value))
 					{
-						throw std::length_error("Current colony's block capacities do not fit within the supplied block limits, therefore reallocation of elements must occur, however user is using a non-copy-constructible/non-move-constructible type.");
+						#ifdef PLF_EXCEPTIONS_SUPPORT
+							throw std::length_error("Current colony's block capacities do not fit within the supplied block limits, therefore reallocation of elements must occur, however user is using a non-copy-constructible/non-move-constructible type.");
+						#else
+							std::terminate();
+						#endif
 					}
 					else
 				#endif
 				{
-					try
-					{
+					#ifdef PLF_EXCEPTIONS_SUPPORT
+						try
+						{
+							consolidate();
+						}
+						catch(...)
+						{
+							min_block_capacity = original_min;
+							max_block_capacity = original_max;
+							throw;
+						}
+					#else
 						consolidate();
-					}
-					catch(...)
-					{
-						min_block_capacity = original_min;
-						max_block_capacity = original_max;
-						throw;
-					}
+					#endif
 				}
 
 				return;
@@ -3557,7 +3629,11 @@ public:
 
 		if (new_capacity > max_size())
 		{
-			throw std::length_error("Capacity requested via reserve() greater than max_size()");
+			#ifdef PLF_EXCEPTIONS_SUPPORT
+				throw std::length_error("Capacity requested via reserve() greater than max_size()");
+			#else
+				std::terminate();
+			#endif
 		}
 
 		new_capacity -= total_capacity;
@@ -3610,17 +3686,21 @@ public:
 
 		while (number_of_max_groups != 0)
 		{
-			try
-			{
+			#ifdef PLF_EXCEPTIONS_SUPPORT
+				try
+				{
+					current_group->next_group = allocate_new_group(max_block_capacity, current_group);
+				}
+				catch (...)
+				{
+					deallocate_group(current_group->next_group);
+					current_group->next_group = unused_groups_head;
+					unused_groups_head = first_unused_group;
+					throw;
+				}
+			#else
 				current_group->next_group = allocate_new_group(max_block_capacity, current_group);
-			}
-			catch (...)
-			{
-				deallocate_group(current_group->next_group);
-				current_group->next_group = unused_groups_head;
-				unused_groups_head = first_unused_group;
-				throw;
-			}
+			#endif
 
 			current_group = current_group->next_group;
 			total_capacity += max_block_capacity;
@@ -3715,7 +3795,11 @@ public:
 			{
 				if (current_group->capacity < min_block_capacity || current_group->capacity > max_block_capacity)
 				{
-					throw std::length_error("A source memory block capacity is outside of the destination's minimum or maximum memory block capacity limits - please change either the source or the destination's min/max block capacity limits using reshape() before calling splice() in this case");
+					#ifdef PLF_EXCEPTIONS_SUPPORT
+						throw std::length_error("A source memory block capacity is outside of the destination's minimum or maximum memory block capacity limits - please change either the source or the destination's min/max block capacity limits using reshape() before calling splice() in this case");
+					#else
+						std::terminate();
+					#endif
 				}
 			}
 		}
@@ -4158,7 +4242,7 @@ public:
 		const size_t number_of_blocks;								// size of each of the arrays above
 
 
-		colony_data(const size_type size) :
+		colony_data(const colony::size_type size) :
 			block_pointers(convert_pointer<aligned_pointer_type *>(PLF_ALLOCATE(uchar_allocator_type, *this, size * sizeof(aligned_pointer_type), NULL))),
 			bitfield_pointers(convert_pointer<unsigned char **>(PLF_ALLOCATE(uchar_allocator_type, *this, size * sizeof(unsigned char *), NULL))),
 			block_capacities(convert_pointer<size_t *>(PLF_ALLOCATE(uchar_allocator_type, *this, size * sizeof(size_t), NULL))),
@@ -5566,5 +5650,10 @@ namespace std
 #undef PLF_DESTROY
 #undef PLF_ALLOCATE
 #undef PLF_DEALLOCATE
+
+#ifdef PLF_ALIGNED_STORAGE_DEFINED // undef if was not already defined prior to inclusion of this header
+	#undef _ENABLE_EXTENDED_ALIGNED_STORAGE
+	#undef PLF_ALIGNED_STORAGE_DEFINED
+#endif
 
 #endif // PLF_COLONY_H
