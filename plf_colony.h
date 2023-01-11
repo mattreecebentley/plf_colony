@@ -37,7 +37,6 @@
 
 #if ((defined(__clang__) || defined(__GNUC__)) && !defined(__EXCEPTIONS)) || (defined(_MSC_VER) && !defined(_CPPUNWIND))
 	#undef PLF_EXCEPTIONS_SUPPORT
-#else
 	#include <exception> // std::terminate
 #endif
 
@@ -223,7 +222,7 @@
 #include <limits>  // std::numeric_limits
 #include <memory> // std::allocator
 #include <iterator> // std::bidirectional_iterator_tag, iterator_traits, make_move_iterator, std::distance for range insert
-#include <stdexcept> // std::length_error, std::terminate
+#include <stdexcept> // std::length_error
 
 
 #ifdef PLF_TYPE_TRAITS_SUPPORT
