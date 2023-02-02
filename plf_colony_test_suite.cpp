@@ -390,7 +390,7 @@ int main()
 			for(colony<int *>::reverse_iterator the_iterator = p_colony.rbegin(); the_iterator != p_colony.rend(); ++the_iterator)
 			{
 				colony<int *>::iterator it = the_iterator.base();
-				the_iterator = p_colony.erase(--it);
+				p_colony.erase(--it);
 				++total;
 			}
 
@@ -2008,6 +2008,7 @@ int main()
 			failpass("erase_if test",	static_cast<int>(i_colony.size()) == 500);
 
 		}
+
 
 		{
 			title2("data() tests");
