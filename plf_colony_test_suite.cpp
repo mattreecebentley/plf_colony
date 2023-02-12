@@ -1,3 +1,5 @@
+// Basic feature testing for colony.
+
 #define PLF_COLONY_TEST_DEBUG
 
 #if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
@@ -246,6 +248,81 @@ int main()
 
 			failpass("Iterator + distance test", distance(p_colony.begin(), plus_twenty) == 20);
 			failpass("Iterator - distance test", distance(plus_two_hundred, p_colony.begin()) == -200);
+
+			{
+				colony<int> d_colony(1000, 1, {20, 20});
+
+				for (colony<int>::iterator current = d_colony.begin(), end = d_colony.end(); current!= end;)
+				{
+					if ((rand() & 7) == 0)
+					{
+						current = d_colony.erase(current);
+					}
+					else
+					{
+						++current;
+					}
+				}
+
+				int d_size = d_colony.size();
+
+				for (int counter = 0; counter != 10000; ++counter)
+				{
+					const int dist1 = rand() % (d_size - 2), dist2 = rand() % ((d_size - 2) - dist1);
+					colony<int>::iterator first = d_colony.begin(), last;
+					advance(first, dist1);
+					last = first;
+					advance(last, dist2);
+
+					const int dist = distance(first, last);
+
+					if (dist != dist2)
+					{
+						printf("positive distance overload fuzz-test failed, real distance = %d, reported distance = %d, counter = %d, suite loop = %d", dist2, dist, counter, looper);
+						getchar();
+						abort();
+					}
+				}
+
+				failpass("Positive distance overload fuzz-test", true);
+
+
+				for (colony<int>::iterator current = d_colony.begin(), end = d_colony.end(); current!= end;)
+				{
+					if ((rand() & 3) == 0)
+					{
+						current = d_colony.erase(current);
+					}
+					else
+					{
+						++current;
+					}
+				}
+
+				d_size = d_colony.size();
+
+
+				for (int counter = 0; counter != 10000; ++counter)
+				{
+					const int dist1 = rand() % (d_size - 2), dist2 = rand() % (d_size - 2);
+					colony<int>::iterator first = d_colony.begin(), last = d_colony.begin();
+					advance(first, dist1);
+					advance(last, dist2);
+
+					const int dist = distance(first, last);
+
+					if (dist != dist2 - dist1)
+					{
+						printf("positive/negative distance overload fuzz-test failed, real distance = %d, reported distance = %d, counter = %d, suite loop = %d", dist2, dist, counter, looper);
+						getchar();
+						abort();
+					}
+				}
+
+				failpass("Positive/negative distance overload fuzz-test", true);
+			}
+
+
 
 			#ifdef PLF_TEST_CPP20_SUPPORT
 				colony<int *>::const_iterator plus_two_hundred_c = plus_two_hundred;

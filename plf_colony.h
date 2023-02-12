@@ -4949,9 +4949,9 @@ public:
 			{
 				distance += iterator2.skipfield_pointer - iterator1.skipfield_pointer;
 			}
- 			else if (iterator2.group_pointer->last_endpoint - 1 >= iterator2.element_pointer || iterator2.element_pointer + 1 + *(iterator2.skipfield_pointer + 1) == iterator2.group_pointer->last_endpoint) // ie. if iterator2 is .end() or the last element in the block
+ 			else if (iterator1.element_pointer == iterator2.group_pointer->elements + *(iterator2.group_pointer->skipfield) && iterator2.element_pointer + 1 + *(iterator2.skipfield_pointer + 1) == iterator2.group_pointer->last_endpoint) // ie. if iterator1 is at beginning of block (have to check this in case first and last are in the same block to begin with) and iterator2 is last element in the block
 			{
-				distance += static_cast<difference_type>(iterator2.group_pointer->size) - (iterator2.group_pointer->last_endpoint - iterator2.element_pointer);
+				distance += static_cast<difference_type>(iterator2.group_pointer->size) - 1;
 			}
 			else
 			{
@@ -5054,7 +5054,7 @@ public:
 		colony_reverse_iterator (const colony_iterator<is_const_r> &source) PLF_NOEXCEPT:
 			current(source)
 		{
-      	++(*this);
+			++(*this);
 		}
 
 
@@ -5066,7 +5066,7 @@ public:
 		#endif
 			current(source)
 		{
-      	++(*this);
+			++(*this);
 		}
 
 
