@@ -385,8 +385,8 @@ public:
 	#endif
 
 	typedef element_type value_type;
-	typedef element_type &																		reference;
-	typedef const element_type &																const_reference;
+	typedef element_type &			reference;
+	typedef const element_type &	const_reference;
 
 
 	// Iterator forward declarations:
@@ -398,7 +398,7 @@ public:
 
 	template <bool is_const_r> class			colony_reverse_iterator;
 	typedef colony_reverse_iterator<false>	reverse_iterator;
-	typedef colony_reverse_iterator<true>		const_reverse_iterator;
+	typedef colony_reverse_iterator<true>	const_reverse_iterator;
 	friend class colony_reverse_iterator<false>;
 	friend class colony_reverse_iterator<true>;
 
@@ -2894,9 +2894,9 @@ public:
 					while(current.element_pointer != iterator2.element_pointer)
 					{
 						PLF_DESTROY(allocator_type, *this, convert_pointer<pointer>(current.element_pointer));
-						++current.skipfield_pointer;
-						current.element_pointer += static_cast<size_type>(*current.skipfield_pointer) + 1u;
-						current.skipfield_pointer += *current.skipfield_pointer;
+						const skipfield_type skip = *(++current.skipfield_pointer);
+						current.element_pointer += static_cast<size_type>(skip) + 1u;
+						current.skipfield_pointer += skip;
 					}
 				}
 
@@ -4315,6 +4315,10 @@ public:
 	class colony_iterator
 	{
 	private:
+		typedef typename colony::group_pointer_type 		group_pointer_type;
+		typedef typename colony::aligned_pointer_type 	aligned_pointer_type;
+		typedef typename colony::skipfield_pointer_type skipfield_pointer_type;
+
 		group_pointer_type		group_pointer;
 		aligned_pointer_type 	element_pointer;
 		skipfield_pointer_type	skipfield_pointer;
@@ -4982,6 +4986,11 @@ public:
 	template <bool is_const_r>
 	class colony_reverse_iterator
 	{
+	private:
+		typedef typename colony::group_pointer_type 		group_pointer_type;
+		typedef typename colony::aligned_pointer_type 	aligned_pointer_type;
+		typedef typename colony::skipfield_pointer_type skipfield_pointer_type;
+
 	protected:
 		iterator current;
 
@@ -4996,6 +5005,7 @@ public:
 		typedef typename plf::conditional<is_const_r, typename colony::const_reference, typename colony::reference>::type	reference;
 
 		friend class colony;
+
 
 		template <class distance_type>
 		friend void advance(colony_reverse_iterator &it, distance_type distance)
@@ -5196,9 +5206,9 @@ public:
 		// In this case we have to redefine the algorithm, rather than using the internal iterator's -- operator, in order for the reverse_iterator to be allowed to reach rend() ie. begin_iterator - 1
 		colony_reverse_iterator & operator ++ ()
 		{
-			colony::group_pointer_type &group_pointer = current.group_pointer;
-			colony::aligned_pointer_type &element_pointer = current.element_pointer;
-			colony::skipfield_pointer_type &skipfield_pointer = current.skipfield_pointer;
+			group_pointer_type &group_pointer = current.group_pointer;
+			aligned_pointer_type &element_pointer = current.element_pointer;
+			skipfield_pointer_type &skipfield_pointer = current.skipfield_pointer;
 
 			assert(group_pointer != NULL);
 

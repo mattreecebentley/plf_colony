@@ -250,7 +250,7 @@ int main()
 			failpass("Iterator - distance test", distance(plus_two_hundred, p_colony.begin()) == -200);
 
 			{
-				colony<int> d_colony(1000, 1, {20, 20});
+				colony<int> d_colony(1000, 1, plf::colony_limits(20, 20));
 
 				for (colony<int>::iterator current = d_colony.begin(), end = d_colony.end(); current!= end;)
 				{
