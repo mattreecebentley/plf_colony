@@ -367,7 +367,7 @@ enum colony_priority { performance, memory_use };
 template <class element_type, class allocator_type = std::allocator<element_type>, plf::colony_priority priority = plf::performance>
 class colony : private allocator_type // Empty base class optimisation - inheriting allocator functions
 {
-	typedef typename plf::conditional<(priority == plf::performance && sizeof(element_type) > 10), unsigned short, unsigned char>::type		skipfield_type; // Note: unsigned short is equivalent to uint_least16_t ie. Using 16-bit unsigned integer in best-case scenario, greater-than-16-bit unsigned integer where platform doesn't support 16-bit types. unsigned char is always == 1 byte, as opposed to uint_8, which may not be.
+	typedef typename plf::conditional<(priority == plf::performance && (sizeof(element_type) > 10 || alignof(element_type) > 10)), unsigned short, unsigned char>::type		skipfield_type; // Note: unsigned short is equivalent to uint_least16_t ie. Using 16-bit unsigned integer in best-case scenario, greater-than-16-bit unsigned integer where platform doesn't support 16-bit types. unsigned char is always == 1 byte, as opposed to uint_8, which may not be.
 
 public:
 	// Standard container typedefs:
@@ -3190,14 +3190,51 @@ public:
 
 	static PLF_CONSTFUNC size_type block_metadata_memory(const size_type block_capacity) PLF_NOEXCEPT
 	{
-		return sizeof(group) + ((get_aligned_block_capacity(block_capacity) - block_capacity) * sizeof(aligned_allocation_struct));
+		return sizeof(group) + ((get_aligned_block_capacity(static_cast<skipfield_type>(block_capacity)) - block_capacity) * sizeof(aligned_allocation_struct));
 	}
 
 
 
-	static PLF_CONSTFUNC size_type block_allocation_amount(const size_type block_capacity) PLF_NOEXCEPT
+	static PLF_CONSTFUNC size_type block_allocation_amount(size_type block_capacity) PLF_NOEXCEPT
 	{
-		return sizeof(aligned_allocation_struct) * get_aligned_block_capacity(block_capacity);
+		if (block_capacity > std::numeric_limits<skipfield_type>::max())
+		{
+			block_capacity = std::numeric_limits<skipfield_type>::max();
+		}
+
+		return sizeof(aligned_allocation_struct) * get_aligned_block_capacity(static_cast<skipfield_type>(block_capacity));
+	}
+
+
+
+	static PLF_CONSTFUNC size_type max_block_capacity_per_allocation(const size_type allocation_amount) PLF_NOEXCEPT
+	{
+		// Get a rough approximation of the number of elements + skipfield units we can fit in the amount expressed:
+		size_type num_units = allocation_amount / (sizeof(aligned_element_struct) + sizeof(skipfield_type));
+
+		// Truncate the amount to the implementation's hard block capacity max limit:
+		if (num_units > std::numeric_limits<skipfield_type>::max())
+		{
+			num_units = std::numeric_limits<skipfield_type>::max();
+		}
+
+		// Adjust num_units downward based on (a) the additional skipfield node necessary per-block in this implementation and
+		// (b) any additional memory waste required in order to allocate the skipfield in multiples of the element type's alignof:
+		if ((	/* Explanation: elements and skipfield are allocated in a single allocation to save performance.
+				In order for the elements to be correctly aligned in memory, this single allocation is aligned to the alignof
+				the element type, so the first line below is the allocation amount in bytes required for the skipfield
+				when allocated in multiples of the element type's alignof. The + sizeof(skipfield_type) adds the additional skipfield node
+				as mentioned, and the (num_units + 1) minus 1 byte rounds up the integer division: */
+			((((num_units + 1) * sizeof(aligned_allocation_struct)) - 1 + sizeof(skipfield_type)) / sizeof(aligned_allocation_struct))
+				/* the second line is the amount of memory in bytes necessary for the elements themselves: */
+			+ (num_units * sizeof(aligned_element_struct)))
+				/* then we compare against the desired allocation amount: */
+			> allocation_amount)
+		{
+			--num_units; // In this implementation it is not possible for the necessary adjustment to be greater than 1 element+skipfield sizeof
+		}
+
+		return num_units;
 	}
 
 
