@@ -3207,7 +3207,7 @@ public:
 
 
 
-	static PLF_CONSTFUNC size_type max_block_capacity_per_allocation(const size_type allocation_amount) PLF_NOEXCEPT
+	static PLF_CONSTFUNC size_type max_elements_per_allocation(const size_type allocation_amount) PLF_NOEXCEPT
 	{
 		// Get a rough approximation of the number of elements + skipfield units we can fit in the amount expressed:
 		size_type num_units = allocation_amount / (sizeof(aligned_element_struct) + sizeof(skipfield_type));
@@ -3365,7 +3365,7 @@ public:
 
 	static PLF_CONSTFUNC colony_limits block_capacity_hard_limits() PLF_NOEXCEPT
 	{
-		return colony_limits(3, std::numeric_limits<skipfield_type>::max());
+		return colony_limits(1, std::numeric_limits<skipfield_type>::max());
 	}
 
 
