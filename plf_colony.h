@@ -3211,11 +3211,12 @@ public:
 	{
 		// Get a rough approximation of the number of elements + skipfield units we can fit in the amount expressed:
 		size_type num_units = allocation_amount / (sizeof(aligned_element_struct) + sizeof(skipfield_type));
+		PLF_CONSTFUNC colony_limits hard_capacities = block_capacity_hard_limits();
 
 		// Truncate the amount to the implementation's hard block capacity max limit:
-		if (num_units > std::numeric_limits<skipfield_type>::max())
+		if (num_units > hard_capacities.max)
 		{
-			num_units = std::numeric_limits<skipfield_type>::max();
+			num_units = hard_capacities.max;
 		}
 
 		// Adjust num_units downward based on (a) the additional skipfield node necessary per-block in this implementation and
@@ -3232,6 +3233,11 @@ public:
 			> allocation_amount)
 		{
 			--num_units; // In this implementation it is not possible for the necessary adjustment to be greater than 1 element+skipfield sizeof
+		}
+
+		if (num_units < hard_capacities.min)
+		{
+			num_units = 0;
 		}
 
 		return num_units;
@@ -3365,7 +3371,7 @@ public:
 
 	static PLF_CONSTFUNC colony_limits block_capacity_hard_limits() PLF_NOEXCEPT
 	{
-		return colony_limits(1, std::numeric_limits<skipfield_type>::max());
+		return colony_limits(3, std::numeric_limits<skipfield_type>::max());
 	}
 
 
