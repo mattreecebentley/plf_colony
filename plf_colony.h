@@ -537,6 +537,7 @@ private:
 				capacity(source.capacity),
 				size(1),
 				erasures_list_next_group(NULL),
+				erasures_list_previous_group(NULL),
 				group_number((source.previous_group == NULL) ? 0 : source.previous_group->group_number + 1u)
 			{
 				std::memset(convert_pointer<void *>(skipfield), 0, sizeof(skipfield_type) * (static_cast<size_type>(capacity) + 1u));
