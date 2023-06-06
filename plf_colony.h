@@ -243,7 +243,6 @@
 	#include <concepts>
 	#include <compare> // std::strong_ordering, std::to_address
 	#include <ranges>
-	#include <bit> // bit_cast
 
 	namespace plf
 	{
@@ -330,24 +329,16 @@ namespace plf
 
 
 
-	// To enable conversion when allocator supplies non-raw pointers:
-	template <class destination_pointer_type, class source_pointer_type>
-	static PLF_CONSTFUNC destination_pointer_type convert_pointer(const source_pointer_type source_pointer) PLF_NOEXCEPT
+	// To enable conversion to void * when allocator supplies non-raw pointers:
+	template <class source_pointer_type>
+	static PLF_CONSTFUNC void * convert_to_void(const source_pointer_type source_pointer) PLF_NOEXCEPT
 	{
-		#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_CPP20_SUPPORT) // constexpr necessary to avoid a branch for every call
-			if constexpr (std::is_trivial<destination_pointer_type>::value && std::is_trivial<source_pointer_type>::value)
-			{
-				return std::bit_cast<destination_pointer_type>(source_pointer);
-			}
-			else
-			{
-				return destination_pointer_type(std::to_address(source_pointer));
-			}
+		#if defined(PLF_CPP20_SUPPORT)
+			return static_cast<void *>(std::to_address(source_pointer));
 		#else
-			return destination_pointer_type(&*source_pointer);
+			return static_cast<void *>(&*source_pointer);
 		#endif
 	}
-
 #endif
 
 
@@ -446,6 +437,25 @@ private:
 	}
 
 
+	// To enable conversion when allocator supplies non-raw pointers:
+	template <class destination_pointer_type, class source_pointer_type>
+	static PLF_CONSTFUNC destination_pointer_type convert_pointer(const source_pointer_type source_pointer) PLF_NOEXCEPT
+	{
+		#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_CPP20_SUPPORT) // constexpr necessary to avoid a branch for every call
+			if constexpr (std::is_trivial<destination_pointer_type>::value)
+			{
+				return reinterpret_cast<destination_pointer_type>(std::to_address(source_pointer));
+			}
+			else
+			{
+				return destination_pointer_type(std::to_address(source_pointer));
+			}
+		#else
+			return destination_pointer_type(&*source_pointer);
+		#endif
+	}
+
+
 	// forward declarations for typedefs below
 	struct group;
 	struct item_index_tuple; // for use in sort()
@@ -512,7 +522,7 @@ private:
 				erasures_list_previous_group(NULL),
 				group_number((previous == NULL) ? 0 : previous->group_number + 1u)
 			{
-				std::memset(convert_pointer<void *>(skipfield), 0, sizeof(skipfield_type) * (static_cast<size_type>(elements_per_group) + 1u));
+				std::memset(convert_to_void(skipfield), 0, sizeof(skipfield_type) * (static_cast<size_type>(elements_per_group) + 1u));
 			}
 		#else
 			// This is a hack around the fact that allocator_type::construct only supports copy construction in C++03 and copy elision does not occur on the vast majority of compilers in this circumstance. So to avoid running out of memory (and losing performance) from allocating the same block twice, we 'move' in the 'copy' constructor.
@@ -540,7 +550,7 @@ private:
 				erasures_list_previous_group(NULL),
 				group_number((source.previous_group == NULL) ? 0 : source.previous_group->group_number + 1u)
 			{
-				std::memset(convert_pointer<void *>(skipfield), 0, sizeof(skipfield_type) * (static_cast<size_type>(capacity) + 1u));
+				std::memset(convert_to_void(skipfield), 0, sizeof(skipfield_type) * (static_cast<size_type>(capacity) + 1u));
 			}
 		#endif
 
@@ -557,7 +567,7 @@ private:
 			erasures_list_previous_group = NULL;
 			group_number = group_num;
 
-			std::memset(convert_pointer<void *>(skipfield), 0, sizeof(skipfield_type) * static_cast<size_type>(capacity)); // capacity + 1 is not necessary here as the final skipfield node is never written to after initialization
+			std::memset(convert_to_void(skipfield), 0, sizeof(skipfield_type) * static_cast<size_type>(capacity)); // capacity + 1 is not necessary here as the final skipfield node is never written to after initialization
 		}
 	};
 
@@ -2688,7 +2698,7 @@ public:
 
 				if (distance_to_end > 2) // if the skipblock is longer than 2 nodes, fill in the middle nodes with non-zero values so that get_iterator() and is_active will work
 				{
-					std::memset(convert_pointer<void *>(iterator1.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_end - 2));
+					std::memset(convert_to_void(iterator1.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_end - 2));
 				}
 
 				iterator1.group_pointer->size = static_cast<skipfield_type>(iterator1.group_pointer->size - number_of_group_erasures);
@@ -2875,7 +2885,7 @@ public:
 
 				if (distance_to_iterator2 > 2) // if the skipblock is longer than 2 nodes, fill in the middle nodes with non-zero values so that get_iterator() and is_active() will work
 				{
-					std::memset(convert_pointer<void *>(current_saved.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_iterator2 - 2));
+					std::memset(convert_to_void(current_saved.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_iterator2 - 2));
 				}
 
 				if (iterator1.element_pointer == begin_iterator.element_pointer)
