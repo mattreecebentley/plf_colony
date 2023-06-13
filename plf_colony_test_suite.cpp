@@ -264,7 +264,7 @@ int main()
 					}
 				}
 
-				int d_size = d_colony.size();
+				int d_size = static_cast<int>(d_colony.size());
 
 				for (int counter = 0; counter != 10000; ++counter)
 				{
@@ -274,7 +274,7 @@ int main()
 					last = first;
 					advance(last, dist2);
 
-					const int dist = distance(first, last);
+					const int dist = static_cast<int>(distance(first, last));
 
 					if (dist != dist2)
 					{
@@ -299,7 +299,7 @@ int main()
 					}
 				}
 
-				d_size = d_colony.size();
+				d_size = static_cast<int>(d_colony.size());
 
 
 				for (int counter = 0; counter != 10000; ++counter)
@@ -309,7 +309,7 @@ int main()
 					advance(first, dist1);
 					advance(last, dist2);
 
-					const int dist = distance(first, last);
+					const int dist = static_cast<int>(distance(first, last));
 
 					if (dist != dist2 - dist1)
 					{
