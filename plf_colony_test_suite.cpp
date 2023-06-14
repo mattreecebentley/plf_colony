@@ -824,7 +824,6 @@ int main()
 					}
 				}
 
-				unsigned int internal_loop_counter = 0;
 
 				for (colony<int>::iterator the_iterator = i_colony.begin(); the_iterator != i_colony.end();)
 				{
@@ -837,8 +836,6 @@ int main()
 					{
 						++the_iterator;
 					}
-
-					++internal_loop_counter;
 				}
 			}
 
@@ -1179,7 +1176,7 @@ int main()
 			small_struct_non_trivial ss(5);
 
 			unsigned int size, range1 = 0, range2 = 0, internal_loop_counter;
-			int counter, sum1 = 0;
+			int counter;
 
 			ss_nt.insert(10000, ss);
 
@@ -1189,7 +1186,6 @@ int main()
 			for (colony<small_struct_non_trivial>::iterator ss_it = ss_nt.begin(); ss_it != ss_nt.end(); ++ss_it)
 			{
 				ss_it = ss_nt.erase(ss_it);
-				sum1 += ss_it->number;
 				++range1;
 			}
 
@@ -1371,7 +1367,7 @@ int main()
 			#endif
 
 			#ifdef PLF_TEST_MOVE_SEMANTICS_SUPPORT
-	 			i_colony3.insert(std::move(i_colony2.begin()), std::move(i_colony2.cend()));
+	 			i_colony3.insert(std::move_iterator(i_colony2.begin()), std::move_iterator(i_colony2.end()));
 
 	 			failpass("Range move-insertion test", i_colony3.size() == 506003);
 
