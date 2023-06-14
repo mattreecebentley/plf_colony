@@ -1367,7 +1367,7 @@ int main()
 			#endif
 
 			#ifdef PLF_TEST_MOVE_SEMANTICS_SUPPORT
-	 			i_colony3.insert(std::move_iterator(i_colony2.begin()), std::move_iterator(i_colony2.end()));
+	 			i_colony3.insert(std::make_move_iterator(i_colony2.begin()), std::make_move_iterator(i_colony2.end()));
 
 	 			failpass("Range move-insertion test", i_colony3.size() == 506003);
 
