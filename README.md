@@ -6,3 +6,5 @@ Documentation and function descriptions here: https://plflib.org/colony.htm#func
  - A build2 package for colony is available here: https://cppget.org/plf-colony
 
 plf::colony is C++98/03/11/14/17/20/23-compatible.
+
+![alt text](https://plflib.org/colony_infographic.png)
