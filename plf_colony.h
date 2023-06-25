@@ -221,7 +221,7 @@
 #include <cstring>	// memset, memcpy, size_t
 #include <limits>  // std::numeric_limits
 #include <memory> // std::allocator
-#include <iterator> // std::bidirectional_iterator_tag, iterator_traits, make_move_iterator, std::distance for range insert
+#include <iterator> // std::bidirectional_iterator_tag, iterator_traits, std::move_iterator, std::distance for range insert
 #include <stdexcept> // std::length_error
 
 
@@ -243,6 +243,7 @@
 	#include <concepts>
 	#include <compare> // std::strong_ordering, std::to_address
 	#include <ranges>
+
 
 	namespace plf
 	{
@@ -274,7 +275,7 @@ namespace plf
 #ifndef PLF_TOOLS
 	#define PLF_TOOLS
 
-	// std:: tool replacements for C++03/98 support:
+	// std:: tool replacements for C++03/98/11 support:
 	template <bool condition, class T = void>
 	struct enable_if
 	{
@@ -313,11 +314,11 @@ namespace plf
 
 
 	template<class element_type>
-	struct eq_to
+	struct equal_to
 	{
 		const element_type value;
 
-		explicit eq_to(const element_type store_value): // no noexcept as element may allocate and potentially throw when copied
+		explicit equal_to(const element_type store_value): // no noexcept as element may allocate and potentially throw when copied
 			value(store_value)
 		{}
 
@@ -331,7 +332,7 @@ namespace plf
 
 	// To enable conversion to void * when allocator supplies non-raw pointers:
 	template <class source_pointer_type>
-	static PLF_CONSTFUNC void * convert_to_void(const source_pointer_type source_pointer) PLF_NOEXCEPT
+	static PLF_CONSTFUNC void * void_cast(const source_pointer_type source_pointer) PLF_NOEXCEPT
 	{
 		#if defined(PLF_CPP20_SUPPORT)
 			return static_cast<void *>(std::to_address(source_pointer));
@@ -339,6 +340,15 @@ namespace plf
 			return static_cast<void *>(&*source_pointer);
 		#endif
 	}
+
+
+	#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+		template <class iterator_type>
+		PLF_CONSTFUNC std::move_iterator<iterator_type> make_move_iterator(iterator_type it)
+		{
+			return std::move_iterator<iterator_type>(std::move(it));
+		}
+	#endif
 #endif
 
 
@@ -355,10 +365,14 @@ enum colony_priority { performance, memory_use };
 
 
 
-template <class element_type, class allocator_type = std::allocator<element_type>, plf::colony_priority priority = plf::performance>
+template <class element_type, class allocator_type = std::allocator<element_type>, plf::colony_priority priority = performance>
 class colony : private allocator_type // Empty base class optimisation - inheriting allocator functions
 {
-	typedef typename plf::conditional<(priority == plf::performance && (sizeof(element_type) > 10 || alignof(element_type) > 10)), unsigned short, unsigned char>::type		skipfield_type; // Note: unsigned short is equivalent to uint_least16_t ie. Using 16-bit unsigned integer in best-case scenario, greater-than-16-bit unsigned integer where platform doesn't support 16-bit types. unsigned char is always == 1 byte, as opposed to uint_8, which may not be.
+	#ifdef PLF_ALIGNMENT_SUPPORT
+		typedef typename plf::conditional<(priority == performance && (sizeof(element_type) > 10 || alignof(element_type) > 10)), unsigned short, unsigned char>::type		skipfield_type; // Note: unsigned short is equivalent to uint_least16_t ie. Using 16-bit unsigned integer in best-case scenario, greater-than-16-bit unsigned integer where platform doesn't support 16-bit types. unsigned char is always == 1 byte, as opposed to uint_8, which may not be.
+	#else
+		typedef typename plf::conditional<(priority == performance && sizeof(element_type) > 10), unsigned short, unsigned char>::type		skipfield_type;
+	#endif
 
 public:
 	// Standard container typedefs:
@@ -522,7 +536,7 @@ private:
 				erasures_list_previous_group(NULL),
 				group_number((previous == NULL) ? 0 : previous->group_number + 1u)
 			{
-				std::memset(convert_to_void(skipfield), 0, sizeof(skipfield_type) * (static_cast<size_type>(elements_per_group) + 1u));
+				std::memset(plf::void_cast(skipfield), 0, sizeof(skipfield_type) * (static_cast<size_type>(elements_per_group) + 1u));
 			}
 		#else
 			// This is a hack around the fact that allocator_type::construct only supports copy construction in C++03 and copy elision does not occur on the vast majority of compilers in this circumstance. So to avoid running out of memory (and losing performance) from allocating the same block twice, we 'move' in the 'copy' constructor.
@@ -550,7 +564,7 @@ private:
 				erasures_list_previous_group(NULL),
 				group_number((source.previous_group == NULL) ? 0 : source.previous_group->group_number + 1u)
 			{
-				std::memset(convert_to_void(skipfield), 0, sizeof(skipfield_type) * (static_cast<size_type>(capacity) + 1u));
+				std::memset(plf::void_cast(skipfield), 0, sizeof(skipfield_type) * (static_cast<size_type>(capacity) + 1u));
 			}
 		#endif
 
@@ -567,7 +581,7 @@ private:
 			erasures_list_previous_group = NULL;
 			group_number = group_num;
 
-			std::memset(convert_to_void(skipfield), 0, sizeof(skipfield_type) * static_cast<size_type>(capacity)); // capacity + 1 is not necessary here as the final skipfield node is never written to after initialization
+			std::memset(plf::void_cast(skipfield), 0, sizeof(skipfield_type) * static_cast<size_type>(capacity)); // capacity + 1 is not necessary here as the final skipfield node is never written to after initialization
 		}
 	};
 
@@ -974,7 +988,7 @@ public:
 
 		template<class range_type>
 			requires std::ranges::range<range_type>
-		colony(plf::ranges::from_range_t, range_type &&rg, const colony_limits block_limits, const allocator_type &alloc = allocator_type()):
+		colony(ranges::from_range_t, range_type &&rg, const colony_limits block_limits, const allocator_type &alloc = allocator_type()):
 			allocator_type(alloc),
 			erasure_groups_head(NULL),
 			unused_groups_head(NULL),
@@ -2523,7 +2537,7 @@ public:
 				remove_from_groups_with_erasures_list(it.group_pointer);
 			}
 
-			if PLF_CONSTEXPR (priority == plf::performance)
+			if PLF_CONSTEXPR (priority == performance)
 			{
 				if (it.group_pointer->next_group != end_iterator.group_pointer)
 				{
@@ -2556,7 +2570,7 @@ public:
 			end_iterator.element_pointer = convert_pointer<aligned_pointer_type>(end_iterator.group_pointer->skipfield);
 			end_iterator.skipfield_pointer = end_iterator.group_pointer->skipfield + end_iterator.group_pointer->capacity;
 
-			if PLF_CONSTEXPR (priority == plf::performance)
+			if PLF_CONSTEXPR (priority == performance)
 			{
 				add_group_to_unused_groups_list(it.group_pointer);
 			}
@@ -2702,7 +2716,7 @@ public:
 
 				if (distance_to_end > 2) // if the skipblock is longer than 2 nodes, fill in the middle nodes with non-zero values so that get_iterator() and is_active will work
 				{
-					std::memset(convert_to_void(iterator1.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_end - 2));
+					std::memset(plf::void_cast(iterator1.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_end - 2));
 				}
 
 				iterator1.group_pointer->size = static_cast<skipfield_type>(iterator1.group_pointer->size - number_of_group_erasures);
@@ -2889,7 +2903,7 @@ public:
 
 				if (distance_to_iterator2 > 2) // if the skipblock is longer than 2 nodes, fill in the middle nodes with non-zero values so that get_iterator() and is_active() will work
 				{
-					std::memset(convert_to_void(current_saved.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_iterator2 - 2));
+					std::memset(plf::void_cast(current_saved.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_iterator2 - 2));
 				}
 
 				if (iterator1.element_pointer == begin_iterator.element_pointer)
@@ -2928,7 +2942,7 @@ public:
 					end_iterator.element_pointer = end_iterator.group_pointer->last_endpoint;
 					end_iterator.skipfield_pointer = end_iterator.group_pointer->skipfield + end_iterator.group_pointer->capacity;
 
-					if PLF_CONSTEXPR (priority == plf::performance)
+					if PLF_CONSTEXPR (priority == performance)
 					{
 						add_group_to_unused_groups_list(current.group_pointer);
 					}
@@ -2947,7 +2961,7 @@ public:
 				}
 				else // ie. colony is now empty
 				{
-					if PLF_CONSTEXPR (priority == plf::memory_use)
+					if PLF_CONSTEXPR (priority == memory_use)
 					{
 						trim_capacity();
 					}
@@ -3285,7 +3299,7 @@ private:
 			if PLF_CONSTEXPR (std::is_nothrow_move_constructible<element_type>::value && std::is_nothrow_move_assignable<element_type>::value)
 			{
 				colony temp(colony_limits(min_block_capacity, max_block_capacity));
-				temp.range_assign(std::make_move_iterator(begin_iterator), total_size);
+				temp.range_assign(plf::make_move_iterator(begin_iterator), total_size);
 				*this = std::move(temp); // Avoid generating 2nd temporary
 			}
 			else
@@ -3506,7 +3520,7 @@ public:
 			}
 			else // Allocator isn't movable so move elements from source and deallocate the source's blocks:
 			{
-				range_assign(std::make_move_iterator(source.begin_iterator), source.total_size);
+				range_assign(plf::make_move_iterator(source.begin_iterator), source.total_size);
 				source.destroy_all_data();
 			}
 
@@ -4159,7 +4173,7 @@ public:
 
 	void sort()
 	{
-		sort(less<element_type>());
+		sort(plf::less<element_type>());
 	}
 
 
@@ -4174,18 +4188,20 @@ public:
 
 		size_type count = 0;
 
-		for(const_iterator current = ++const_iterator(begin_iterator), end = cend(), previous = begin_iterator; current != end; previous = current++)
+		for(const_iterator current = ++const_iterator(begin_iterator), previous = begin_iterator; current != end_iterator;)
 		{
 			if (compare(*current, *previous))
 			{
 				const size_type original_count = ++count;
 				const_iterator last(++const_iterator(current));
 
-				while(last != end && compare(*last, *previous))
+				while(last != end_iterator && compare(*last, *previous))
 				{
 					++last;
 					++count;
 				}
+
+				previous = current;
 
 				if (count != original_count)
 				{
@@ -4195,11 +4211,10 @@ public:
 				{
 					current = erase(current);
 				}
-
-				if (last == end) // Have to check here because if back block has been fully erased, cend() will have changed and 'end' is invalidated (but still valid in terms of a comparison with last)
-				{
-					break;
-				}
+			}
+			else
+			{
+				previous = current++;
 			}
 		}
 
@@ -5642,17 +5657,16 @@ namespace std
 	{
 		typedef typename plf::colony<element_type, allocator_type> colony;
 		typedef typename colony::const_iterator 	const_iterator;
-		typedef typename colony::size_type 		size_type;
+		typedef typename colony::size_type 			size_type;
 		size_type count = 0;
 
-		const const_iterator end = container.cend();
-
-		for(const_iterator current = container.cbegin(); current != end; ++current)
+		for (const_iterator current = container.cbegin(); current != container.cend(); )
 		{
 			if (predicate(*current))
 			{
 				const size_type original_count = ++count;
 				const_iterator last(++const_iterator(current));
+				const const_iterator end = container.cend();
 
 				while(last != end && predicate(*last))
 				{
@@ -5668,11 +5682,10 @@ namespace std
 				{
 					current = container.erase(current);
 				}
-
-				if (last == end) // same logic as unique() member function
-				{
-					break;
-				}
+			}
+			else
+			{
+				++current;
 			}
 		}
 
@@ -5684,7 +5697,7 @@ namespace std
 	template <class element_type, class allocator_type>
 	typename plf::colony<element_type, allocator_type>::size_type erase(plf::colony<element_type, allocator_type> &container, const element_type &value)
 	{
-		return erase_if(container, plf::eq_to<element_type>(value));
+		return erase_if(container, plf::equal_to<element_type>(value));
 	}
 
 
