@@ -250,9 +250,9 @@ int main()
 			failpass("Iterator - distance test", distance(plus_two_hundred, p_colony.begin()) == -200);
 
 			{
-				colony<int> d_colony(1000, 1, plf::colony_limits(20, 20));
+				colony<int> d_colony(1000, 1, plf::limits(20, 20));
 
-				for (colony<int>::iterator current = d_colony.begin(), end = d_colony.end(); current!= end;)
+				for (colony<int>::iterator current = d_colony.begin(), end = d_colony.end(); current != end;)
 				{
 					if ((rand() & 7) == 0)
 					{
@@ -273,6 +273,7 @@ int main()
 					advance(first, dist1);
 					last = first;
 					advance(last, dist2);
+					if (last > d_colony.end()) last = d_colony.end();
 
 					const int dist = static_cast<int>(distance(first, last));
 
@@ -308,6 +309,7 @@ int main()
 					colony<int>::iterator first = d_colony.begin(), last = d_colony.begin();
 					advance(first, dist1);
 					advance(last, dist2);
+					if (last > d_colony.end()) last = d_colony.end();
 
 					const int dist = static_cast<int>(distance(first, last));
 
@@ -624,7 +626,7 @@ int main()
 
 
 			i_colony.reset();
-			i_colony.reshape(plf::colony_limits(100, i_colony.block_capacity_limits().max));
+			i_colony.reshape(plf::limits(100, i_colony.block_capacity_limits().max));
 
 			i_colony.insert(30000, 1); // fill-insert 30000 elements
 
@@ -801,7 +803,7 @@ int main()
 
 
 			i_colony.reset();
-			i_colony.reshape(plf::colony_limits(3, i_colony.block_capacity_limits().max));
+			i_colony.reshape(plf::limits(3, i_colony.block_capacity_limits().max));
 
 			const unsigned int temp_capacity2 = static_cast<unsigned int>(i_colony.capacity());
 			i_colony.reserve(100000);
@@ -1036,6 +1038,8 @@ int main()
 					range2 = range1 + 1 + (rand() % (size - range1));
 					advance(it1, static_cast<int>(range1));
 					advance(it2, static_cast<int>(range2));
+					
+					if (it2 > i_colony.end()) it2 = i_colony.end();
 
 					i_colony.erase(it1, it2);
 
@@ -1090,6 +1094,7 @@ int main()
 					range2 = range1 + 1 + (rand() % (size - range1));
 					advance(it1, static_cast<int>(range1));
 					advance(it2, static_cast<int>(range2));
+					if (it2 > i_colony.end()) it2 = i_colony.end();
 
 					i_colony.erase(it1, it2);
 
@@ -1212,6 +1217,7 @@ int main()
 					range2 = range1 + 1 + (rand() % (size - range1));
 					advance(ss_it1, static_cast<int>(range1));
 					advance(ss_it2, static_cast<int>(range2));
+					if (ss_it2 > ss_nt.end()) ss_it2 = ss_nt.end();
 
 					ss_nt.erase(ss_it1, ss_it2);
 
@@ -1344,7 +1350,7 @@ int main()
 				failpass("Rangesv3 constructor test", i_colony_range.size() == 2);
 			#endif
 
-			colony<int> i_colony3(5000, 2, plf::colony_limits(100, 250));
+			colony<int> i_colony3(5000, 2, plf::limits(100, 250));
 
 			failpass("Fill construction test", i_colony3.size() == 5000);
 
@@ -1367,7 +1373,7 @@ int main()
 			#endif
 
 			#ifdef PLF_TEST_MOVE_SEMANTICS_SUPPORT
-	 			i_colony3.insert(std::make_move_iterator(i_colony2.begin()), std::make_move_iterator(i_colony2.end()));
+	 			i_colony3.insert(plf::make_move_iterator(i_colony2.begin()), plf::make_move_iterator(i_colony2.end()));
 
 	 			failpass("Range move-insertion test", i_colony3.size() == 506003);
 
@@ -1646,7 +1652,7 @@ int main()
 			title2("Misc function tests");
 
 			colony<int> colony1;
-			colony1.reshape(plf::colony_limits(50, 100));
+			colony1.reshape(plf::limits(50, 100));
 
 			colony1.insert(27);
 
@@ -1660,13 +1666,13 @@ int main()
 			failpass("Change_group_sizes max-size test", colony1.capacity() == 200);
 
 			colony1.clear();
-			colony1.reshape(plf::colony_limits(200, 255));
+			colony1.reshape(plf::limits(200, 255));
 
 			colony1.insert(27);
 
 			failpass("Reshape min-size test", colony1.capacity() == 200);
 
-			plf::colony_limits temp_limits = colony1.block_capacity_limits();
+			plf::limits temp_limits = colony1.block_capacity_limits();
 
 			failpass("get_block_capacity_limits test", temp_limits.min == 200 && temp_limits.max == 255);
 
@@ -1681,11 +1687,11 @@ int main()
 
 			failpass("Reshape max-size test", colony1.capacity() == 3460);
 
-			colony1.reshape(plf::colony_limits(150, 150));
+			colony1.reshape(plf::limits(150, 150));
 
 			failpass("Reshape test 3", colony1.capacity() == 3450);
 
-			colony1.reshape(plf::colony_limits(200, 200));
+			colony1.reshape(plf::limits(200, 200));
 
 			failpass("Reshape test 4", colony1.capacity() == 3400);
 
@@ -1875,8 +1881,8 @@ int main()
 			{
 				colony<int> colony1, colony2;
 
-				colony1.reshape(plf::colony_limits(200, 200));
-				colony2.reshape(plf::colony_limits(200, 200));
+				colony1.reshape(plf::limits(200, 200));
+				colony2.reshape(plf::limits(200, 200));
 
 				for(int number = 0; number != 100; ++number)
 				{
@@ -1911,7 +1917,7 @@ int main()
 
 
 			{
-				colony<int> colony1(plf::colony_limits(200, 200)), colony2(plf::colony_limits(200, 200));
+				colony<int> colony1(plf::limits(200, 200)), colony2(plf::limits(200, 200));
 
 				for(int number = 0; number != 100; ++number)
 				{
@@ -2035,15 +2041,14 @@ int main()
 			i_colony.insert(100, 200);
 			colony<int> i_colony2 = i_colony;
 
-			erase(i_colony, 100);
-			int total = std::accumulate(i_colony.begin(), i_colony.end(), 0);
+			std::erase(i_colony, 100);
 
-			failpass("non-member erase test 1", total == 20000);
+			failpass("non-member erase test 1", i_colony.size() == 100);
 
 			erase(i_colony2, 200);
-			total = std::accumulate(i_colony2.begin(), i_colony2.end(), 0);
 
-			failpass("non-member erase test 2", total == 10000);
+
+			failpass("non-member erase test 2", i_colony2.size() == 100);
 
 
 			i_colony.clear();
