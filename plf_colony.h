@@ -220,6 +220,11 @@
 #endif
 
 
+#ifndef PLF_SORT_FUNCTION
+	#define PLF_SORT_FUNCTION std::sort
+	#define PLF_SORT_FUNCTION_DEFINED
+#endif
+
 #include <algorithm> // std::fill_n, std::sort
 #include <cassert>	// assert
 #include <cstring>	// memset, memcpy, size_t
@@ -4109,64 +4114,107 @@ public:
 			return;
 		}
 
-		tuple_pointer_type const sort_array = PLF_ALLOCATE(tuple_allocator_type, tuple_allocator, total_size, NULL);
-		tuple_pointer_type tuple_pointer = sort_array;
-
-		// Construct pointers to all elements in the sequence:
-		size_type index = 0;
-
-		for (iterator current_element = begin_iterator; current_element != end_iterator; ++current_element, ++tuple_pointer, ++index)
-		{
-			#ifdef PLF_VARIADICS_SUPPORT
-				PLF_CONSTRUCT(tuple_allocator_type, tuple_allocator, tuple_pointer, &*current_element, index);
-			#else
-				PLF_CONSTRUCT(tuple_allocator_type, tuple_allocator, tuple_pointer, item_index_tuple(&*current_element, index));
-			#endif
-		}
-
-		// Now, sort the pointers by the values they point to:
-		#ifndef PLF_SORT_FUNCTION
-			std::sort(sort_array, tuple_pointer, sort_dereferencer<comparison_function>(compare));
+  		#ifdef PLF_TYPE_TRAITS_SUPPORT
+			if PLF_CONSTEXPR ((std::is_trivially_copyable<element_type>::value || std::is_move_assignable<element_type>::value) && sizeof(element_type) <= sizeof(element_type *) * 2) // If element is <= 2 pointers, just copy to an array and sort that then copy back - consumes less memory
 		#else
-			PLF_SORT_FUNCTION(sort_array, tuple_pointer, sort_dereferencer<comparison_function>(compare));
+			if PLF_CONSTEXPR (sizeof(element_type) <= sizeof(element_type *) * 2)
 		#endif
-
-		// Sort the actual elements via the tuple array:
-		index = 0;
-
-		for (tuple_pointer_type current_tuple = sort_array; current_tuple != tuple_pointer; ++current_tuple, ++index)
 		{
-			if (current_tuple->original_index != index)
-			{
-				#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-					element_type end_value = std::move(*(current_tuple->original_location));
-				#else
-					element_type end_value = *(current_tuple->original_location);
-				#endif
-				size_type destination_index = index;
-				size_type source_index = current_tuple->original_index;
+			element_type * const sort_array = PLF_ALLOCATE(allocator_type, *this, total_size, NULL), * const end = sort_array + total_size;
 
-				do
+			#ifdef PLF_TYPE_TRAITS_SUPPORT
+				if PLF_CONSTEXPR (!std::is_trivially_copyable<element_type>::value && std::is_move_assignable<element_type>::value)
 				{
-					#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-						*(sort_array[destination_index].original_location) = std::move(*(sort_array[source_index].original_location));
-					#else
-						*(sort_array[destination_index].original_location) = *(sort_array[source_index].original_location);
-					#endif
-					destination_index = source_index;
-					source_index = sort_array[destination_index].original_index;
-					sort_array[destination_index].original_index = destination_index;
-				} while (source_index != index);
+					std::uninitialized_copy(plf::make_move_iterator(begin_iterator), plf::make_move_iterator(end_iterator), sort_array);
+				}
+				else
+			#endif
+			{
+				std::uninitialized_copy(begin_iterator, end_iterator, sort_array);
+			}
+			
+			PLF_SORT_FUNCTION(sort_array, end, compare);
 
-				#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-					*(sort_array[destination_index].original_location) = std::move(end_value);
+			#ifdef PLF_TYPE_TRAITS_SUPPORT
+				if PLF_CONSTEXPR (!std::is_trivially_copyable<element_type>::value && std::is_move_assignable<element_type>::value)
+				{
+					std::copy(plf::make_move_iterator(sort_array), plf::make_move_iterator(end), begin_iterator);
+				}
+				else
+			#endif
+			{
+				std::copy(sort_array, end, begin_iterator);
+
+				#ifdef PLF_TYPE_TRAITS_SUPPORT
+					if (!std::is_trivially_destructible<element_type>::value)
+				#endif
+				{
+					for (element_type *current = sort_array; current != end; ++current)
+					{
+						PLF_DESTROY(allocator_type, *this, current);
+					}
+				}
+			}
+			
+			PLF_DEALLOCATE(allocator_type, *this, sort_array, total_size);
+		}
+ 		else
+ 		{
+			tuple_pointer_type const sort_array = PLF_ALLOCATE(tuple_allocator_type, tuple_allocator, total_size, NULL);
+			tuple_pointer_type tuple_pointer = sort_array;
+
+			// Construct pointers to all elements in the sequence:
+			size_type index = 0;
+
+			for (iterator current_element = begin_iterator; current_element != end_iterator; ++current_element, ++tuple_pointer, ++index)
+			{
+				#ifdef PLF_VARIADICS_SUPPORT
+					PLF_CONSTRUCT(tuple_allocator_type, tuple_allocator, tuple_pointer, &*current_element, index);
 				#else
-					*(sort_array[destination_index].original_location) = end_value;
+					PLF_CONSTRUCT(tuple_allocator_type, tuple_allocator, tuple_pointer, item_index_tuple(&*current_element, index));
 				#endif
 			}
-		}
 
-		PLF_DEALLOCATE(tuple_allocator_type, tuple_allocator, sort_array, total_size);
+			// Now, sort the pointers by the values they point to:
+			PLF_SORT_FUNCTION(sort_array, tuple_pointer, sort_dereferencer<comparison_function>(compare));
+
+			// Sort the actual elements via the tuple array:
+			index = 0;
+
+			for (tuple_pointer_type current_tuple = sort_array; current_tuple != tuple_pointer; ++current_tuple, ++index)
+			{
+				if (current_tuple->original_index != index)
+				{
+					#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+						element_type end_value = std::move(*(current_tuple->original_location));
+					#else
+						element_type end_value = *(current_tuple->original_location);
+					#endif
+					size_type destination_index = index;
+					size_type source_index = current_tuple->original_index;
+
+					do
+					{
+						#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+							*(sort_array[destination_index].original_location) = std::move(*(sort_array[source_index].original_location));
+						#else
+							*(sort_array[destination_index].original_location) = *(sort_array[source_index].original_location);
+						#endif
+						destination_index = source_index;
+						source_index = sort_array[destination_index].original_index;
+						sort_array[destination_index].original_index = destination_index;
+					} while (source_index != index);
+
+					#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+						*(sort_array[destination_index].original_location) = std::move(end_value);
+					#else
+						*(sort_array[destination_index].original_location) = end_value;
+					#endif
+				}
+			}
+
+			PLF_DEALLOCATE(tuple_allocator_type, tuple_allocator, sort_array, total_size);
+		}
 	}
 
 
@@ -5742,6 +5790,11 @@ typename plf::colony<element_type, allocator_type>::size_type erase(plf::colony<
 
 #if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
 	#pragma warning ( pop )
+#endif
+
+#ifdef PLF_SORT_FUNCTION_DEFINED
+	#undef PLF_SORT_FUNCTION
+	#undef PLF_SORT_FUNCTION_DEFINED
 #endif
 
 #endif // PLF_COLONY_H
