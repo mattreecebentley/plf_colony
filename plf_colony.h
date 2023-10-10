@@ -21,10 +21,6 @@
 #ifndef PLF_COLONY_H
 #define PLF_COLONY_H
 
-#ifndef _ENABLE_EXTENDED_ALIGNED_STORAGE
-	#define _ENABLE_EXTENDED_ALIGNED_STORAGE // Because MSVC didn't implement aligned_storage correctly in the past and avoids changing the default behaviour in order to not break old software, we have to specify this to enable correct aligning behaviour in MSVC.
-	#define PLF_ALIGNED_STORAGE_DEFINED // Use to signify that we need to undef the above at the end of the file, in case the code using this header relies on the aforementioned old aligned_storage behaviour
-#endif
 
 // Compiler-specific defines:
 
@@ -361,6 +357,7 @@ namespace plf
 
 
 	enum priority { performance = 1, memory_use = 4};
+
 #endif
 
 
@@ -5782,11 +5779,6 @@ typename plf::colony<element_type, allocator_type>::size_type erase(plf::colony<
 #undef PLF_DESTROY
 #undef PLF_ALLOCATE
 #undef PLF_DEALLOCATE
-
-#ifdef PLF_ALIGNED_STORAGE_DEFINED // undef if was not already defined prior to inclusion of this header
-	#undef _ENABLE_EXTENDED_ALIGNED_STORAGE
-	#undef PLF_ALIGNED_STORAGE_DEFINED
-#endif
 
 #if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
 	#pragma warning ( pop )
