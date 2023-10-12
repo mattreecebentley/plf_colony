@@ -1369,6 +1369,12 @@ public:
 						{ // For no good reason this compiles to much faster code under GCC in raw small struct tests:
 							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), element);
 						}
+						#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+							else if PLF_CONSTEXPR (!std::is_copy_constructible<element_type>::value)
+							{
+								PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), std::move(element));
+							}
+						#endif
 						else
 					#endif
 					{
@@ -1733,7 +1739,7 @@ private:
 	{
 		#ifdef PLF_EXCEPTIONS_SUPPORT
 			#ifdef PLF_TYPE_TRAITS_SUPPORT
-				if PLF_CONSTEXPR (!std::is_nothrow_copy_constructible<element_type>::value) // to avoid unnecessary codegen, since this function will never be called if this line is true
+				if PLF_CONSTEXPR (!std::is_nothrow_copy_constructible<element_type>::value || (!std::is_copy_constructible<element_type>::value && !std::is_nothrow_move_constructible<element_type>::value)) // to avoid unnecessary codegen, since this function will never be called if this line is true
 			#endif
 			{
 				const skipfield_type elements_constructed_before_exception = static_cast<skipfield_type>(end_iterator.element_pointer - end_iterator.group_pointer->elements);
@@ -1810,7 +1816,7 @@ private:
 	{
 		#ifdef PLF_EXCEPTIONS_SUPPORT
 			#ifdef PLF_TYPE_TRAITS_SUPPORT
-				if PLF_CONSTEXPR (!std::is_nothrow_copy_constructible<element_type>::value) // to avoid unnecessary codegen
+				if PLF_CONSTEXPR (!std::is_nothrow_copy_constructible<element_type>::value || (!std::is_copy_constructible<element_type>::value && !std::is_nothrow_move_constructible<element_type>::value)) // to avoid unnecessary codegen
 			#endif
 			{
 				// Reconstruct existing skipblock and free-list indexes to reflect partially-reused skipblock:
@@ -2037,35 +2043,49 @@ private:
 	template <class iterator_type>
 	iterator_type range_fill(iterator_type it, const skipfield_type size)
 	{
+		const aligned_pointer_type fill_end = end_iterator.element_pointer + size;
+
 		#ifdef PLF_TYPE_TRAITS_SUPPORT
 			if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value)
 			{
-				const aligned_pointer_type fill_end = end_iterator.element_pointer + size;
-
 				do
 				{
 					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), *it++);
 				} while (++end_iterator.element_pointer != fill_end);
 			}
-			else
+			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+				else if PLF_CONSTEXPR (std::is_move_constructible<element_type>::value && !std::is_copy_constructible<element_type>::value)
+				{
+					do
+					{
+						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), std::move(*it++));
+					} while (++end_iterator.element_pointer != fill_end);
+				}
+			#endif
+			else 
 		#endif
 		{
-			const aligned_pointer_type fill_end = end_iterator.element_pointer + size;
-
 			do
 			{
 				#ifdef PLF_EXCEPTIONS_SUPPORT
 					try
 					{
-						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), *it++);
+				#endif
+					#ifdef PLF_TYPE_TRAITS_SUPPORT
+						if PLF_CONSTEXPR (!std::is_copy_constructible<element_type>::value)
+						{
+							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), std::move(*it++));
+						}
+						else
+					#endif
+					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), *it++);
+				#ifdef PLF_EXCEPTIONS_SUPPORT
 					}
 					catch (...)
 					{
 						recover_from_partial_fill();
 						throw;
 					}
-				#else
-					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), *it++);
 				#endif
 			} while (++end_iterator.element_pointer != fill_end);
 		}
@@ -2089,6 +2109,15 @@ private:
 					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(current_location), *it++);
 				}
 			}
+			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+				else if PLF_CONSTEXPR (std::is_nothrow_move_constructible<element_type>::value && !std::is_copy_constructible<element_type>::value)
+				{
+					for (aligned_pointer_type current_location = location; current_location != fill_end; ++current_location)
+					{
+						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(current_location), std::move(*it++));
+					}
+				}
+			#endif
 			else
 		#endif
 		{
@@ -2101,15 +2130,22 @@ private:
 				#ifdef PLF_EXCEPTIONS_SUPPORT
 					try
 					{
-						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(current_location), *it++);
+				#endif
+					#ifdef PLF_TYPE_TRAITS_SUPPORT
+						if PLF_CONSTEXPR (!std::is_copy_constructible<element_type>::value)
+						{
+							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(current_location), std::move(*it++));
+						}
+						else
+					#endif
+					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(current_location), *it++);
+				#ifdef PLF_EXCEPTIONS_SUPPORT
 					}
 					catch (...)
 					{
 						recover_from_partial_skipblock_fill(location, current_location, skipfield_pointer, prev_free_list_node);
 						throw;
 					}
-				#else
-					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(current_location), *it++);
 				#endif
 			}
 		}
@@ -4119,7 +4155,7 @@ public:
 		{
 			element_type * const sort_array = PLF_ALLOCATE(allocator_type, *this, total_size, NULL), * const end = sort_array + total_size;
 
-			#ifdef PLF_TYPE_TRAITS_SUPPORT
+			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
 				if PLF_CONSTEXPR (!std::is_trivially_copyable<element_type>::value && std::is_move_assignable<element_type>::value)
 				{
 					std::uninitialized_copy(plf::make_move_iterator(begin_iterator), plf::make_move_iterator(end_iterator), sort_array);
@@ -4132,7 +4168,7 @@ public:
 			
 			PLF_SORT_FUNCTION(sort_array, end, compare);
 
-			#ifdef PLF_TYPE_TRAITS_SUPPORT
+			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
 				if PLF_CONSTEXPR (!std::is_trivially_copyable<element_type>::value && std::is_move_assignable<element_type>::value)
 				{
 					std::copy(plf::make_move_iterator(sort_array), plf::make_move_iterator(end), begin_iterator);
