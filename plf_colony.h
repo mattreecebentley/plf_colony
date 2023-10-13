@@ -1369,12 +1369,6 @@ public:
 						{ // For no good reason this compiles to much faster code under GCC in raw small struct tests:
 							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), element);
 						}
-						#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-							else if PLF_CONSTEXPR (!std::is_copy_constructible<element_type>::value)
-							{
-								PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), std::move(element));
-							}
-						#endif
 						else
 					#endif
 					{
@@ -1739,7 +1733,7 @@ private:
 	{
 		#ifdef PLF_EXCEPTIONS_SUPPORT
 			#ifdef PLF_TYPE_TRAITS_SUPPORT
-				if PLF_CONSTEXPR (!std::is_nothrow_copy_constructible<element_type>::value || (!std::is_copy_constructible<element_type>::value && !std::is_nothrow_move_constructible<element_type>::value)) // to avoid unnecessary codegen, since this function will never be called if this line is true
+				if PLF_CONSTEXPR ((!std::is_copy_constructible<element_type>::value && !std::is_nothrow_move_constructible<element_type>::value) || !std::is_nothrow_copy_constructible<element_type>::value) // to avoid unnecessary codegen, since this function will never be called if this line isn't true
 			#endif
 			{
 				const skipfield_type elements_constructed_before_exception = static_cast<skipfield_type>(end_iterator.element_pointer - end_iterator.group_pointer->elements);
@@ -1816,7 +1810,7 @@ private:
 	{
 		#ifdef PLF_EXCEPTIONS_SUPPORT
 			#ifdef PLF_TYPE_TRAITS_SUPPORT
-				if PLF_CONSTEXPR (!std::is_nothrow_copy_constructible<element_type>::value || (!std::is_copy_constructible<element_type>::value && !std::is_nothrow_move_constructible<element_type>::value)) // to avoid unnecessary codegen
+				if PLF_CONSTEXPR ((!std::is_copy_constructible<element_type>::value && !std::is_nothrow_move_constructible<element_type>::value) || !std::is_nothrow_copy_constructible<element_type>::value) // to avoid unnecessary codegen
 			#endif
 			{
 				// Reconstruct existing skipblock and free-list indexes to reflect partially-reused skipblock:
@@ -2054,7 +2048,7 @@ private:
 				} while (++end_iterator.element_pointer != fill_end);
 			}
 			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-				else if PLF_CONSTEXPR (std::is_move_constructible<element_type>::value && !std::is_copy_constructible<element_type>::value)
+				else if PLF_CONSTEXPR (std::is_nothrow_move_constructible<element_type>::value && !std::is_copy_constructible<element_type>::value)
 				{
 					do
 					{
