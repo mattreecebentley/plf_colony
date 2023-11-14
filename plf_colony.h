@@ -3909,10 +3909,6 @@ public:
 			}
 		}
 
-		// Preserve original unused_groups so that both source and destination retain theirs in case of swap or std::move below:
-		group_pointer_type const source_unused_groups = source.unused_groups_head, unused_groups_head_original = unused_groups_head;
-		source.unused_groups_head = NULL;
-		unused_groups_head = NULL;
 
 		if (total_size != 0)
 		{
@@ -4029,47 +4025,37 @@ public:
 		}
 		else // If *this is empty():
 		{
-			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-				*this = std::move(source);
-			#else
-				destroy_all_data();
-				end_iterator = source.end_iterator;
-				begin_iterator = source.begin_iterator;
-				erasure_groups_head = source.erasure_groups_head;
-				unused_groups_head = source.unused_groups_head;
-				total_size = source.total_size;
-				total_capacity = source.total_capacity;
-				min_block_capacity = source.min_block_capacity;
-				max_block_capacity = source.max_block_capacity;
+			// Preserve unused_groups_head and de-link so that destroy_all_data doesn't remove them:
+			const group_pointer_type original_unused_groups = unused_groups_head;
+			unused_groups_head = NULL;
+			destroy_all_data();
 
-				static_cast<allocator_type &>(*this) = static_cast<allocator_type &>(source);
-				// Reconstruct rebinds:
-				group_allocator = group_allocator_type(*this);
-				aligned_allocation_struct_allocator = aligned_struct_allocator_type(*this);
-				skipfield_allocator = skipfield_allocator_type(*this);
-				tuple_allocator = tuple_allocator_type(*this);
-			#endif
+			// Move source data to *this:
+			end_iterator = source.end_iterator;
+			begin_iterator = source.begin_iterator;
+			erasure_groups_head = source.erasure_groups_head;
+			total_size = source.total_size;
+			total_capacity = source.total_capacity;
 
-			// Add capacity for unused_groups back into *this:
-			for (group_pointer_type current = unused_groups_head_original; current != NULL; current = current->next_group)
+			// Restore unused_groups_head and add capacity for unused groups back into *this:
+			unused_groups_head = original_unused_groups;
+			for (group_pointer_type current = original_unused_groups; current != NULL; current = current->next_group)
 			{
 				total_capacity += current->capacity;
 			}
 		}
 
 
-		// Re-link original unused_groups to *this (in case of swap):
-		unused_groups_head = unused_groups_head_original;
-
 		// Reset source values:
+		const group_pointer_type source_unused_groups_head = source.unused_groups_head;
 		source.blank();
 
-		if (source_unused_groups != NULL) // If there were unused_groups in source, re-link them and remove their capacity count from *this:
+		if (source_unused_groups_head != NULL) // If there were unused_groups in source, re-link them and remove their capacity count from *this:
 		{
 			size_type source_unused_groups_capacity = 0;
 
 			// Count capacity in source unused_groups:
-			for (group_pointer_type current = source_unused_groups; current != NULL; current = current->next_group)
+			for (group_pointer_type current = source_unused_groups_head; current != NULL; current = current->next_group)
 			{
 				source_unused_groups_capacity += current->capacity;
 			}
@@ -4078,12 +4064,12 @@ public:
 			source.total_capacity = source_unused_groups_capacity;
 
 			// Establish first group from source unused_groups as first active group in source, link rest as reserved groups:
-			source.unused_groups_head = source_unused_groups->next_group;
-			source.begin_iterator.group_pointer = source_unused_groups;
-			source.begin_iterator.element_pointer = source_unused_groups->elements;
-			source.begin_iterator.skipfield_pointer = source_unused_groups->skipfield;
+			source.unused_groups_head = source_unused_groups_head->next_group;
+			source.begin_iterator.group_pointer = source_unused_groups_head;
+			source.begin_iterator.element_pointer = source_unused_groups_head->elements;
+			source.begin_iterator.skipfield_pointer = source_unused_groups_head->skipfield;
 			source.end_iterator = source.begin_iterator;
-			source_unused_groups->reset(0, NULL, NULL, 0);
+			source.unused_groups_head->reset(0, NULL, NULL, 0);
 		}
 	}
 
