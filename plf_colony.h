@@ -221,7 +221,7 @@
 	#define PLF_SORT_FUNCTION_DEFINED
 #endif
 
-#include <algorithm> // std::fill_n, std::sort
+#include <algorithm> // std::fill_n, std::sort, std::swap
 #include <cassert>	// assert
 #include <cstring>	// memset, memcpy, size_t
 #include <limits>  // std::numeric_limits
@@ -3324,20 +3324,21 @@ public:
 
 private:
 
-	// get all elements contiguous in memory and shrink to fit, remove erasures and erasure free lists. Invalidates all iterators and pointers to elements.
-	void consolidate()
+	// get all elements contiguous in memory and shrink to fit, remove erasures and free lists. Invalidates all iterators and pointers to elements.
+	void consolidate(const skipfield_type new_min, const skipfield_type new_max)
 	{
-		#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
-			if PLF_CONSTEXPR (std::is_nothrow_move_constructible<element_type>::value && std::is_nothrow_move_assignable<element_type>::value)
+		colony temp(plf::limits(new_min, new_max));
+
+		#if defined(PLF_MOVE_SEMANTICS_SUPPORT) && defined(PLF_TYPE_TRAITS_SUPPORT)
+			if PLF_CONSTEXPR (std::is_nothrow_move_constructible<element_type>::value)
 			{
-				colony temp(plf::limits(min_block_capacity, max_block_capacity));
-				temp.range_assign(plf::make_move_iterator(begin_iterator), total_size);
+				temp.range_assign(std::make_move_iterator(begin_iterator), total_size);
 				*this = std::move(temp); // Avoid generating 2nd temporary
 			}
 			else
 		#endif
 		{
-			colony temp(*this);
+			temp.range_assign(begin_iterator, total_size);
 			swap(temp);
 		}
 	}
@@ -3350,50 +3351,31 @@ public:
 	void reshape(const plf::limits block_limits)
 	{
 		check_capacities_conformance(block_limits);
-		#ifdef PLF_EXCEPTIONS_SUPPORT
-			const skipfield_type original_min = min_block_capacity, original_max = max_block_capacity;
-		#endif
-		min_block_capacity = static_cast<skipfield_type>(block_limits.min);
-		max_block_capacity = static_cast<skipfield_type>(block_limits.max);
+		const skipfield_type new_min = static_cast<skipfield_type>(block_limits.min), new_max = static_cast<skipfield_type>(block_limits.max);
 
-		// Need to check all group sizes here, because splice might append smaller blocks to the end of a larger block:
-		for (group_pointer_type current_group = begin_iterator.group_pointer; current_group != NULL; current_group = current_group->next_group)
+		if (min_block_capacity > new_max || max_block_capacity < new_min) // If none of the original blocks could potentially fit within the new limits, skip checking of blocks and just consolidate:
 		{
-			if (current_group->capacity < min_block_capacity || current_group->capacity > max_block_capacity)
-			{
-				#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
-					if PLF_CONSTEXPR (!(std::is_copy_constructible<element_type>::value || std::is_move_constructible<element_type>::value))
-					{
-						#ifdef PLF_EXCEPTIONS_SUPPORT
-							throw std::length_error("Current colony's block capacities do not fit within the supplied block limits, therefore reallocation of elements must occur, however user is using a non-copy-constructible/non-move-constructible type.");
-						#else
-							std::terminate();
-						#endif
-					}
-					else
-				#endif
-				{
-					#ifdef PLF_EXCEPTIONS_SUPPORT
-						try
-						{
-							consolidate();
-						}
-						catch(...)
-						{
-							min_block_capacity = original_min;
-							max_block_capacity = original_max;
-							throw;
-						}
-					#else
-						consolidate();
-					#endif
-				}
+			consolidate(new_min, new_max);
+			return;
+		}
 
-				return;
+		if (min_block_capacity < new_min || max_block_capacity > new_max) // ie. If existing blocks could be outside of the new limits
+		{
+			// Otherwise need to check all group sizes here (not just back one, which is most likely largest), because splice might append smaller blocks after a larger block:
+			for (group_pointer_type current_group = begin_iterator.group_pointer; current_group != NULL; current_group = current_group->next_group)
+			{
+				if (current_group->capacity < new_min || current_group->capacity > new_max)
+				{
+					consolidate(new_min, new_max);
+					return;
+				}
 			}
 		}
 
-		// If a consolidation or throw has not occured, process reserved/unused groups:
+		// If a consolidation or throw has not occured, process reserved/unused groups and deallocate where they don't fit the new limits:
+		min_block_capacity = new_min;
+		max_block_capacity = new_max;
+		
 		for (group_pointer_type current_group = unused_groups_head, previous_group = NULL; current_group != NULL;)
 		{
 			const group_pointer_type next_group = current_group->next_group;
@@ -3621,7 +3603,7 @@ public:
 			return;
 		}
 
-		consolidate();
+		consolidate(min_block_capacity, max_block_capacity);
 	}
 
 
@@ -3861,7 +3843,7 @@ public:
 
 		for (group_pointer_type current_group = end_iterator.group_pointer; current_group != NULL; current_group = current_group->previous_group, end = pointer_cast<aligned_pointer_type>(current_group->skipfield))
 		{
-			if (it.group_pointer == current_group && it.element_pointer >= current_group->elements && it.element_pointer < end) // 2nd 2 conditions necessary in case the group contained the element which the iterator points to, has been deallocated from the hive previously, but then the same pointer address is re-supplied via an allocator for a subsequent group allocation (in which case the group's element block memory location may be different)
+			if (it.group_pointer == current_group && it.element_pointer >= current_group->elements && it.element_pointer < end) // 2nd 2 conditions necessary in case the group contained the element which the iterator points to, has been deallocated from the colony previously, but then the same pointer address is re-supplied via an allocator for a subsequent group allocation (in which case the group's element block memory location may be different)
 			{
 				return (*it.skipfield_pointer == 0);
 			}
@@ -3879,6 +3861,21 @@ public:
 
 
 
+private:
+
+	void source_blocks_incompatible()
+	{
+		#ifdef PLF_EXCEPTIONS_SUPPORT
+			throw std::length_error("A source memory block capacity is outside of the destination's minimum or maximum memory block capacity limits - please change either the source or the destination's min/max block capacity limits using reshape() before calling splice() in this case");
+		#else
+			std::terminate();
+		#endif
+	}
+
+
+
+public:
+
 	void splice(colony &source)
 	{
 		// Process: if there are unused memory spaces at the end of the current back group of the chain, convert them
@@ -3893,18 +3890,18 @@ public:
 			return;
 		}
 
-		// Throw if incompatible group capacity found:
-		if (source.min_block_capacity < min_block_capacity || source.max_block_capacity > max_block_capacity)
+		// Throw if incompatible block capacities found in source:
+		if (source.min_block_capacity > max_block_capacity || source.max_block_capacity < min_block_capacity) // ie. source blocks cannot possibly fit within *this's block capacity limits
+		{
+			source_blocks_incompatible();
+		}
+		else if (source.min_block_capacity < min_block_capacity || source.max_block_capacity > max_block_capacity) // ie. source blocks may or may not fit
 		{
 			for (group_pointer_type current_group = source.begin_iterator.group_pointer; current_group != NULL; current_group = current_group->next_group)
 			{
 				if (current_group->capacity < min_block_capacity || current_group->capacity > max_block_capacity)
 				{
-					#ifdef PLF_EXCEPTIONS_SUPPORT
-						throw std::length_error("A source memory block capacity is outside of the destination's minimum or maximum memory block capacity limits - please change either the source or the destination's min/max block capacity limits using reshape() before calling splice() in this case");
-					#else
-						std::terminate();
-					#endif
+					source_blocks_incompatible();
 				}
 			}
 		}
@@ -3916,13 +3913,10 @@ public:
 			if ((pointer_cast<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer) > (pointer_cast<aligned_pointer_type>(source.end_iterator.group_pointer->skipfield) - source.end_iterator.element_pointer))
 			{
 				swap(source);
-
-				// Swap block capacity limits back to where they were:
-				const skipfield_type source_colony_limits[2] = {source.min_block_capacity, source.max_block_capacity};
-				source.min_block_capacity = min_block_capacity;
-				source.max_block_capacity = max_block_capacity;
-				min_block_capacity = source_colony_limits[0];
-				max_block_capacity = source_colony_limits[1];
+				// Swap back unused groups list and block capacity limits so that source and *this retain their original ones:
+				std::swap(source.unused_groups_head, unused_groups_head);
+				std::swap(source.min_block_capacity, min_block_capacity);
+				std::swap(source.max_block_capacity, max_block_capacity);
 			}
 
 
@@ -4029,6 +4023,7 @@ public:
 			const group_pointer_type original_unused_groups = unused_groups_head;
 			unused_groups_head = NULL;
 			destroy_all_data();
+			unused_groups_head = original_unused_groups;
 
 			// Move source data to *this:
 			end_iterator = source.end_iterator;
@@ -4037,8 +4032,7 @@ public:
 			total_size = source.total_size;
 			total_capacity = source.total_capacity;
 
-			// Restore unused_groups_head and add capacity for unused groups back into *this:
-			unused_groups_head = original_unused_groups;
+			// Add capacity for unused groups back into *this:
 			for (group_pointer_type current = original_unused_groups; current != NULL; current = current->next_group)
 			{
 				total_capacity += current->capacity;
@@ -4314,6 +4308,7 @@ public:
 			#endif
 		#endif
 		{
+			// Otherwise, make the reads/writes as contiguous in memory as-possible (yes, it is faster than using std::swap with the individual variables):
 			const iterator 					swap_end_iterator = end_iterator, swap_begin_iterator = begin_iterator;
 			const group_pointer_type		swap_erasure_groups_head = erasure_groups_head, swap_unused_groups_head = unused_groups_head;
 			const size_type					swap_total_size = total_size, swap_total_capacity = total_capacity;
@@ -4341,15 +4336,7 @@ public:
 				if PLF_CONSTEXPR (std::allocator_traits<allocator_type>::propagate_on_container_swap::value && !std::allocator_traits<allocator_type>::is_always_equal::value)
 			#endif
 			{
-				#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-					allocator_type swap_allocator = std::move(static_cast<allocator_type &>(source));
-					static_cast<allocator_type &>(source) = std::move(static_cast<allocator_type &>(*this));
-					static_cast<allocator_type &>(*this) = std::move(swap_allocator);
-				#else
-					allocator_type swap_allocator = static_cast<allocator_type &>(source);
-					static_cast<allocator_type &>(source) = static_cast<allocator_type &>(*this);
-					static_cast<allocator_type &>(*this) = swap_allocator;
-				#endif
+				std::swap(static_cast<allocator_type &>(source), static_cast<allocator_type &>(*this));
 
 				// Reconstruct rebinds for swapped allocators:
 				group_allocator = group_allocator_type(*this);
@@ -5039,9 +5026,9 @@ public:
 
 			difference_type distance = 0;
 			colony_iterator iterator1 = *this, iterator2 = last;
-			const bool swap = iterator1 > iterator2;
+			const bool swap_iterators = iterator1 > iterator2;
 
-			if (swap)
+			if (swap_iterators)
 			{
 				iterator1 = last;
 				iterator2 = *this;
@@ -5102,7 +5089,7 @@ public:
 			}
 
 
-			if (swap)
+			if (swap_iterators)
 			{
 				distance = -distance;
 			}
