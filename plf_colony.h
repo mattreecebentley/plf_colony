@@ -2056,7 +2056,7 @@ private:
 					} while (++end_iterator.element_pointer != fill_end);
 				}
 			#endif
-			else 
+			else
 		#endif
 		{
 			do
@@ -3375,7 +3375,7 @@ public:
 		// If a consolidation or throw has not occured, process reserved/unused groups and deallocate where they don't fit the new limits:
 		min_block_capacity = new_min;
 		max_block_capacity = new_max;
-		
+
 		for (group_pointer_type current_group = unused_groups_head, previous_group = NULL; current_group != NULL;)
 		{
 			const group_pointer_type next_group = current_group->next_group;
@@ -4041,15 +4041,15 @@ public:
 
 
 		// Reset source values:
-		const group_pointer_type source_unused_groups_head = source.unused_groups_head;
-		source.blank();
+		group_pointer_type const original_unused_groups_head = source.unused_groups_head; // grab value before it gets wiped
+		source.blank(); // blank source before adding capacity from unused groups back in 
 
-		if (source_unused_groups_head != NULL) // If there were unused_groups in source, re-link them and remove their capacity count from *this:
+		if (source.unused_groups_head != NULL) // If there were unused groups in source, re-link them and remove their capacity count from *this while adding it to source:
 		{
 			size_type source_unused_groups_capacity = 0;
 
 			// Count capacity in source unused_groups:
-			for (group_pointer_type current = source_unused_groups_head; current != NULL; current = current->next_group)
+			for (group_pointer_type current = original_unused_groups_head; current != NULL; current = current->next_group)
 			{
 				source_unused_groups_capacity += current->capacity;
 			}
@@ -4058,12 +4058,12 @@ public:
 			source.total_capacity = source_unused_groups_capacity;
 
 			// Establish first group from source unused_groups as first active group in source, link rest as reserved groups:
-			source.unused_groups_head = source_unused_groups_head->next_group;
-			source.begin_iterator.group_pointer = source_unused_groups_head;
-			source.begin_iterator.element_pointer = source_unused_groups_head->elements;
-			source.begin_iterator.skipfield_pointer = source_unused_groups_head->skipfield;
+			source.unused_groups_head = original_unused_groups_head->next_group;
+			source.begin_iterator.group_pointer = original_unused_groups_head;
+			source.begin_iterator.element_pointer = original_unused_groups_head->elements;
+			source.begin_iterator.skipfield_pointer = original_unused_groups_head->skipfield;
 			source.end_iterator = source.begin_iterator;
-			source.unused_groups_head->reset(0, NULL, NULL, 0);
+			original_unused_groups_head->reset(0, NULL, NULL, 0);
 		}
 	}
 
@@ -4139,7 +4139,7 @@ public:
 			{
 				std::uninitialized_copy(begin_iterator, end_iterator, sort_array);
 			}
-			
+
 			PLF_SORT_FUNCTION(sort_array, end, compare);
 
 			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
@@ -4162,7 +4162,7 @@ public:
 					}
 				}
 			}
-			
+
 			PLF_DEALLOCATE(allocator_type, *this, sort_array, total_size);
 		}
  		else
@@ -4787,7 +4787,7 @@ public:
 
 
 				// Special case for initial element pointer and initial group (we don't know how far into the group the element pointer is)
-				if (element_pointer != group_pointer->elements + *(group_pointer->skipfield)) // ie. != first non-erased element in group
+				if (element_pointer != group_pointer->elements + *(group_pointer->skipfield)) // ie. != first non-erased element in group - otherwise we skip this section and just treat the first block as we would an intermediary block
 				{
 					const difference_type distance_from_end = pointer_cast<aligned_pointer_type>(group_pointer->skipfield) - element_pointer;
 
