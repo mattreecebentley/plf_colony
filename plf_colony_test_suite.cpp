@@ -141,20 +141,6 @@ void failpass(const char *test_type, bool condition)
 
 
 
-	struct small_struct
-	{
-		double *empty_field_1;
-		double unused_number;
-		unsigned int empty_field2;
-		double *empty_field_3;
-		int number;
-		unsigned int empty_field4;
-
-		small_struct(const int num) : number(num) {};
-	};
-
-
-
 	class non_copyable_type
 	{
 	private:
@@ -168,6 +154,25 @@ void failpass(const char *test_type, bool condition)
 #endif
 
 
+struct small_struct
+{
+	double *empty_field_1;
+	double unused_number;
+	unsigned int empty_field2;
+	double *empty_field_3;
+	int number;
+	unsigned int empty_field4;
+
+	int operator * () const { return number; };
+	bool operator == (const small_struct &source) const { return source.number == number; };
+	bool operator != (const small_struct &source) const { return source.number != number; };
+	bool operator > (const small_struct &source) const { return number > source.number; };
+	bool operator < (const small_struct &source) const { return number < source.number; };
+	bool operator >= (const small_struct &source) const { return number >= source.number; };
+	bool operator <= (const small_struct &source) const { return number <= source.number; };
+	
+	small_struct(const unsigned int num): number(num) {};
+};
 
 
 int global_counter = 0;
@@ -1306,6 +1311,7 @@ int main()
 			}
 
 			failpass("Unique test", unique);
+
 			i_colony.sort(std::greater<int>());
 
 			previous = 65536;
@@ -1322,6 +1328,86 @@ int main()
 			}
 
 			failpass("Greater-than sort test", sorted);
+
+
+			i_colony.clear();
+			i_colony.trim_capacity();
+			i_colony.reserve(512);
+
+			for (unsigned int temp = 0; temp != 200; ++temp)
+			{
+				i_colony.insert(rand() & 65535);
+			}
+
+			i_colony.sort();
+
+			previous = 0;
+
+			for (colony<int>::iterator current = i_colony.begin(); current != i_colony.end(); ++current)
+			{
+				if (previous > *current)
+				{
+					sorted = false;
+					break;
+				}
+
+				previous = *current;
+			}
+
+			failpass("Less-than sort with allocation optimization 1 test - small types", sorted);
+
+
+			colony<small_struct> ss_colony;
+			ss_colony.reserve(512);
+
+			for (unsigned int temp = 0; temp != 200; ++temp)
+			{
+				ss_colony.insert(rand() & 65535);
+			}
+
+			ss_colony.sort();
+
+			small_struct ss_previous(0);
+
+			for (colony<small_struct>::iterator current = ss_colony.begin(); current != ss_colony.end(); ++current)
+			{
+				if (ss_previous > *current)
+				{
+					sorted = false;
+					break;
+				}
+
+				ss_previous = *current;
+			}
+
+			failpass("Less-than sort with allocation optimization 2 test - large type 1", sorted);
+
+
+			ss_colony.clear();
+			ss_colony.reshape(plf::limits(100, 100));
+			ss_colony.reserve(200);
+
+			for (unsigned int temp = 0; temp != 75; ++temp)
+			{
+				ss_colony.insert(rand() & 65535);
+			}
+
+			ss_colony.sort();
+
+			ss_previous = 0;
+
+			for (colony<small_struct>::iterator current = ss_colony.begin(); current != ss_colony.end(); ++current)
+			{
+				if (ss_previous > *current)
+				{
+					sorted = false;
+					break;
+				}
+
+				ss_previous = *current;
+			}
+
+			failpass("Less-than sort with allocation optimization 3 test - large type 2", sorted);
 		}
 
 

@@ -3856,7 +3856,7 @@ public:
 
 	allocator_type get_allocator() const PLF_NOEXCEPT
 	{
-		return *this;
+		return static_cast<allocator_type>(*this);
 	}
 
 
@@ -4042,7 +4042,7 @@ public:
 
 		// Reset source values:
 		group_pointer_type const original_unused_groups_head = source.unused_groups_head; // grab value before it gets wiped
-		source.blank(); // blank source before adding capacity from unused groups back in 
+		source.blank(); // blank source before adding capacity from unused groups back in
 
 		if (source.unused_groups_head != NULL) // If there were unused groups in source, re-link them and remove their capacity count from *this while adding it to source:
 		{
@@ -4111,6 +4111,34 @@ private:
 
 
 
+
+	// Try and find space in the unused blocks or the back block instead of allocating for sort:
+	template <class the_type>
+	aligned_pointer_type get_free_space() const PLF_NOEXCEPT
+	{
+		const size_type number_of_elements_needed = ((total_size * sizeof(the_type)) + sizeof(aligned_element_struct) - 1) / sizeof(aligned_element_struct); // rounding up
+
+		if (number_of_elements_needed < max_block_capacity)
+		{
+			if (static_cast<size_type>(pointer_cast<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer) >= number_of_elements_needed)
+			{ // there is enough space at the back of the back block
+				return end_iterator.element_pointer;
+			}
+
+			for (group_pointer_type current = unused_groups_head; current != NULL; current = current->next_group)
+			{
+				if (current->capacity >= number_of_elements_needed)
+				{ // there is enough space in one of the unused blocks
+					return current->elements;
+				}
+			}
+		}
+
+		return NULL;
+	}
+
+
+
 public:
 
 	template <class comparison_function>
@@ -4127,7 +4155,15 @@ public:
 			if PLF_CONSTEXPR (sizeof(element_type) <= sizeof(element_type *) * 2)
 		#endif
 		{
-			element_type * const sort_array = PLF_ALLOCATE(allocator_type, *this, total_size, NULL), * const end = sort_array + total_size;
+			pointer sort_array = pointer_cast<pointer>(get_free_space<element_type>());
+			const bool need_to_allocate = (sort_array == NULL);
+
+			if (need_to_allocate)
+			{
+				sort_array = PLF_ALLOCATE(allocator_type, *this, total_size, end_iterator.skipfield_pointer);
+			}
+
+			const pointer end = sort_array + total_size;
 
 			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
 				if PLF_CONSTEXPR (!std::is_trivially_copyable<element_type>::value && std::is_move_assignable<element_type>::value)
@@ -4163,11 +4199,21 @@ public:
 				}
 			}
 
-			PLF_DEALLOCATE(allocator_type, *this, sort_array, total_size);
+			if (need_to_allocate)
+			{
+				PLF_DEALLOCATE(allocator_type, *this, sort_array, total_size);
+			}
 		}
  		else
  		{
-			tuple_pointer_type const sort_array = PLF_ALLOCATE(tuple_allocator_type, tuple_allocator, total_size, NULL);
+			item_index_tuple *sort_array = pointer_cast<item_index_tuple *>(get_free_space<item_index_tuple>());
+			const bool need_to_allocate = (sort_array == NULL);
+
+			if (need_to_allocate)
+			{
+				sort_array = PLF_ALLOCATE(tuple_allocator_type, tuple_allocator, total_size, end_iterator.skipfield_pointer);
+			}
+
 			tuple_pointer_type tuple_pointer = sort_array;
 
 			// Construct pointers to all elements in the sequence:
@@ -4220,7 +4266,10 @@ public:
 				}
 			}
 
-			PLF_DEALLOCATE(tuple_allocator_type, tuple_allocator, sort_array, total_size);
+			if (need_to_allocate)
+			{
+				PLF_DEALLOCATE(tuple_allocator_type, tuple_allocator, sort_array, total_size);
+			}
 		}
 	}
 
@@ -4248,11 +4297,10 @@ public:
 			if (compare(*current, *previous))
 			{
 				const size_type original_count = ++count;
-				const_iterator last(++const_iterator(current));
+				const_iterator last = current;
 
-				while(last != end_iterator && compare(*last, *previous))
+				while(++last != end_iterator && compare(*last, *previous))
 				{
-					++last;
 					++count;
 				}
 
@@ -5712,12 +5760,11 @@ typename plf::colony<element_type, allocator_type>::size_type erase_if(plf::colo
 		if (predicate(*current))
 		{
 			const size_type original_count = ++count;
-			const_iterator last(++const_iterator(current));
 			const const_iterator end = container.cend();
+			const_iterator last = current;
 
-			while(last != end && predicate(*last))
+			while(++last != end && predicate(*last))
 			{
-				++last;
 				++count;
 			}
 
