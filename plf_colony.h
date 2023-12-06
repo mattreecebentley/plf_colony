@@ -650,7 +650,7 @@ public:
 	{
 		PLF_CONSTFUNC skipfield_type adaptive_size = static_cast<skipfield_type>(((sizeof(colony) + sizeof(group)) * 2) / sizeof(aligned_element_struct));
 		PLF_CONSTFUNC skipfield_type max_block_capacity = default_max_block_capacity(); // Necessary to check against in situations with > 64bit pointer sizes and small sizeof(T)
-		return (8 > adaptive_size) ? 8 : (adaptive_size > max_block_capacity) ? max_block_capacity : adaptive_size;
+		return std::max(static_cast<skipfield_type>(8), std::min(adaptive_size, max_block_capacity));
 	}
 
 
@@ -658,7 +658,7 @@ public:
 	// Adaptive maximum based on numeric_limits and best outcome from multiple benchmark's (on balance) in terms of memory usage and performance:
 	static PLF_CONSTFUNC skipfield_type default_max_block_capacity() PLF_NOEXCEPT
 	{
-		return static_cast<skipfield_type>((std::numeric_limits<skipfield_type>::max() > 8192u) ? 8192u : std::numeric_limits<skipfield_type>::max());
+		return static_cast<skipfield_type>(std::min(static_cast<unsigned int>(std::numeric_limits<skipfield_type>::max()), 8192u));
 	}
 
 
@@ -749,7 +749,7 @@ public:
 		unused_groups_head(NULL),
 		total_size(0),
 		total_capacity(0),
-		min_block_capacity(static_cast<skipfield_type>((source.min_block_capacity > source.total_size) ? source.min_block_capacity : ((source.total_size > source.max_block_capacity) ? source.max_block_capacity : source.total_size))), // min group size is set to value closest to total number of elements in source colony, in order to not create unnecessary small groups in the range-insert below, then reverts to the original min group size afterwards. This effectively saves a call to reserve.
+		min_block_capacity(std::max(source.min_block_capacity, static_cast<skipfield_type>(std::min(source.total_size, static_cast<size_type>(source.max_block_capacity))))), // min group size is set to value closest to total number of elements in source colony, in order to not create unnecessary small groups in the range-insert below, then reverts to the original min group size afterwards. This effectively saves a call to reserve.
 		max_block_capacity(source.max_block_capacity),
 		group_allocator(*this),
 		aligned_allocation_struct_allocator(*this),
@@ -772,7 +772,7 @@ public:
 		unused_groups_head(NULL),
 		total_size(0),
 		total_capacity(0),
-		min_block_capacity(static_cast<skipfield_type>((source.min_block_capacity > source.total_size) ? source.min_block_capacity : ((source.total_size > source.max_block_capacity) ? source.max_block_capacity : source.total_size))), // min group size is set to value closest to total number of elements in source colony, in order to not create unnecessary small groups in the range-insert below, then reverts to the original min group size afterwards. This effectively saves a call to reserve.
+		min_block_capacity(std::max(source.min_block_capacity, static_cast<skipfield_type>(std::min(source.total_size, static_cast<size_type>(source.max_block_capacity))))),
 		max_block_capacity(source.max_block_capacity),
 		group_allocator(*this),
 		aligned_allocation_struct_allocator(*this),
@@ -1387,7 +1387,7 @@ public:
 
 				if (unused_groups_head == NULL)
 				{
-					const skipfield_type new_group_size = (total_size < static_cast<size_type>(max_block_capacity)) ? static_cast<skipfield_type>(total_size) : max_block_capacity;
+					const skipfield_type new_group_size = static_cast<skipfield_type>(std::min(total_size, static_cast<size_type>(max_block_capacity)));
 					reset_group_numbers_if_necessary();
 					next_group = allocate_new_group(new_group_size, end_iterator.group_pointer);
 
@@ -1511,7 +1511,7 @@ public:
 
 					if (unused_groups_head == NULL)
 					{
-						const skipfield_type new_group_size = (total_size < static_cast<size_type>(max_block_capacity)) ? static_cast<skipfield_type>(total_size) : max_block_capacity;
+						const skipfield_type new_group_size = static_cast<skipfield_type>(std::min(total_size, static_cast<size_type>(max_block_capacity)));
 						reset_group_numbers_if_necessary();
 						next_group = allocate_new_group(new_group_size, end_iterator.group_pointer);
 
@@ -1636,7 +1636,7 @@ public:
 
 					if (unused_groups_head == NULL)
 					{
-						const skipfield_type new_group_size = (total_size < static_cast<size_type>(max_block_capacity)) ? static_cast<skipfield_type>(total_size) : max_block_capacity;
+						const skipfield_type new_group_size = static_cast<skipfield_type>(std::min(total_size, static_cast<size_type>(max_block_capacity)));
 						reset_group_numbers_if_necessary();
 						next_group = allocate_new_group(new_group_size, end_iterator.group_pointer);
 
@@ -1999,10 +1999,8 @@ public:
 
 
 		// Use up remaining available element locations in end group:
-		// This variable is either the remaining capacity of the group or the number of elements yet to be filled, whichever is smaller:
-		const skipfield_type group_remainder = static_cast<skipfield_type>(
-			(static_cast<size_type>(pointer_cast<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer) >= size) ?
-			size : pointer_cast<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer);
+		// This variable is either the remaining capacity of the group or the number of elements yet to be inserted, whichever is smaller:
+		const skipfield_type group_remainder = static_cast<skipfield_type>(std::min(static_cast<size_type>(pointer_cast<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer), size));
 
 		if (group_remainder != 0)
 		{
@@ -2249,9 +2247,7 @@ private:
 			}
 		}
 
-		const skipfield_type group_remainder = static_cast<skipfield_type>(
-			(static_cast<size_type>(pointer_cast<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer) >= size) ?
-			size : pointer_cast<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer);
+		const skipfield_type group_remainder = static_cast<skipfield_type>(std::min(static_cast<size_type>(pointer_cast<aligned_pointer_type>(end_iterator.group_pointer->skipfield) - end_iterator.element_pointer), size));
 
 		if (group_remainder != 0)
 		{
@@ -4044,7 +4040,7 @@ public:
 		group_pointer_type const original_unused_groups_head = source.unused_groups_head; // grab value before it gets wiped
 		source.blank(); // blank source before adding capacity from unused groups back in
 
-		if (source.unused_groups_head != NULL) // If there were unused groups in source, re-link them and remove their capacity count from *this while adding it to source:
+		if (original_unused_groups_head != NULL) // If there were unused groups in source, re-link them and remove their capacity count from *this while adding it to source:
 		{
 			size_type source_unused_groups_capacity = 0;
 
