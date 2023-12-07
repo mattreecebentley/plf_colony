@@ -1380,7 +1380,7 @@ public:
 					++end_iterator.skipfield_pointer;
 					++total_size;
 
-					return return_iterator; // return value before incrementation
+					return return_iterator; // value before incrementation
 				}
 
 				group_pointer_type next_group;
@@ -1428,7 +1428,7 @@ public:
 				end_iterator.skipfield_pointer = next_group->skipfield + 1;
 				++total_size;
 
-				return iterator(next_group, next_group->elements, next_group->skipfield); /* returns value before incrementation */
+				return iterator(next_group, next_group->elements, next_group->skipfield);
 			}
 			else // there are erased elements, reuse those memory locations
 			{
@@ -1552,7 +1552,7 @@ public:
 					end_iterator.skipfield_pointer = next_group->skipfield + 1;
 					++total_size;
 
-					return iterator(next_group, next_group->elements, next_group->skipfield); /* returns value before incrementation */
+					return iterator(next_group, next_group->elements, next_group->skipfield);
 				}
 				else
 				{
@@ -1677,7 +1677,7 @@ public:
 					end_iterator.skipfield_pointer = next_group->skipfield + 1;
 					++total_size;
 
-					return iterator(next_group, next_group->elements, next_group->skipfield); /* returns value before incrementation */
+					return iterator(next_group, next_group->elements, next_group->skipfield);
 				}
 				else
 				{
@@ -2007,7 +2007,7 @@ public:
 			fill(element, group_remainder);
 			end_iterator.group_pointer->size = static_cast<skipfield_type>(end_iterator.group_pointer->size + group_remainder);
 
-			if (size == group_remainder) // Ie. remaining capacity was >= remaining elements to be filled
+			if (size == group_remainder) // ie. remaining capacity was >= remaining elements to be filled
 			{
 				end_iterator.skipfield_pointer = end_iterator.group_pointer->skipfield + end_iterator.group_pointer->size;
 				return;
@@ -2398,12 +2398,11 @@ private:
 
 public:
 
-	// Must return iterator to subsequent non-erased element (or end()), in case the group containing the element which the iterator points to becomes empty after the erasure, and is thereafter removed from the colony chain, making the current iterator invalid and unusable in a ++ operation:
 	iterator erase(const const_iterator it) // if uninitialized/invalid iterator supplied, function could generate an exception
 	{
 		assert(total_size != 0);
 		assert(it.group_pointer != NULL); // ie. not uninitialized iterator
-		assert(it.element_pointer != pointer_cast<aligned_pointer_type>(it.group_pointer->skipfield)); // ie. != end()
+		assert(it.element_pointer != end_iterator.element_pointer); // ie. != end()
 		assert(*(it.skipfield_pointer) == 0); // ie. element pointed to by iterator has not been erased previously
 
 		#ifdef PLF_TYPE_TRAITS_SUPPORT
@@ -4399,10 +4398,10 @@ public:
 
 	struct colony_data : public uchar_allocator_type
 	{
-		aligned_pointer_type * const block_pointers; 			// array of pointers to element memory blocks
-		unsigned char * * const bitfield_pointers;				// array of pointers to bitfields in the form of unsigned char arrays representing whether an element is erased or not (0 for erased).
-		size_t * const block_capacities; 							// array of the number of elements in each memory block
-		const size_t number_of_blocks;								// size of each of the arrays above
+		aligned_pointer_type * const block_pointers; 	// array of pointers to element memory blocks
+		unsigned char * * const bitfield_pointers;		// array of pointers to bitfields in the form of unsigned char arrays representing whether an element is erased or not (0 for erased).
+		size_t * const block_capacities; 				// array of the number of elements in each memory block
+		const size_t number_of_blocks;					// size of each of the arrays above
 
 
 		colony_data(const colony::size_type size) :
@@ -4921,7 +4920,6 @@ public:
 				{
 					element_pointer = group_pointer->elements + distance;
 					skipfield_pointer = group_pointer->skipfield + distance;
-					return;
 				}
 				else	 // We already know size > distance due to the intermediary group checks above - safe to ignore endpoint check condition while incrementing here:
 				{
@@ -4934,12 +4932,9 @@ public:
 					} while(--distance != 0);
 
 					element_pointer = group_pointer->elements + (skipfield_pointer - group_pointer->skipfield);
-					return;
 				}
-
-				return;
 			}
-			else if (distance < 0) // for negative change
+			else if (distance < 0)
 			{
 				// Code logic is very similar to += above
 				if(group_pointer->previous_group == NULL && element_pointer == group_pointer->elements + *(group_pointer->skipfield)) // check if we're already at begin()
@@ -5021,13 +5016,11 @@ public:
 				{
 					element_pointer = group_pointer->elements + *(group_pointer->skipfield);
 					skipfield_pointer = group_pointer->skipfield + *(group_pointer->skipfield);
-					return;
 				}
 				else if (group_pointer->free_list_head == std::numeric_limits<skipfield_type>::max()) // ie. no erased elements in this group
 				{
 					element_pointer = pointer_cast<aligned_pointer_type>(group_pointer->skipfield) - distance;
 					skipfield_pointer = (group_pointer->skipfield + group_pointer->size) - distance;
-					return;
 				}
 				else // ie. no more groups to traverse but there are erased elements in this group
 				{
@@ -5040,11 +5033,8 @@ public:
 					} while(--distance != 0);
 
 					element_pointer = group_pointer->elements + (skipfield_pointer - group_pointer->skipfield);
-					return;
 				}
 			}
-
-			// Only distance == 0 reaches here
 		}
 
 
@@ -5152,7 +5142,7 @@ public:
 	class colony_reverse_iterator
 	{
 	private:
-		typedef typename colony::group_pointer_type 		group_pointer_type;
+		typedef typename colony::group_pointer_type 	group_pointer_type;
 		typedef typename colony::aligned_pointer_type 	aligned_pointer_type;
 		typedef typename colony::skipfield_pointer_type skipfield_pointer_type;
 
@@ -5163,7 +5153,7 @@ public:
 		struct colony_iterator_tag {};
 		typedef std::bidirectional_iterator_tag 	iterator_category;
 		typedef std::bidirectional_iterator_tag 	iterator_concept;
-		typedef iterator 									iterator_type;
+		typedef iterator 							iterator_type;
 		typedef typename colony::value_type 		value_type;
 		typedef typename colony::difference_type	difference_type;
 		typedef typename plf::conditional<is_const_r, typename colony::const_pointer, typename colony::pointer>::type		pointer;
