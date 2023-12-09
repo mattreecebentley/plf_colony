@@ -1446,7 +1446,7 @@ public:
 		{
 			initialize(min_block_capacity);
 
-			#ifdef PLF_EXCEPTIONS_SUPPORT
+			#ifndef PLF_EXCEPTIONS_SUPPORT
 				PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), element);
 			#else
 				#ifdef PLF_TYPE_TRAITS_SUPPORT
