@@ -8,4 +8,4 @@ Documentation and function descriptions here: https://plflib.org/colony.htm#func
 plf::colony is C++98/03/11/14/17/20/23-compatible.
 
 
-![Infographic describing the container](https://i.imgur.com/SiHjAHB.png)
+![Infographic describing the container](https://i.imgur.com/tnRmFBv.png)
