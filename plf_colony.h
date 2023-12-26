@@ -3325,17 +3325,21 @@ private:
 		colony temp(plf::limits(new_min, new_max));
 
 		#if defined(PLF_MOVE_SEMANTICS_SUPPORT) && defined(PLF_TYPE_TRAITS_SUPPORT)
-			if PLF_CONSTEXPR (std::is_nothrow_move_constructible<element_type>::value)
+			if PLF_CONSTEXPR (!std::is_trivial<element_type>::value && std::is_nothrow_move_constructible<element_type>::value)
 			{
 				temp.range_assign(std::make_move_iterator(begin_iterator), total_size);
-				*this = std::move(temp); // Avoid generating 2nd temporary
 			}
 			else
 		#endif
 		{
 			temp.range_assign(begin_iterator, total_size);
-			swap(temp);
 		}
+
+		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+			*this = std::move(temp); // Avoid generating 2nd temporary
+		#else
+			swap(temp);
+		#endif
 	}
 
 
@@ -4286,20 +4290,19 @@ public:
 		}
 
 		size_type count = 0;
+		const const_iterator end = end_iterator;
 
-		for(const_iterator current = ++const_iterator(begin_iterator), previous = begin_iterator; current != end_iterator;)
+		for(const_iterator current = begin_iterator, previous = begin_iterator; ++current != end; previous = current)
 		{
 			if (compare(*current, *previous))
 			{
 				const size_type original_count = ++count;
 				const_iterator last = current;
 
-				while(++last != end_iterator && compare(*last, *previous))
+				while(++last != end && compare(*last, *previous))
 				{
 					++count;
 				}
-
-				previous = current;
 
 				if (count != original_count)
 				{
@@ -4309,10 +4312,8 @@ public:
 				{
 					current = erase(current);
 				}
-			}
-			else
-			{
-				previous = current++;
+
+				if (last == end) break;
 			}
 		}
 
@@ -5740,13 +5741,13 @@ typename plf::colony<element_type, allocator_type>::size_type erase_if(plf::colo
 	typedef typename colony::const_iterator 	const_iterator;
 	typedef typename colony::size_type 			size_type;
 	size_type count = 0;
+	const const_iterator end = container.cend();
 
-	for (const_iterator current = container.cbegin(); current != container.cend(); )
+	for (const_iterator current = container.cbegin(); current != end; ++current)
 	{
 		if (predicate(*current))
 		{
 			const size_type original_count = ++count;
-			const const_iterator end = container.cend();
 			const_iterator last = current;
 
 			while(++last != end && predicate(*last))
@@ -5756,16 +5757,14 @@ typename plf::colony<element_type, allocator_type>::size_type erase_if(plf::colo
 
 			if (count != original_count)
 			{
-				current = container.erase(current, last); // Take advantage of optimized ranged overload
+				current = container.erase(current, last); // optimised range-erase
 			}
 			else
 			{
 				current = container.erase(current);
 			}
-		}
-		else
-		{
-			++current;
+
+			if (last == end) break;
 		}
 	}
 
