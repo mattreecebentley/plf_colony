@@ -216,6 +216,9 @@
 #endif
 
 
+#define PLF_CONSTRUCT_ELEMENT(location, element) PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(location), element)
+
+
 #ifndef PLF_SORT_FUNCTION
 	#define PLF_SORT_FUNCTION std::sort
 	#define PLF_SORT_FUNCTION_DEFINED
@@ -1340,7 +1343,7 @@ private:
 		next_group->reset(1, NULL, end_iterator.group_pointer, end_iterator.group_pointer->group_number + 1u);
 		return next_group;
 	}
-
+                              
 
 
 public:
@@ -1367,12 +1370,12 @@ public:
 					#ifdef PLF_TYPE_TRAITS_SUPPORT
 						if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value)
 						{ // For no good reason this compiles to much faster code under GCC in raw small struct tests:
-							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), element);
+							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, element);
 						}
 						else
 					#endif
 					{
-						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), element);
+						PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, element);
 						++end_iterator.element_pointer; // Shift the addition outside, avoiding a try-catch block if an exception is thrown during construction
 					}
 
@@ -1392,19 +1395,19 @@ public:
 					next_group = allocate_new_group(new_group_size, end_iterator.group_pointer);
 
 					#ifndef PLF_EXCEPTIONS_SUPPORT
-						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(next_group->elements), element);
+						PLF_CONSTRUCT_ELEMENT(next_group->elements, element);
 					#else
 						#ifdef PLF_TYPE_TRAITS_SUPPORT
 							if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value)
 							{
-								PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(next_group->elements), element);
+								PLF_CONSTRUCT_ELEMENT(next_group->elements, element);
 							}
 							else
 						#endif
 						{
 							try
 							{
-								PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(next_group->elements), element);
+								PLF_CONSTRUCT_ELEMENT(next_group->elements, element);
 							}
 							catch (...)
 							{
@@ -1418,7 +1421,7 @@ public:
 				}
 				else
 				{
-					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(unused_groups_head->elements), element);
+					PLF_CONSTRUCT_ELEMENT(unused_groups_head->elements, element);
 					next_group = reuse_unused_group();
 				}
 
@@ -1436,7 +1439,7 @@ public:
 
 				// We always reuse the element at the start of the skipblock, this is also where the free-list information for that skipblock is stored. Get the previous free-list node's index from this memory space, before we write to our element to it. 'Next' index is always the free_list_head (as represented by the maximum value of the skipfield type) here so we don't need to get it:
 				const skipfield_type prev_free_list_index = *pointer_cast<skipfield_pointer_type>(new_location.element_pointer);
-				PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(new_location.element_pointer), element);
+				PLF_CONSTRUCT_ELEMENT(new_location.element_pointer, element);
 				update_skipblock(new_location, prev_free_list_index);
 
 				return new_location;
@@ -1447,19 +1450,19 @@ public:
 			initialize(min_block_capacity);
 
 			#ifndef PLF_EXCEPTIONS_SUPPORT
-				PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), element);
+				PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, element);
 			#else
 				#ifdef PLF_TYPE_TRAITS_SUPPORT
 					if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value)
 					{
-						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), element);
+						PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, element);
 					}
 					else
 				#endif
 				{
 					try
 					{
-						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), element);
+						PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, element);
 					}
 					catch (...)
 					{
@@ -1491,12 +1494,12 @@ public:
 						#ifdef PLF_TYPE_TRAITS_SUPPORT
 							if PLF_CONSTEXPR (std::is_nothrow_move_constructible<element_type>::value)
 							{
-								PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), std::move(element));
+								PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::move(element));
 							}
 							else
 						#endif
 						{
-							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), std::move(element));
+							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, std::move(element));
 							++end_iterator.element_pointer;
 						}
 
@@ -1516,19 +1519,19 @@ public:
 						next_group = allocate_new_group(new_group_size, end_iterator.group_pointer);
 
 						#ifndef PLF_EXCEPTIONS_SUPPORT
-							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(next_group->elements), std::move(element));
+							PLF_CONSTRUCT_ELEMENT(next_group->elements, std::move(element));
 						#else
 							#ifdef PLF_TYPE_TRAITS_SUPPORT
 								if PLF_CONSTEXPR (std::is_nothrow_move_constructible<element_type>::value)
 								{
-									PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(next_group->elements), std::move(element));
+									PLF_CONSTRUCT_ELEMENT(next_group->elements, std::move(element));
 								}
 								else
 							#endif
 							{
 								try
 								{
-									PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(next_group->elements), std::move(element));
+									PLF_CONSTRUCT_ELEMENT(next_group->elements, std::move(element));
 								}
 								catch (...)
 								{
@@ -1542,7 +1545,7 @@ public:
 					}
 					else
 					{
-						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(unused_groups_head->elements), std::move(element));
+						PLF_CONSTRUCT_ELEMENT(unused_groups_head->elements, std::move(element));
 						next_group = reuse_unused_group();
 					}
 
@@ -1559,7 +1562,7 @@ public:
 					iterator new_location(erasure_groups_head, erasure_groups_head->elements + erasure_groups_head->free_list_head, erasure_groups_head->skipfield + erasure_groups_head->free_list_head);
 
 					const skipfield_type prev_free_list_index = *pointer_cast<skipfield_pointer_type>(new_location.element_pointer);
-					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(new_location.element_pointer), std::move(element));
+					PLF_CONSTRUCT_ELEMENT(new_location.element_pointer, std::move(element));
 					update_skipblock(new_location, prev_free_list_index);
 
 					return new_location;
@@ -1570,19 +1573,19 @@ public:
 				initialize(min_block_capacity);
 
 				#ifndef PLF_EXCEPTIONS_SUPPORT
-					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), std::move(element));
+					PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::move(element));
 				#else
 					#ifdef PLF_TYPE_TRAITS_SUPPORT
 						if PLF_CONSTEXPR (std::is_nothrow_move_constructible<element_type>::value)
 						{
-							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), std::move(element));
+							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::move(element));
 						}
 						else
 					#endif
 					{
 						try
 						{
-							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), std::move(element));
+							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::move(element));
 						}
 						catch (...)
 						{
@@ -1616,12 +1619,12 @@ public:
 						#ifdef PLF_TYPE_TRAITS_SUPPORT
 							if PLF_CONSTEXPR (std::is_nothrow_constructible<element_type>::value)
 							{
-								PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), std::forward<arguments>(parameters) ...);
+								PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::forward<arguments>(parameters) ...);
 							}
 							else
 						#endif
 						{
-							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), std::forward<arguments>(parameters) ...);
+							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, std::forward<arguments>(parameters) ...);
 							++end_iterator.element_pointer;
 						}
 
@@ -1641,19 +1644,19 @@ public:
 						next_group = allocate_new_group(new_group_size, end_iterator.group_pointer);
 
 						#ifndef PLF_EXCEPTIONS_SUPPORT
-							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(next_group->elements), std::forward<arguments>(parameters) ...);
+							PLF_CONSTRUCT_ELEMENT(next_group->elements, std::forward<arguments>(parameters) ...);
 						#else
 							#ifdef PLF_TYPE_TRAITS_SUPPORT
 								if PLF_CONSTEXPR (std::is_nothrow_constructible<element_type>::value)
 								{
-									PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(next_group->elements), std::forward<arguments>(parameters) ...);
+									PLF_CONSTRUCT_ELEMENT(next_group->elements, std::forward<arguments>(parameters) ...);
 								}
 								else
 							#endif
 							{
 								try
 								{
-									PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(next_group->elements), std::forward<arguments>(parameters) ...);
+									PLF_CONSTRUCT_ELEMENT(next_group->elements, std::forward<arguments>(parameters) ...);
 								}
 								catch (...)
 								{
@@ -1667,7 +1670,7 @@ public:
 					}
 					else
 					{
-						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(unused_groups_head->elements), std::forward<arguments>(parameters) ...);
+						PLF_CONSTRUCT_ELEMENT(unused_groups_head->elements, std::forward<arguments>(parameters) ...);
 						next_group = reuse_unused_group();
 					}
 
@@ -1684,7 +1687,7 @@ public:
 					iterator new_location(erasure_groups_head, erasure_groups_head->elements + erasure_groups_head->free_list_head, erasure_groups_head->skipfield + erasure_groups_head->free_list_head);
 
 					const skipfield_type prev_free_list_index = *pointer_cast<skipfield_pointer_type>(new_location.element_pointer);
-					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(new_location.element_pointer), std::forward<arguments>(parameters) ...);
+					PLF_CONSTRUCT_ELEMENT(new_location.element_pointer, std::forward<arguments>(parameters) ...);
 					update_skipblock(new_location, prev_free_list_index);
 
 					return new_location;
@@ -1695,19 +1698,19 @@ public:
 				initialize(min_block_capacity);
 
 				#ifndef PLF_EXCEPTIONS_SUPPORT
-					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), std::forward<arguments>(parameters) ...);
+					PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::forward<arguments>(parameters) ...);
 				#else
 					#ifdef PLF_TYPE_TRAITS_SUPPORT
 						if PLF_CONSTEXPR (std::is_nothrow_constructible<element_type>::value)
 						{
-							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), std::forward<arguments>(parameters) ...);
+							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::forward<arguments>(parameters) ...);
 						}
 						else
 					#endif
 					{
 						try
 						{
-							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer++), std::forward<arguments>(parameters) ...);
+							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::forward<arguments>(parameters) ...);
 						}
 						catch (...)
 						{
@@ -1773,7 +1776,7 @@ private:
 
 					do
 					{
-						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), element);
+						PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, element);
 					} while (++end_iterator.element_pointer != fill_end);
 				}
 			}
@@ -1787,7 +1790,7 @@ private:
 				#ifdef PLF_EXCEPTIONS_SUPPORT
 					try
 					{
-						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), element);
+						PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, element);
 					}
 					catch (...)
 					{
@@ -1795,7 +1798,7 @@ private:
 						throw;
 					}
 				#else
-					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), element);
+					PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, element);
 				#endif
 			} while (++end_iterator.element_pointer != fill_end);
 		}
@@ -1858,7 +1861,7 @@ private:
 
 					for (aligned_pointer_type current_location = location; current_location != fill_end; ++current_location)
 					{
-						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(current_location), element);
+						PLF_CONSTRUCT_ELEMENT(current_location, element);
 					}
 				}
 			}
@@ -1875,7 +1878,7 @@ private:
 				#ifdef PLF_EXCEPTIONS_SUPPORT
 					try
 					{
-						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(current_location), element);
+						PLF_CONSTRUCT_ELEMENT(current_location, element);
 					}
 					catch (...)
 					{
@@ -1883,7 +1886,7 @@ private:
 						throw;
 					}
 				#else
-					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(current_location), element);
+					PLF_CONSTRUCT_ELEMENT(current_location, element);
 				#endif
 			}
 		}
@@ -2042,7 +2045,7 @@ private:
 			{
 				do
 				{
-					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), *it++);
+					PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, *it++);
 				} while (++end_iterator.element_pointer != fill_end);
 			}
 			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
@@ -2050,7 +2053,7 @@ private:
 				{
 					do
 					{
-						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), std::move(*it++));
+						PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, std::move(*it++));
 					} while (++end_iterator.element_pointer != fill_end);
 				}
 			#endif
@@ -2066,11 +2069,11 @@ private:
 					#ifdef PLF_TYPE_TRAITS_SUPPORT
 						if PLF_CONSTEXPR (!std::is_copy_constructible<element_type>::value)
 						{
-							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), std::move(*it++));
+							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, std::move(*it++));
 						}
 						else
 					#endif
-					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(end_iterator.element_pointer), *it++);
+					PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, *it++);
 				#ifdef PLF_EXCEPTIONS_SUPPORT
 					}
 					catch (...)
@@ -2098,7 +2101,7 @@ private:
 			{
 				for (aligned_pointer_type current_location = location; current_location != fill_end; ++current_location)
 				{
-					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(current_location), *it++);
+					PLF_CONSTRUCT_ELEMENT(current_location, *it++);
 				}
 			}
 			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
@@ -2106,7 +2109,7 @@ private:
 				{
 					for (aligned_pointer_type current_location = location; current_location != fill_end; ++current_location)
 					{
-						PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(current_location), std::move(*it++));
+						PLF_CONSTRUCT_ELEMENT(current_location, std::move(*it++));
 					}
 				}
 			#endif
@@ -2126,11 +2129,11 @@ private:
 					#ifdef PLF_TYPE_TRAITS_SUPPORT
 						if PLF_CONSTEXPR (!std::is_copy_constructible<element_type>::value)
 						{
-							PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(current_location), std::move(*it++));
+							PLF_CONSTRUCT_ELEMENT(current_location, std::move(*it++));
 						}
 						else
 					#endif
-					PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(current_location), *it++);
+					PLF_CONSTRUCT_ELEMENT(current_location, *it++);
 				#ifdef PLF_EXCEPTIONS_SUPPORT
 					}
 					catch (...)
@@ -5795,6 +5798,7 @@ typename plf::colony<element_type, allocator_type>::size_type erase(plf::colony<
 } // namespace std
 
 
+#undef PLF_CONSTRUCT_ELEMENT
 #undef PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
 #undef PLF_ALIGNMENT_SUPPORT
 #undef PLF_INITIALIZER_LIST_SUPPORT
