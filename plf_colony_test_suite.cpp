@@ -82,6 +82,11 @@
 	#include <utility> // std::move
 #endif
 
+#ifdef PLF_TEST_CPP20_SUPPORT
+	#include <ranges>
+#endif
+
+
 #include "plf_colony.h"
 
 
