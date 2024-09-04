@@ -3716,15 +3716,22 @@ private:
 	{
 		const aligned_pointer_type aligned_element_pointer = pointer_cast<aligned_pointer_type>(element_pointer);
 
-		// Start with last group first, as will be the largest group in most cases so statistically-higher chance of the element being in it:
-		aligned_pointer_type end = end_iterator.element_pointer; // This line is important in case the element was in a group which became empty, got moved to the unused_groups list or was deallocated, and then was re-used. It prevents the function from mistakenly giving an iterator which is beyond the back element of the colony.
-		for (group_pointer_type current_group = end_iterator.group_pointer; current_group != NULL; current_group = current_group->previous_group, end = pointer_cast<aligned_pointer_type>(current_group->skipfield))
+		// Note: we start with checking the back group first, as it will be the largest group in most cases, so there's a statistically-higher chance of the element being within it.
+		// Special case for back group in case the element was in a group which became empty and got moved to the unused_groups list or was deallocated, and then that memory was re-used (ie. it became the current back group). The following line prevents the function from mistakenly returning an iterator which is beyond the back element of the colony:
+		group_pointer_type current_group = end_iterator.group_pointer;
+		aligned_pointer_type end = end_iterator.element_pointer;
+
+		while (true)
 		{
 			if (aligned_element_pointer >= current_group->elements && aligned_element_pointer < end)
 			{
 				const skipfield_pointer_type skipfield_pointer = current_group->skipfield + (aligned_element_pointer - current_group->elements);
 				return (*skipfield_pointer == 0) ? colony_iterator<is_const>(current_group, aligned_element_pointer, skipfield_pointer) : colony_iterator<is_const>(end_iterator);
 			}
+
+			current_group = current_group->previous_group;
+			if (current_group == NULL) break;
+			end = pointer_cast<aligned_pointer_type>(current_group->skipfield);
 		}
 
 		return end_iterator;
@@ -3751,14 +3758,19 @@ public:
 	bool is_active(const const_iterator &it) const PLF_NOEXCEPT
 	{
 		// Schema: check (a) that the group the iterator belongs to is still active and not deallocated or in the unused_groups list, then (b) that the element is not erased. (a) prevents an out-of-bounds memory access if the group is deallocated. Same reasoning as get_iterator for loop conditions
+		group_pointer_type current_group = end_iterator.group_pointer;
 		aligned_pointer_type end = end_iterator.element_pointer; // Same reasoning as in get_it()
 
-		for (group_pointer_type current_group = end_iterator.group_pointer; current_group != NULL; current_group = current_group->previous_group, end = pointer_cast<aligned_pointer_type>(current_group->skipfield))
+		while(true)
 		{
 			if (it.group_pointer == current_group && it.element_pointer >= current_group->elements && it.element_pointer < end) // 2nd 2 conditions necessary in case the group contained the element which the iterator points to, has been deallocated from the colony previously, but then the same pointer address is re-supplied via an allocator for a subsequent group allocation (in which case the group's element block memory location may be different)
 			{
-				return (*it.skipfield_pointer == 0);
+				return *it.skipfield_pointer == 0;
 			}
+
+			current_group = current_group->previous_group;
+			if (current_group == NULL) break;
+			end = pointer_cast<aligned_pointer_type>(current_group->skipfield);
 		}
 
 		return false;
