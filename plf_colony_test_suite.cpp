@@ -175,7 +175,7 @@ struct small_struct
 	bool operator < (const small_struct &source) const { return number < source.number; };
 	bool operator >= (const small_struct &source) const { return number >= source.number; };
 	bool operator <= (const small_struct &source) const { return number <= source.number; };
-	
+
 	small_struct(const unsigned int num): number(num) {};
 };
 
@@ -785,7 +785,15 @@ int main()
 			failpass("Advance + iterator-to-index test", index == 20);
 
 			i_colony.erase(temp_iterator);
+
+			failpass("is_active test 1", i_colony.is_active(temp_iterator) == false);
+			failpass("get_iterator test 1", i_colony.get_iterator(&(*temp_iterator)) == i_colony.end());
+
 			temp_iterator = i_colony.begin(); // Check edge-case with advance when erasures present in initial group
+
+			failpass("is_active test 2", i_colony.is_active(temp_iterator) == true);
+			failpass("get_iterator test 2", i_colony.get_iterator(&(*temp_iterator)) == temp_iterator);
+
 			advance(temp_iterator, 500);
 
 			index = static_cast<unsigned int>(distance(i_colony.begin(), temp_iterator));
@@ -811,8 +819,16 @@ int main()
 
 			failpass("Total erase test", i_colony.empty());
 
+			// Test get_iterator etc on an empty colony with empty memory blocks retained:
+			failpass("is_active test 3", i_colony.is_active(temp_iterator) == false);
+  			failpass("get_iterator test 3", i_colony.get_iterator(&(*temp_iterator)) == i_colony.end());
 
-			i_colony.reset();
+			i_colony.trim_capacity();
+
+			// Test get_iterator etc on a colony with no blocks:
+			failpass("is_active test 4", i_colony.is_active(temp_iterator) == false);
+  			failpass("get_iterator test 4", i_colony.get_iterator(&(*temp_iterator)) == i_colony.end());
+
 			i_colony.reshape(plf::limits(3, i_colony.block_capacity_limits().max));
 
 			const unsigned int temp_capacity2 = static_cast<unsigned int>(i_colony.capacity());
@@ -1048,7 +1064,7 @@ int main()
 					range2 = range1 + 1 + (rand() % (size - range1));
 					advance(it1, static_cast<int>(range1));
 					advance(it2, static_cast<int>(range2));
-					
+
 					if (it2 > i_colony.end()) it2 = i_colony.end();
 
 					i_colony.erase(it1, it2);
