@@ -605,7 +605,7 @@ private:
 
 	void check_capacities_conformance(const plf::limits capacities) const
 	{
-		plf::limits hard_capacities = block_capacity_hard_limits();
+		PLF_CONSTFUNC plf::limits hard_capacities = block_capacity_hard_limits();
 
 		if (capacities.min < hard_capacities.min || capacities.min > capacities.max || capacities.max > hard_capacities.max)
 		{
@@ -3238,8 +3238,8 @@ public:
 	static PLF_CONSTFUNC size_type max_elements_per_allocation(const size_type allocation_amount) PLF_NOEXCEPT
 	{
 		// Get a rough approximation of the number of elements + skipfield units we can fit in the amount expressed:
-		size_type num_units = allocation_amount / (sizeof(aligned_element_struct) + sizeof(skipfield_type));
-		plf::limits hard_capacities = block_capacity_hard_limits();
+		PLF_CONSTFUNC size_type num_units = allocation_amount / (sizeof(aligned_element_struct) + sizeof(skipfield_type));
+		PLF_CONSTFUNC plf::limits hard_capacities = block_capacity_hard_limits();
 
 		// Truncate the amount to the implementation's hard block capacity max limit:
 		if (num_units > hard_capacities.max) num_units = hard_capacities.max;
@@ -3496,15 +3496,6 @@ public:
 			}
 			else // Allocator isn't movable so move elements from source and deallocate the source's blocks:
 			{
-				const plf::limits hard_limits = block_capacity_hard_limits();
-
-				if (source.min_block_capacity >= hard_limits.min && source.max_block_capacity <= hard_limits.max)
-				{
-					if (source.min_block_capacity < min_block_capacity || source.max_block_capacity > max_block_capacity) reset();
-					min_block_capacity = source.min_block_capacity;
-					max_block_capacity = source.max_block_capacity;
-				}
-
 				range_assign(plf::make_move_iterator(source.begin_iterator), source.total_size);
 				source.destroy_all_data();
 			}
