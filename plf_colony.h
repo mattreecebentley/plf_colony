@@ -590,10 +590,10 @@ private:
 
 	// colony member variables:
 
-	iterator 				end_iterator, begin_iterator;
+	iterator 			end_iterator, begin_iterator;
 	group_pointer_type	erasure_groups_head,	// Head of doubly-linked list of groups which have erased-element memory locations available for re-use
-								unused_groups_head;	// Head of singly-linked list of reserved groups retained by erase()/clear() or created by reserve()
-	size_type				total_size, total_capacity;
+						unused_groups_head;	// Head of singly-linked list of reserved groups retained by erase()/clear() or created by reserve()
+	size_type			total_size, total_capacity;
 	skipfield_type 		min_block_capacity, max_block_capacity;
 
 	group_allocator_type group_allocator;
@@ -605,7 +605,7 @@ private:
 
 	void check_capacities_conformance(const plf::limits capacities) const
 	{
-		PLF_CONSTFUNC plf::limits hard_capacities = block_capacity_hard_limits();
+		plf::limits hard_capacities = block_capacity_hard_limits();
 
 		if (capacities.min < hard_capacities.min || capacities.min > capacities.max || capacities.max > hard_capacities.max)
 		{
@@ -644,43 +644,54 @@ private:
 
 
 
+	static PLF_CONSTFUNC size_t max_size_static() PLF_NOEXCEPT
+	{
+		#ifdef PLF_ALLOCATOR_TRAITS_SUPPORT
+			return static_cast<size_t>(std::allocator_traits<allocator_type>::max_size(allocator_type()));
+		#else
+			return static_cast<size_t>(allocator_type::max_size());
+		#endif
+	}
+
+
+
 public:
 
 	// Adaptive minimum based around aligned size, sizeof(group) and sizeof(colony):
-	static PLF_CONSTFUNC skipfield_type default_min_block_capacity() PLF_NOEXCEPT
+	static PLF_CONSTFUNC skipfield_type block_capacity_default_min() PLF_NOEXCEPT
 	{
-		PLF_CONSTFUNC skipfield_type adaptive_size = static_cast<skipfield_type>(((sizeof(colony) + sizeof(group)) * 2) / sizeof(aligned_element_struct));
-		PLF_CONSTFUNC skipfield_type max_block_capacity = default_max_block_capacity(); // Necessary to check against in situations with > 64bit pointer sizes and small sizeof(T)
+		PLF_CONSTFUNC const skipfield_type adaptive_size = static_cast<skipfield_type>(((sizeof(colony) + sizeof(group)) * 2) / sizeof(aligned_element_struct));
+		PLF_CONSTFUNC const skipfield_type max_block_capacity = block_capacity_default_max(); // Necessary to check against in situations with > 64bit pointer sizes and small sizeof(T)
 		return std::max(static_cast<skipfield_type>(8), std::min(adaptive_size, max_block_capacity));
 	}
 
 
 
 	// Adaptive maximum based on numeric_limits and best outcome from multiple benchmark's (on balance) in terms of memory usage and performance:
-	static PLF_CONSTFUNC skipfield_type default_max_block_capacity() PLF_NOEXCEPT
+	static PLF_CONSTFUNC skipfield_type block_capacity_default_max() PLF_NOEXCEPT
 	{
-		return static_cast<skipfield_type>(std::min(static_cast<unsigned int>(std::numeric_limits<skipfield_type>::max()), 8192u));
+		return static_cast<skipfield_type>(std::min(std::min(static_cast<size_t>(std::numeric_limits<skipfield_type>::max()), static_cast<size_t>(8192u)), max_size_static()));
 	}
 
 
 
-	static PLF_CONSTFUNC plf::limits default_block_capacity_limits() PLF_NOEXCEPT
+	static PLF_CONSTFUNC plf::limits block_capacity_default_limits() PLF_NOEXCEPT
 	{
-		return plf::limits(static_cast<size_t>(default_min_block_capacity()), static_cast<size_t>(default_max_block_capacity()));
+		return plf::limits(static_cast<size_t>(block_capacity_default_min()), static_cast<size_t>(block_capacity_default_max()));
 	}
 
 
 
 	// Default constructors:
 
-	explicit colony(const allocator_type &alloc) PLF_NOEXCEPT:
+	PLF_CONSTFUNC explicit colony(const allocator_type &alloc) PLF_NOEXCEPT:
 		allocator_type(alloc),
 		erasure_groups_head(NULL),
 		unused_groups_head(NULL),
 		total_size(0),
 		total_capacity(0),
-		min_block_capacity(default_min_block_capacity()),
-		max_block_capacity(default_max_block_capacity()),
+		min_block_capacity(block_capacity_default_min()),
+		max_block_capacity(block_capacity_default_max()),
 		group_allocator(*this),
 		aligned_allocation_struct_allocator(*this),
 		skipfield_allocator(*this),
@@ -694,8 +705,8 @@ public:
 		unused_groups_head(NULL),
 		total_size(0),
 		total_capacity(0),
-		min_block_capacity(default_min_block_capacity()),
-		max_block_capacity(default_max_block_capacity()),
+		min_block_capacity(block_capacity_default_min()),
+		max_block_capacity(block_capacity_default_max()),
 		group_allocator(*this),
 		aligned_allocation_struct_allocator(*this),
 		skipfield_allocator(*this),
@@ -704,7 +715,7 @@ public:
 
 
 
-	colony(const plf::limits block_limits, const allocator_type &alloc) PLF_NOEXCEPT:
+	PLF_CONSTFUNC colony(const plf::limits block_limits, const allocator_type &alloc) PLF_NOEXCEPT:
 		allocator_type(alloc),
 		erasure_groups_head(NULL),
 		unused_groups_head(NULL),
@@ -722,7 +733,7 @@ public:
 
 
 
-	explicit colony(const plf::limits block_limits):
+	PLF_CONSTFUNC explicit colony(const plf::limits block_limits):
 		erasure_groups_head(NULL),
 		unused_groups_head(NULL),
 		total_size(0),
@@ -863,8 +874,8 @@ public:
 		unused_groups_head(NULL),
 		total_size(0),
 		total_capacity(0),
-		min_block_capacity(default_min_block_capacity()),
-		max_block_capacity(default_max_block_capacity()),
+		min_block_capacity(block_capacity_default_min()),
+		max_block_capacity(block_capacity_default_max()),
 		group_allocator(*this),
 		aligned_allocation_struct_allocator(*this),
 		skipfield_allocator(*this),
@@ -902,8 +913,8 @@ public:
 		unused_groups_head(NULL),
 		total_size(0),
 		total_capacity(0),
-		min_block_capacity(default_min_block_capacity()),
-		max_block_capacity(default_max_block_capacity()),
+		min_block_capacity(block_capacity_default_min()),
+		max_block_capacity(block_capacity_default_max()),
 		group_allocator(*this),
 		aligned_allocation_struct_allocator(*this),
 		skipfield_allocator(*this),
@@ -943,8 +954,8 @@ public:
 		unused_groups_head(NULL),
 		total_size(0),
 		total_capacity(0),
-		min_block_capacity(default_min_block_capacity()),
-		max_block_capacity(default_max_block_capacity()),
+		min_block_capacity(block_capacity_default_min()),
+		max_block_capacity(block_capacity_default_max()),
 		group_allocator(*this),
 		aligned_allocation_struct_allocator(*this),
 		skipfield_allocator(*this),
@@ -978,7 +989,7 @@ public:
 
 
 		colony(const std::initializer_list<element_type> &element_list, const allocator_type &alloc = allocator_type()):
-			colony(element_list, default_block_capacity_limits(), alloc)
+			colony(element_list, block_capacity_default_limits(), alloc)
 		{}
 	#endif
 
@@ -1011,7 +1022,7 @@ public:
 		template<class range_type>
 			requires std::ranges::range<range_type>
 		colony(plf::ranges::from_range_t, range_type &&rg, const allocator_type &alloc = allocator_type()):
-			colony(plf::ranges::from_range, std::move(rg), default_block_capacity_limits(), alloc)
+			colony(plf::ranges::from_range, std::move(rg), block_capacity_default_limits(), alloc)
 		{}
 	#endif
 
@@ -3174,7 +3185,7 @@ public:
 
 
 
-	 size_type max_size() const PLF_NOEXCEPT
+	size_type max_size() const PLF_NOEXCEPT
 	{
 		#ifdef PLF_ALLOCATOR_TRAITS_SUPPORT
 			return std::allocator_traits<allocator_type>::max_size(*this);
@@ -3228,7 +3239,7 @@ public:
 	{
 		// Get a rough approximation of the number of elements + skipfield units we can fit in the amount expressed:
 		size_type num_units = allocation_amount / (sizeof(aligned_element_struct) + sizeof(skipfield_type));
-		PLF_CONSTFUNC plf::limits hard_capacities = block_capacity_hard_limits();
+		plf::limits hard_capacities = block_capacity_hard_limits();
 
 		// Truncate the amount to the implementation's hard block capacity max limit:
 		if (num_units > hard_capacities.max) num_units = hard_capacities.max;
@@ -3359,7 +3370,7 @@ public:
 
 
 
-	plf::limits block_capacity_limits() const PLF_NOEXCEPT
+	PLF_CONSTFUNC plf::limits block_capacity_limits() const PLF_NOEXCEPT
 	{
 		return plf::limits(static_cast<size_t>(min_block_capacity), static_cast<size_t>(max_block_capacity));
 	}
@@ -3368,7 +3379,7 @@ public:
 
 	static PLF_CONSTFUNC plf::limits block_capacity_hard_limits() PLF_NOEXCEPT
 	{
-		return plf::limits(3, std::numeric_limits<skipfield_type>::max());
+		return plf::limits(3, std::min(static_cast<size_t>(std::numeric_limits<skipfield_type>::max()), max_size_static()));
 	}
 
 
@@ -3485,6 +3496,15 @@ public:
 			}
 			else // Allocator isn't movable so move elements from source and deallocate the source's blocks:
 			{
+				const plf::limits hard_limits = block_capacity_hard_limits();
+
+				if (source.min_block_capacity >= hard_limits.min && source.max_block_capacity <= hard_limits.max)
+				{
+					if (source.min_block_capacity < min_block_capacity || source.max_block_capacity > max_block_capacity) reset();
+					min_block_capacity = source.min_block_capacity;
+					max_block_capacity = source.max_block_capacity;
+				}
+
 				range_assign(plf::make_move_iterator(source.begin_iterator), source.total_size);
 				source.destroy_all_data();
 			}
