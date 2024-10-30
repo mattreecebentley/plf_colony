@@ -2630,13 +2630,21 @@ public:
 
 				// Schema: first erase all non-erased elements until end of group & remove all skipblocks post-iterator1 from the free_list. Then, either update preceding skipblock or create new one:
 
-				#ifdef PLF_TYPE_TRAITS_SUPPORT
-					if (std::is_trivially_destructible<element_type>::value && current.group_pointer->free_list_head == std::numeric_limits<skipfield_type>::max())
+				if (current.group_pointer->free_list_head == std::numeric_limits<skipfield_type>::max()) // ie. no other erasures in block
+				{
+					number_of_group_erasures += static_cast<size_type>(end - current.element_pointer);
+
+					#ifdef PLF_TYPE_TRAITS_SUPPORT
+						if PLF_CONSTEXPR (!std::is_trivially_destructible<element_type>::value)
+					#endif
 					{
-						number_of_group_erasures += static_cast<size_type>(end - current.element_pointer);
+						do // Avoid checking skipfield for rest of elements in group, as there are no skipped elements
+						{
+							destroy_element(current.element_pointer);
+						} while (++current.element_pointer != end);
 					}
-					else
-				#endif
+				}
+				else
 				{
 					while (current.element_pointer != end)
 					{
@@ -2645,7 +2653,9 @@ public:
 							#ifdef PLF_TYPE_TRAITS_SUPPORT
 								if PLF_CONSTEXPR (!std::is_trivially_destructible<element_type>::value)
 							#endif
-							destroy_element(current.element_pointer);
+							{
+								destroy_element(current.element_pointer);
+							}
 							++number_of_group_erasures;
 							++current.element_pointer;
 							++current.skipfield_pointer;
@@ -2812,13 +2822,21 @@ public:
 
 				const const_iterator current_saved = current;
 
-				#ifdef PLF_TYPE_TRAITS_SUPPORT
-					if (std::is_trivially_destructible<element_type>::value && current.group_pointer->free_list_head == std::numeric_limits<skipfield_type>::max())
+				if (current.group_pointer->free_list_head == std::numeric_limits<skipfield_type>::max()) // ie. no other erasures in block
+				{
+					number_of_group_erasures += static_cast<size_type>(iterator2.element_pointer - current.element_pointer);
+
+					#ifdef PLF_TYPE_TRAITS_SUPPORT
+						if PLF_CONSTEXPR (!std::is_trivially_destructible<element_type>::value)
+					#endif
 					{
-						number_of_group_erasures += static_cast<size_type>(iterator2.element_pointer - current.element_pointer);
+						do // avoid checking skipfield
+						{
+							destroy_element(current.element_pointer);
+						} while (++current.element_pointer != iterator2.element_pointer);
 					}
-					else
-				#endif
+				}
+				else
 				{
 					while (current.element_pointer != iterator2.element_pointer)
 					{
