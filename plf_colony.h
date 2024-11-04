@@ -4553,7 +4553,7 @@ public:
 				template <bool is_const_it = is_const, class = typename plf::enable_if<is_const_it>::type >
 				colony_iterator(colony_iterator<false> &&source) PLF_NOEXCEPT:
 			#else
-				colony_iterator(const colony_iterator<!is_const> &&source) PLF_NOEXCEPT:
+				colony_iterator(colony_iterator<!is_const> &&source) PLF_NOEXCEPT:
 			#endif
 				group_pointer(std::move(source.group_pointer)),
 				element_pointer(std::move(source.element_pointer)),
@@ -4602,9 +4602,9 @@ public:
 
 			#ifdef PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
 				template <bool is_const_it = is_const, class = typename plf::enable_if<is_const_it>::type >
-				colony_iterator & operator = (const colony_iterator<false> &&source) PLF_NOEXCEPT
+				colony_iterator & operator = (colony_iterator<false> &&source) PLF_NOEXCEPT
 			#else
-				colony_iterator & operator = (const colony_iterator<!is_const> &&source) PLF_NOEXCEPT
+				colony_iterator & operator = (colony_iterator<!is_const> &&source) PLF_NOEXCEPT
 			#endif
 			{
 				group_pointer = std::move(source.group_pointer);
@@ -5199,7 +5199,7 @@ public:
 				template <bool is_const_rit = is_const_r, class = typename plf::enable_if<is_const_rit>::type >
 				colony_reverse_iterator (colony_reverse_iterator<false> &&source) PLF_NOEXCEPT:
 			#else
-				colony_reverse_iterator (const colony_iterator<!is_const_r> &&source) PLF_NOEXCEPT:
+				colony_reverse_iterator (colony_iterator<!is_const_r> &&source) PLF_NOEXCEPT:
 			#endif
 				current(std::move(source.current))
 			{}
