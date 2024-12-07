@@ -1483,6 +1483,15 @@ public:
 
 
 
+	#ifdef PLF_CPP20_SUPPORT
+		iterator insert([[maybe_unused]] const_iterator hint, const element_type &element) // Note: hint is ignored, purely to serve other standard library functions
+		{
+			return insert(element);
+		}
+	#endif
+
+
+
 	#ifdef PLF_MOVE_SEMANTICS_SUPPORT
 		iterator insert(element_type &&element) // The move-insert function is near-identical to the regular insert function, with the exception of the element construction method and is_nothrow tests.
 		{
@@ -1595,6 +1604,15 @@ public:
 				return begin_iterator;
 			}
 		}
+
+
+
+		#ifdef PLF_CPP20_SUPPORT
+			iterator insert([[maybe_unused]] const_iterator hint, element_type &&element)
+			{
+				return insert(std::forward<element_type &&>(element));
+			}
+		#endif
 	#endif
 
 
@@ -1709,7 +1727,18 @@ public:
 				return begin_iterator;
 			}
 		}
+
+
+
+		#ifdef PLF_CPP20_SUPPORT
+			template<typename... arguments>
+			iterator emplace_hint([[maybe_unused]] const_iterator hint, arguments &&... parameters)
+			{
+				return emplace(std::forward<arguments>(parameters) ...);
+			}
+		#endif
 	#endif
+
 
 
 
@@ -3068,6 +3097,7 @@ private:
 		erasure_groups_head = NULL;
 		total_size = 0;
 	}
+
 
 
 public:
