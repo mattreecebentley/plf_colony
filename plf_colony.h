@@ -529,9 +529,9 @@ private:
 
 
 		#ifdef PLF_VARIADICS_SUPPORT
-			group(aligned_struct_allocator_type &aligned_allocation_struct_allocator, const skipfield_type elements_per_group, const group_pointer_type previous):
+			group(aligned_struct_allocator_type &aligned_struct_allocator, const skipfield_type elements_per_group, const group_pointer_type previous):
 				next_group(NULL),
-				elements(pointer_cast<aligned_pointer_type>(PLF_ALLOCATE(aligned_struct_allocator_type, aligned_allocation_struct_allocator, get_aligned_block_capacity(elements_per_group), (previous == NULL) ? NULL : previous->elements))),
+				elements(pointer_cast<aligned_pointer_type>(PLF_ALLOCATE(aligned_struct_allocator_type, aligned_struct_allocator, get_aligned_block_capacity(elements_per_group), (previous == NULL) ? NULL : previous->elements))),
 				previous_group(previous),
 				free_list_head(std::numeric_limits<skipfield_type>::max()),
 				capacity(elements_per_group),
@@ -545,8 +545,8 @@ private:
 			}
 		#else
 			// This is a hack around the fact that allocator_type::construct only supports copy construction in C++03 and copy elision does not occur on the vast majority of compilers in this circumstance. So to avoid running out of memory (and losing performance) from allocating the same block twice, we 'move' in the 'copy' constructor.
-			group(aligned_struct_allocator_type &aligned_allocation_struct_allocator, const skipfield_type elements_per_group, const group_pointer_type previous) PLF_NOEXCEPT:
-				elements(pointer_cast<aligned_pointer_type>(PLF_ALLOCATE(aligned_struct_allocator_type, aligned_allocation_struct_allocator, get_aligned_block_capacity(elements_per_group), (previous == NULL) ? 0 : previous->elements))),
+			group(aligned_struct_allocator_type &aligned_struct_allocator, const skipfield_type elements_per_group, const group_pointer_type previous) PLF_NOEXCEPT:
+				elements(pointer_cast<aligned_pointer_type>(PLF_ALLOCATE(aligned_struct_allocator_type, aligned_struct_allocator, get_aligned_block_capacity(elements_per_group), (previous == NULL) ? 0 : previous->elements))),
 				previous_group(previous),
 				capacity(elements_per_group)
 			{}
@@ -597,7 +597,7 @@ private:
 	skipfield_type 		min_block_capacity, max_block_capacity;
 
 	group_allocator_type group_allocator;
-	aligned_struct_allocator_type aligned_allocation_struct_allocator;
+	aligned_struct_allocator_type aligned_struct_allocator;
 	skipfield_allocator_type skipfield_allocator;
 	tuple_allocator_type tuple_allocator;
 
@@ -693,7 +693,7 @@ public:
 		min_block_capacity(block_capacity_default_min()),
 		max_block_capacity(block_capacity_default_max()),
 		group_allocator(*this),
-		aligned_allocation_struct_allocator(*this),
+		aligned_struct_allocator(*this),
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{}
@@ -708,7 +708,7 @@ public:
 		min_block_capacity(block_capacity_default_min()),
 		max_block_capacity(block_capacity_default_max()),
 		group_allocator(*this),
-		aligned_allocation_struct_allocator(*this),
+		aligned_struct_allocator(*this),
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{}
@@ -724,7 +724,7 @@ public:
 		min_block_capacity(static_cast<skipfield_type>(block_limits.min)),
 		max_block_capacity(static_cast<skipfield_type>(block_limits.max)),
 		group_allocator(*this),
-		aligned_allocation_struct_allocator(*this),
+		aligned_struct_allocator(*this),
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{
@@ -741,7 +741,7 @@ public:
 		min_block_capacity(static_cast<skipfield_type>(block_limits.min)),
 		max_block_capacity(static_cast<skipfield_type>(block_limits.max)),
 		group_allocator(*this),
-		aligned_allocation_struct_allocator(*this),
+		aligned_struct_allocator(*this),
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{
@@ -764,7 +764,7 @@ public:
 		min_block_capacity(std::max(source.min_block_capacity, static_cast<skipfield_type>(std::min(source.total_size, static_cast<size_type>(source.max_block_capacity))))), // min group size is set to value closest to total number of elements in source colony, in order to not create unnecessary small groups in the range-insert below, then reverts to the original min group size afterwards. This effectively saves a call to reserve.
 		max_block_capacity(source.max_block_capacity),
 		group_allocator(*this),
-		aligned_allocation_struct_allocator(*this),
+		aligned_struct_allocator(*this),
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{ // can skip checking for skipfield conformance here as source will have already checked theirs. Same applies for other copy and move constructors below
@@ -787,7 +787,7 @@ public:
 		min_block_capacity(std::max(source.min_block_capacity, static_cast<skipfield_type>(std::min(source.total_size, static_cast<size_type>(source.max_block_capacity))))),
 		max_block_capacity(source.max_block_capacity),
 		group_allocator(*this),
-		aligned_allocation_struct_allocator(*this),
+		aligned_struct_allocator(*this),
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{
@@ -806,20 +806,33 @@ public:
 			colony(colony &&source, const allocator_type &alloc):
 		#endif
 			allocator_type(alloc),
-			end_iterator(std::move(source.end_iterator)),
-			begin_iterator(std::move(source.begin_iterator)),
-			erasure_groups_head(std::move(source.erasure_groups_head)),
-			unused_groups_head(std::move(source.unused_groups_head)),
+			end_iterator(source.end_iterator),
+			begin_iterator(source.begin_iterator),
+			erasure_groups_head(source.erasure_groups_head),
+			unused_groups_head(source.unused_groups_head),
 			total_size(source.total_size),
 			total_capacity(source.total_capacity),
 			min_block_capacity(source.min_block_capacity),
 			max_block_capacity(source.max_block_capacity),
-			group_allocator(*this),
-			aligned_allocation_struct_allocator(*this),
-			skipfield_allocator(*this),
-			tuple_allocator(*this)
+			group_allocator(alloc),
+			aligned_struct_allocator(alloc),
+			skipfield_allocator(alloc),
+			tuple_allocator(alloc)
 		{
 			assert(&source != this);
+
+			#ifdef PLF_IS_ALWAYS_EQUAL_SUPPORT
+				if PLF_CONSTEXPR (!std::allocator_traits<allocator_type>::is_always_equal::value)
+			#endif
+			{
+				if (alloc != static_cast<allocator_type &>(source))
+				{
+					blank();
+					range_assign(std::make_move_iterator(source.begin_iterator), source.total_size);
+					source.destroy_all_data();
+				}
+			}
+
 			source.blank();
 		}
 
@@ -836,7 +849,7 @@ public:
 			min_block_capacity(source.min_block_capacity),
 			max_block_capacity(source.max_block_capacity),
 			group_allocator(*this),
-			aligned_allocation_struct_allocator(*this),
+			aligned_struct_allocator(*this),
 			skipfield_allocator(*this),
 			tuple_allocator(*this)
 		{
@@ -858,7 +871,7 @@ public:
 		min_block_capacity(static_cast<skipfield_type>(block_limits.min)),
 		max_block_capacity(static_cast<skipfield_type>(block_limits.max)),
 		group_allocator(*this),
-		aligned_allocation_struct_allocator(*this),
+		aligned_struct_allocator(*this),
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{
@@ -877,7 +890,7 @@ public:
 		min_block_capacity(block_capacity_default_min()),
 		max_block_capacity(block_capacity_default_max()),
 		group_allocator(*this),
-		aligned_allocation_struct_allocator(*this),
+		aligned_struct_allocator(*this),
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{
@@ -897,7 +910,7 @@ public:
 		min_block_capacity(static_cast<skipfield_type>(block_limits.min)),
 		max_block_capacity(static_cast<skipfield_type>(block_limits.max)),
 		group_allocator(*this),
-		aligned_allocation_struct_allocator(*this),
+		aligned_struct_allocator(*this),
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{
@@ -916,7 +929,7 @@ public:
 		min_block_capacity(block_capacity_default_min()),
 		max_block_capacity(block_capacity_default_max()),
 		group_allocator(*this),
-		aligned_allocation_struct_allocator(*this),
+		aligned_struct_allocator(*this),
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{
@@ -937,7 +950,7 @@ public:
 		min_block_capacity(static_cast<skipfield_type>(block_limits.min)),
 		max_block_capacity(static_cast<skipfield_type>(block_limits.max)),
 		group_allocator(*this),
-		aligned_allocation_struct_allocator(*this),
+		aligned_struct_allocator(*this),
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{
@@ -957,7 +970,7 @@ public:
 		min_block_capacity(block_capacity_default_min()),
 		max_block_capacity(block_capacity_default_max()),
 		group_allocator(*this),
-		aligned_allocation_struct_allocator(*this),
+		aligned_struct_allocator(*this),
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{
@@ -978,7 +991,7 @@ public:
 			min_block_capacity(static_cast<skipfield_type>(block_limits.min)),
 			max_block_capacity(static_cast<skipfield_type>(block_limits.max)),
 			group_allocator(*this),
-			aligned_allocation_struct_allocator(*this),
+			aligned_struct_allocator(*this),
 			skipfield_allocator(*this),
 			tuple_allocator(*this)
 		{
@@ -1009,7 +1022,7 @@ public:
 			min_block_capacity(static_cast<skipfield_type>(block_limits.min)),
 			max_block_capacity(static_cast<skipfield_type>(block_limits.max)),
 			group_allocator(*this),
-			aligned_allocation_struct_allocator(*this),
+			aligned_struct_allocator(*this),
 			skipfield_allocator(*this),
 			tuple_allocator(*this)
 		{
@@ -1132,9 +1145,9 @@ private:
 			try
 			{
 				#ifdef PLF_VARIADICS_SUPPORT
-					PLF_CONSTRUCT(group_allocator_type, group_allocator, new_group, aligned_allocation_struct_allocator, elements_per_group, previous);
+					PLF_CONSTRUCT(group_allocator_type, group_allocator, new_group, aligned_struct_allocator, elements_per_group, previous);
 				#else
-					PLF_CONSTRUCT(group_allocator_type, group_allocator, new_group, group(aligned_allocation_struct_allocator, elements_per_group, previous));
+					PLF_CONSTRUCT(group_allocator_type, group_allocator, new_group, group(aligned_struct_allocator, elements_per_group, previous));
 				#endif
 			}
 			catch (...)
@@ -1144,9 +1157,9 @@ private:
 			}
 		#else
 			#ifdef PLF_VARIADICS_SUPPORT
-				PLF_CONSTRUCT(group_allocator_type, group_allocator, new_group, aligned_allocation_struct_allocator, elements_per_group, previous);
+				PLF_CONSTRUCT(group_allocator_type, group_allocator, new_group, aligned_struct_allocator, elements_per_group, previous);
 			#else
-				PLF_CONSTRUCT(group_allocator_type, group_allocator, new_group, group(aligned_allocation_struct_allocator, elements_per_group, previous));
+				PLF_CONSTRUCT(group_allocator_type, group_allocator, new_group, group(aligned_struct_allocator, elements_per_group, previous));
 			#endif
 		#endif
 
@@ -1157,7 +1170,7 @@ private:
 
 	void deallocate_group(const group_pointer_type the_group) PLF_NOEXCEPT
 	{
-		PLF_DEALLOCATE(aligned_struct_allocator_type, aligned_allocation_struct_allocator, pointer_cast<aligned_struct_pointer_type>(the_group->elements), get_aligned_block_capacity(the_group->capacity));
+		PLF_DEALLOCATE(aligned_struct_allocator_type, aligned_struct_allocator, pointer_cast<aligned_struct_pointer_type>(the_group->elements), get_aligned_block_capacity(the_group->capacity));
 		PLF_DEALLOCATE(group_allocator_type, group_allocator, the_group, 1);
 	}
 
@@ -1769,29 +1782,17 @@ private:
 		#ifdef PLF_TYPE_TRAITS_SUPPORT
 			if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value)
 			{
-				if PLF_CONSTEXPR (std::is_trivially_copyable<element_type>::value && std::is_trivially_copy_constructible<element_type>::value) // ie. we can get away with using the cheaper fill_n here if there is no chance of an exception being thrown:
+				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type))
 				{
-					if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type))
-					{
-						alignas (alignof(aligned_element_struct)) element_type aligned_copy = element; // to avoid potentially violating memory boundaries in line below, create an initial object copy of same (but aligned) type
-						std::fill_n(end_iterator.element_pointer, size, *pointer_cast<aligned_pointer_type>(&aligned_copy));
-					}
-					else
-					{
-						std::fill_n(pointer_cast<pointer>(end_iterator.element_pointer), size, element);
-					}
-
-					end_iterator.element_pointer += size;
+					alignas (alignof(aligned_element_struct)) element_type aligned_copy = element; // to avoid potentially violating memory boundaries in line below, create an initial object copy of same (but aligned) type
+					std::uninitialized_fill_n(end_iterator.element_pointer, size, *pointer_cast<aligned_pointer_type>(&aligned_copy));
 				}
-				else // If at least nothrow_constructible, can remove the large block of 'catch' code below
+				else
 				{
-					const aligned_pointer_type fill_end = end_iterator.element_pointer + size;
-
-					do
-					{
-						PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, element);
-					} while (++end_iterator.element_pointer != fill_end);
+					std::uninitialized_fill_n(pointer_cast<pointer>(end_iterator.element_pointer), size, element);
 				}
+
+				end_iterator.element_pointer += size;
 			}
 			else
 		#endif
@@ -1856,26 +1857,14 @@ private:
 		#ifdef PLF_TYPE_TRAITS_SUPPORT
 			if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value)
 			{
-				if PLF_CONSTEXPR (std::is_trivially_copyable<element_type>::value && std::is_trivially_copy_constructible<element_type>::value)
+				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type))
 				{
-					if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type))
-					{
-						alignas (alignof(aligned_element_struct)) element_type aligned_copy = element;
-						std::fill_n(location, size, *pointer_cast<aligned_pointer_type>(&aligned_copy));
-					}
-					else
-					{
-						std::fill_n(pointer_cast<pointer>(location), size, element);
-					}
+					alignas (alignof(aligned_element_struct)) element_type aligned_copy = element;
+					std::uninitialized_fill_n(location, size, *pointer_cast<aligned_pointer_type>(&aligned_copy));
 				}
 				else
 				{
-					const aligned_pointer_type fill_end = location + size;
-
-					for (aligned_pointer_type current_location = location; current_location != fill_end; ++current_location)
-					{
-						PLF_CONSTRUCT_ELEMENT(current_location, element);
-					}
+					std::uninitialized_fill_n(pointer_cast<pointer>(location), size, element);
 				}
 			}
 			else
@@ -3469,21 +3458,20 @@ public:
 			if PLF_CONSTEXPR (std::allocator_traits<allocator_type>::propagate_on_container_copy_assignment::value)
 		#endif
 		{
-			allocator_type source_allocator(source);
-
 			#ifdef PLF_IS_ALWAYS_EQUAL_SUPPORT
-				if(!std::allocator_traits<allocator_type>::is_always_equal::value && static_cast<allocator_type &>(*this) != source_allocator)
-			#else
-				if(static_cast<allocator_type &>(*this) != source_allocator)
+				if PLF_CONSTEXPR (!std::allocator_traits<allocator_type>::is_always_equal::value)
 			#endif
-			{ // Deallocate existing blocks as source allocator is not necessarily able to do so
-				reset();
+			{
+				if(static_cast<allocator_type &>(*this) != static_cast<allocator_type &>(source))
+				{ // Deallocate existing blocks as source allocator is not necessarily able to do so
+					reset();
+				}
 			}
 
-			static_cast<allocator_type &>(*this) = source_allocator;
+			static_cast<allocator_type &>(*this) = static_cast<allocator_type &>(source);
 			// Reconstruct rebinds:
 			group_allocator = group_allocator_type(*this);
-			aligned_allocation_struct_allocator = aligned_struct_allocator_type(*this);
+			aligned_struct_allocator = aligned_struct_allocator_type(*this);
 			skipfield_allocator = skipfield_allocator_type(*this);
 			tuple_allocator = tuple_allocator_type(*this);
 		}
@@ -3506,7 +3494,7 @@ public:
 			destroy_all_data();
 
 			#ifdef PLF_IS_ALWAYS_EQUAL_SUPPORT
-				if (std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value || std::allocator_traits<allocator_type>::is_always_equal::value || static_cast<allocator_type &>(*this) == static_cast<allocator_type &>(source))
+				if PLF_CONSTEXPR (std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value || std::allocator_traits<allocator_type>::is_always_equal::value || static_cast<allocator_type &>(*this) == static_cast<allocator_type &>(source))
 			#else
 				if (static_cast<allocator_type &>(*this) == static_cast<allocator_type &>(source))
 			#endif
@@ -3536,7 +3524,7 @@ public:
 						static_cast<allocator_type &>(*this) = std::move(static_cast<allocator_type &>(source));
 						// Reconstruct rebinds:
 						group_allocator = group_allocator_type(*this);
-						aligned_allocation_struct_allocator = aligned_struct_allocator_type(*this);
+						aligned_struct_allocator = aligned_struct_allocator_type(*this);
 						skipfield_allocator = skipfield_allocator_type(*this);
 						tuple_allocator = tuple_allocator_type(*this);
 					}
@@ -4173,7 +4161,7 @@ public:
 			const pointer end = sort_array + total_size;
 
 			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
-				if PLF_CONSTEXPR (!std::is_trivially_copyable<element_type>::value && std::is_move_assignable<element_type>::value)
+				if PLF_CONSTEXPR (!std::is_trivially_copy_constructible<element_type>::value && std::is_nothrow_move_assignable<element_type>::value)
 				{
 					std::uninitialized_copy(plf::make_move_iterator(begin_iterator), plf::make_move_iterator(end_iterator), sort_array);
 				}
@@ -4186,7 +4174,7 @@ public:
 			PLF_SORT_FUNCTION(sort_array, end, compare);
 
 			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
-				if PLF_CONSTEXPR (!std::is_trivially_copyable<element_type>::value && std::is_move_assignable<element_type>::value)
+				if PLF_CONSTEXPR ((!std::is_trivially_copy_constructible<element_type>::value || !std::is_trivially_destructible<element_type>::value) && std::is_move_assignable<element_type>::value)
 				{
 					std::copy(plf::make_move_iterator(sort_array), plf::make_move_iterator(end), begin_iterator);
 				}
@@ -4389,11 +4377,11 @@ public:
 
 				// Reconstruct rebinds for swapped allocators:
 				group_allocator = group_allocator_type(*this);
-				aligned_allocation_struct_allocator = aligned_struct_allocator_type(*this);
+				aligned_struct_allocator = aligned_struct_allocator_type(*this);
 				skipfield_allocator = skipfield_allocator_type(*this);
 				tuple_allocator = tuple_allocator_type(*this);
 				source.group_allocator = group_allocator_type(source);
-				source.aligned_allocation_struct_allocator = aligned_struct_allocator_type(source);
+				source.aligned_struct_allocator = aligned_struct_allocator_type(source);
 				source.skipfield_allocator = skipfield_allocator_type(source);
 				source.tuple_allocator = tuple_allocator_type(source);
 			} // else: undefined behaviour, as per standard
