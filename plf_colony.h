@@ -775,7 +775,7 @@ public:
 
 
 	colony(const colony &source):
-		#if defined(__cplusplus) && __cplusplus >= 201103L
+		#if (defined(__cplusplus) && __cplusplus >= 201103L) || _MSC_VER >= 1700
 			allocator_type(std::allocator_traits<allocator_type>::select_on_container_copy_construction(source)),
 		#else
 			allocator_type(source),
