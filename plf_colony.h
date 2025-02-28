@@ -1,4 +1,4 @@
-// Copyright (c) 2024, Matthew Bentley (mattreecebentley@gmail.com) www.plflib.org
+// Copyright (c) 2025, Matthew Bentley (mattreecebentley@gmail.com) www.plflib.org
 
 // zLib license (https://www.zlib.net/zlib_license.html):
 // This software is provided 'as-is', without any express or implied
@@ -649,7 +649,7 @@ private:
 		#ifdef PLF_ALLOCATOR_TRAITS_SUPPORT
 			return static_cast<size_t>(std::allocator_traits<allocator_type>::max_size(allocator_type()));
 		#else
-			return static_cast<size_t>(allocator_type::max_size());
+			return static_cast<size_t>(std::numeric_limits<size_type>::max() / sizeof(element_type)); // Substituting because allocator::max_size is not static
 		#endif
 	}
 
@@ -3462,13 +3462,13 @@ public:
 				if PLF_CONSTEXPR (!std::allocator_traits<allocator_type>::is_always_equal::value)
 			#endif
 			{
-				if(static_cast<allocator_type &>(*this) != static_cast<allocator_type &>(source))
+				if (static_cast<allocator_type &>(*this) != static_cast<const allocator_type &>(source))
 				{ // Deallocate existing blocks as source allocator is not necessarily able to do so
 					reset();
 				}
 			}
 
-			static_cast<allocator_type &>(*this) = static_cast<allocator_type &>(source);
+			static_cast<allocator_type &>(*this) = static_cast<const allocator_type &>(source);
 			// Reconstruct rebinds:
 			group_allocator = group_allocator_type(*this);
 			aligned_struct_allocator = aligned_struct_allocator_type(*this);
@@ -3483,56 +3483,80 @@ public:
 
 
 	#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+	private:
+
+		void move_assign(colony &&source) PLF_NOEXCEPT
+		{
+			#ifdef PLF_IS_ALWAYS_EQUAL_SUPPORT
+				if PLF_CONSTEXPR ((std::is_trivially_copyable<allocator_type>::value || std::allocator_traits<allocator_type>::is_always_equal::value) &&
+					std::is_trivial<group_pointer_type>::value && std::is_trivial<aligned_pointer_type>::value && std::is_trivial<skipfield_pointer_type>::value)
+				{
+					std::memcpy(static_cast<void *>(this), &source, sizeof(colony));
+				}
+				else
+			#endif
+			{
+				end_iterator = std::move(source.end_iterator);
+				begin_iterator = std::move(source.begin_iterator);
+				erasure_groups_head = std::move(source.erasure_groups_head);
+				unused_groups_head =  std::move(source.unused_groups_head);
+				total_size = source.total_size;
+				total_capacity = source.total_capacity;
+				min_block_capacity = source.min_block_capacity;
+				max_block_capacity = source.max_block_capacity;
+
+				#ifdef PLF_ALLOCATOR_TRAITS_SUPPORT
+					if PLF_CONSTEXPR(std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value)
+				#endif
+				{
+					static_cast<allocator_type &>(*this) = std::move(static_cast<allocator_type &>(source));
+					// Reconstruct rebinds:
+					group_allocator = group_allocator_type(*this);
+					aligned_struct_allocator = aligned_struct_allocator_type(*this);
+					skipfield_allocator = skipfield_allocator_type(*this);
+					tuple_allocator = tuple_allocator_type(*this);
+				}
+			}
+		}
+
+
+
+	public:
+
 		// Move assignment
-		#ifdef PLF_ALLOCATOR_TRAITS_SUPPORT
+		#ifdef PLF_IS_ALWAYS_EQUAL_SUPPORT
 			colony & operator = (colony &&source) PLF_NOEXCEPT(std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value || std::allocator_traits<allocator_type>::is_always_equal::value)
 		#else
-			colony & operator = (colony &&source) PLF_NOEXCEPT
+			colony & operator = (colony &&source)
 		#endif
 		{
 			assert(&source != this);
 			destroy_all_data();
 
-			#ifdef PLF_IS_ALWAYS_EQUAL_SUPPORT
-				if PLF_CONSTEXPR (std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value || std::allocator_traits<allocator_type>::is_always_equal::value || static_cast<allocator_type &>(*this) == static_cast<allocator_type &>(source))
-			#else
-				if (static_cast<allocator_type &>(*this) == static_cast<allocator_type &>(source))
+			#ifdef PLF_IS_ALWAYS_EQUAL_SUPPORT // We need this to be constexpr to avoid warning errors on the 'throw' below
+				if PLF_CONSTEXPR (std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value || std::allocator_traits<allocator_type>::is_always_equal::value)
+				{
+					move_assign(std::move(source));
+				}
+				else
 			#endif
+			if (static_cast<allocator_type &>(*this) == static_cast<allocator_type &>(source))
 			{
-				#ifdef PLF_IS_ALWAYS_EQUAL_SUPPORT
-					if PLF_CONSTEXPR ((std::is_trivially_copyable<allocator_type>::value || std::allocator_traits<allocator_type>::is_always_equal::value) &&
-						std::is_trivial<group_pointer_type>::value && std::is_trivial<aligned_pointer_type>::value && std::is_trivial<skipfield_pointer_type>::value)
+				move_assign(std::move(source));
+			}
+			else // Allocator isn't movable so move elements from source and deallocate the source's blocks. Could throw here:
+			{
+				#ifdef PLF_TYPE_TRAITS_SUPPORT
+					if PLF_CONSTEXPR (!std::is_move_constructible<element_type>::value)
 					{
-						std::memcpy(static_cast<void *>(this), &source, sizeof(colony));
+						range_assign(source.begin_iterator, source.total_size);
 					}
 					else
 				#endif
 				{
-					end_iterator = std::move(source.end_iterator);
-					begin_iterator = std::move(source.begin_iterator);
-					erasure_groups_head = std::move(source.erasure_groups_head);
-					unused_groups_head =  std::move(source.unused_groups_head);
-					total_size = source.total_size;
-					total_capacity = source.total_capacity;
-					min_block_capacity = source.min_block_capacity;
-					max_block_capacity = source.max_block_capacity;
-
-					#ifdef PLF_ALLOCATOR_TRAITS_SUPPORT
-						if PLF_CONSTEXPR(std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value)
-					#endif
-					{
-						static_cast<allocator_type &>(*this) = std::move(static_cast<allocator_type &>(source));
-						// Reconstruct rebinds:
-						group_allocator = group_allocator_type(*this);
-						aligned_struct_allocator = aligned_struct_allocator_type(*this);
-						skipfield_allocator = skipfield_allocator_type(*this);
-						tuple_allocator = tuple_allocator_type(*this);
-					}
+					range_assign(plf::make_move_iterator(source.begin_iterator), source.total_size);
 				}
-			}
-			else // Allocator isn't movable so move elements from source and deallocate the source's blocks:
-			{
-				range_assign(plf::make_move_iterator(source.begin_iterator), source.total_size);
+
 				source.destroy_all_data();
 			}
 
@@ -3794,7 +3818,7 @@ private:
 			if (aligned_element_pointer >= end_iterator.group_pointer->elements && aligned_element_pointer < end_iterator.element_pointer)
 			{
 				const skipfield_pointer_type skipfield_pointer = end_iterator.group_pointer->skipfield + (aligned_element_pointer - end_iterator.group_pointer->elements);
-				return (*skipfield_pointer == 0) ? colony_iterator<is_const>(end_iterator.group_pointer, aligned_element_pointer, skipfield_pointer) : end_iterator;
+				return (*skipfield_pointer == 0) ? colony_iterator<is_const>(end_iterator.group_pointer, aligned_element_pointer, skipfield_pointer) : colony_iterator<is_const>(end_iterator);
 			}
 
 			// All other groups, if any exist:
@@ -3803,7 +3827,7 @@ private:
 				if (aligned_element_pointer >= current_group->elements && aligned_element_pointer < pointer_cast<aligned_pointer_type>(current_group->skipfield))
 				{
 					const skipfield_pointer_type skipfield_pointer = current_group->skipfield + (aligned_element_pointer - current_group->elements);
-					return (*skipfield_pointer == 0) ? colony_iterator<is_const>(current_group, aligned_element_pointer, skipfield_pointer) : end_iterator;
+					return (*skipfield_pointer == 0) ? colony_iterator<is_const>(current_group, aligned_element_pointer, skipfield_pointer) : colony_iterator<is_const>(end_iterator);
 				}
 			}
 		}
