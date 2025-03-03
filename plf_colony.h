@@ -655,6 +655,31 @@ private:
 
 
 
+	void reserve_and_fill(const size_type size, const element_type &element)
+	{
+		if (size != 0)
+		{
+			reserve(size);
+			end_iterator.group_pointer->next_group = unused_groups_head;
+			fill_unused_groups(size, element, 0, NULL, begin_iterator.group_pointer);
+		}
+	}
+
+
+
+	template <class iterator_type>
+	void reserve_and_range_fill(const size_type size, const iterator_type &it)
+	{
+		if (size != 0)
+		{
+			reserve(size);
+			end_iterator.group_pointer->next_group = unused_groups_head;
+			range_fill_unused_groups(size, it, 0, NULL, begin_iterator.group_pointer);
+		}
+	}
+
+
+
 public:
 
 	// Adaptive minimum based around aligned size, sizeof(group) and sizeof(colony):
@@ -768,7 +793,7 @@ public:
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{ // can skip checking for skipfield conformance here as source will have already checked theirs. Same applies for other copy and move constructors below
-		range_assign(source.begin_iterator, source.total_size);
+		reserve_and_range_fill(source.total_size, source.begin_iterator);
 		min_block_capacity = source.min_block_capacity; // reset to correct value for future operations
 	}
 
@@ -791,7 +816,7 @@ public:
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{
-		range_assign(source.begin_iterator, source.total_size);
+		reserve_and_range_fill(source.total_size, source.begin_iterator);
 		min_block_capacity = source.min_block_capacity; // reset to correct value for future operations
 	}
 
@@ -828,7 +853,8 @@ public:
 				if (alloc != static_cast<allocator_type &>(source))
 				{
 					blank();
-					range_assign(std::make_move_iterator(source.begin_iterator), source.total_size);
+					static_cast<allocator_type &>(*this) = static_cast<allocator_type &>(source);
+					reserve_and_range_fill(source.total_size, plf::make_move_iterator(source.begin_iterator));
 					source.destroy_all_data();
 				}
 			}
@@ -839,7 +865,7 @@ public:
 
 
 		colony(colony &&source) PLF_NOEXCEPT:
-			allocator_type(std::move(static_cast<allocator_type &>(source))),
+			allocator_type(static_cast<allocator_type &>(source)),
 			end_iterator(std::move(source.end_iterator)),
 			begin_iterator(std::move(source.begin_iterator)),
 			erasure_groups_head(std::move(source.erasure_groups_head)),
@@ -876,7 +902,7 @@ public:
 		tuple_allocator(*this)
 	{
 		check_capacities_conformance(block_limits);
-		assign(fill_number, element);
+		reserve_and_fill(fill_number, element);
 	}
 
 
@@ -894,7 +920,7 @@ public:
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{
-		assign(fill_number, element);
+		reserve_and_fill(fill_number, element);
 	}
 
 
@@ -915,7 +941,7 @@ public:
 		tuple_allocator(*this)
 	{
 		check_capacities_conformance(block_limits);
-		assign(fill_number, element_type());
+		reserve_and_fill(fill_number, element_type());
 	}
 
 
@@ -933,7 +959,7 @@ public:
 		skipfield_allocator(*this),
 		tuple_allocator(*this)
 	{
-		assign(fill_number, element_type());
+		reserve_and_fill(fill_number, element_type());
 	}
 
 
@@ -996,7 +1022,7 @@ public:
 			tuple_allocator(*this)
 		{
 			check_capacities_conformance(block_limits);
-			range_assign(element_list.begin(), static_cast<size_type>(element_list.size()));
+			reserve_and_range_fill(static_cast<size_type>(element_list.size()), element_list.begin());
 		}
 
 
@@ -1027,7 +1053,7 @@ public:
 			tuple_allocator(*this)
 		{
 			check_capacities_conformance(block_limits);
-			range_assign(std::ranges::begin(rg), static_cast<size_type>(std::ranges::distance(rg)));
+			reserve_and_range_fill(static_cast<size_type>(std::ranges::distance(rg)), std::ranges::begin(rg));
 		}
 
 
@@ -1940,7 +1966,8 @@ public:
 
 		if (total_size == 0)
 		{
-			assign(size, element);
+			prepare_groups_for_assign(size);
+			fill_unused_groups(size, element, 0, NULL, begin_iterator.group_pointer);
 			return;
 		}
 
@@ -2038,7 +2065,7 @@ public:
 private:
 
 	template <class iterator_type>
-	iterator_type range_fill(iterator_type it, const skipfield_type size)
+	void range_fill(iterator_type &it, const skipfield_type size)
 	{
 		const aligned_pointer_type fill_end = end_iterator.element_pointer + size;
 
@@ -2088,13 +2115,12 @@ private:
 		}
 
 		total_size += size;
-		return it;
 	}
 
 
 
 	template <class iterator_type>
-	iterator_type range_fill_skipblock(iterator_type it, const aligned_pointer_type location, const skipfield_pointer_type skipfield_pointer, const skipfield_type size)
+	void range_fill_skipblock(iterator_type &it, const aligned_pointer_type location, const skipfield_pointer_type skipfield_pointer, const skipfield_type size)
 	{
 		const aligned_pointer_type fill_end = location + size;
 
@@ -2150,8 +2176,6 @@ private:
 		std::memset(skipfield_pointer, 0, size * sizeof(skipfield_type)); // reset skipfield nodes within skipblock to 0
 		erasure_groups_head->size = static_cast<skipfield_type>(erasure_groups_head->size + size);
 		total_size += size;
-
-		return it;
 	}
 
 
@@ -2166,7 +2190,7 @@ private:
 			previous_group = end_iterator.group_pointer;
 			size -= static_cast<size_type>(capacity);
 			end_iterator.element_pointer = end_iterator.group_pointer->elements;
-			it = range_fill(it, capacity);
+			range_fill(it, capacity);
 		}
 
 		// Deal with final group (partial fill)
@@ -2194,7 +2218,8 @@ private:
 
 		if (total_size == 0)
 		{
-			range_assign(it, size);
+			prepare_groups_for_assign(size);
+			range_fill_unused_groups(size, it, 0, NULL, begin_iterator.group_pointer);
 			return;
 		}
 
@@ -2215,7 +2240,7 @@ private:
 			if (skipblock_size <= size)
 			{
 				erasure_groups_head->free_list_head = *pointer_cast<skipfield_pointer_type>(element_pointer);
-				it = range_fill_skipblock(it, element_pointer, skipfield_pointer, skipblock_size);
+				range_fill_skipblock(it, element_pointer, skipfield_pointer, skipblock_size);
 				size -= skipblock_size;
 
 				if (erasure_groups_head->free_list_head != std::numeric_limits<skipfield_type>::max())
@@ -2232,7 +2257,7 @@ private:
 			else
 			{
 				const skipfield_type prev_index = *pointer_cast<skipfield_pointer_type>(element_pointer);
-				it = range_fill_skipblock(it, element_pointer, skipfield_pointer, static_cast<skipfield_type>(size));
+				range_fill_skipblock(it, element_pointer, skipfield_pointer, static_cast<skipfield_type>(size));
 				const skipfield_type new_skipblock_size = static_cast<skipfield_type>(skipblock_size - size);
 
 				*(skipfield_pointer + size) = new_skipblock_size;
@@ -2253,7 +2278,7 @@ private:
 
 		if (group_remainder != 0)
 		{
-			it = range_fill(it, group_remainder);
+			range_fill(it, group_remainder);
 			end_iterator.group_pointer->size = static_cast<skipfield_type>(end_iterator.group_pointer->size + group_remainder);
 
 			if (size == group_remainder)
@@ -3094,7 +3119,7 @@ public:
 
 	// Fill assign:
 
-	void assign(const size_type size, const element_type &element)
+	void assign(size_type size, const element_type &element)
 	{
 		if (size == 0)
 		{
@@ -3102,8 +3127,43 @@ public:
 			return;
 		}
 
-		prepare_groups_for_assign(size);
-		fill_unused_groups(size, element, 0, NULL, begin_iterator.group_pointer);
+		#ifdef PLF_TYPE_TRAITS_SUPPORT
+			if PLF_CONSTEXPR (!(std::is_trivially_destructible<element_type>::value && std::is_trivially_constructible<element_type>::value) && std::is_copy_assignable<element_type>::value)
+			{
+				if (total_size == 0)
+				{
+					prepare_groups_for_assign(size);
+					fill_unused_groups(size, element, 0, NULL, begin_iterator.group_pointer);
+				}
+				else if (size < total_size)
+				{
+					iterator current = begin_iterator;
+
+					do
+					{
+						*current++ = element;
+					} while (--size != 0);
+
+					erase(current, end_iterator);
+				}
+				else
+				{
+					iterator current = begin_iterator;
+
+					do
+					{
+						*current = element;
+					} while (++current != end_iterator);
+
+					insert(size - total_size, element);
+				}
+			}
+			else
+		#endif
+		{
+			prepare_groups_for_assign(size);
+			fill_unused_groups(size, element, 0, NULL, begin_iterator.group_pointer);
+		}
 	}
 
 
@@ -3113,7 +3173,7 @@ private:
 	// Range assign core:
 
 	template <class iterator_type>
-	void range_assign(const iterator_type it, const size_type size)
+	void range_assign(iterator_type it, size_type size)
 	{
 		if (size == 0)
 		{
@@ -3121,10 +3181,44 @@ private:
 			return;
 		}
 
-		prepare_groups_for_assign(size);
-		range_fill_unused_groups(size, it, 0, NULL, begin_iterator.group_pointer);
-	}
+		#ifdef PLF_TYPE_TRAITS_SUPPORT
+			if PLF_CONSTEXPR (!(std::is_trivially_destructible<element_type>::value && std::is_trivially_constructible<element_type>::value) && std::is_copy_assignable<element_type>::value)
+			{
+				if (total_size == 0)
+				{
+					prepare_groups_for_assign(size);
+					range_fill_unused_groups(size, it, 0, NULL, begin_iterator.group_pointer);
+				}
+				else if (size < total_size)
+				{
+					iterator current = begin_iterator;
 
+					do
+					{
+						*current++ = *it++;
+					} while (--size != 0);
+
+					erase(current, end_iterator);
+				}
+				else
+				{
+					iterator current = begin_iterator;
+
+					do
+					{
+						*current = *it++;
+					} while (++current != end_iterator);
+
+					range_insert(it, size - total_size);
+				}
+			}
+			else
+		#endif
+		{
+			prepare_groups_for_assign(size);
+			range_fill_unused_groups(size, it, 0, NULL, begin_iterator.group_pointer);
+		}
+	}
 
 
 
@@ -3133,7 +3227,7 @@ public:
 	// Range assign:
 
 	template <class iterator_type>
-	void assign(const typename plf::enable_if<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type first, const iterator_type last)
+	void assign(const typename plf::enable_if<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type &first, const iterator_type &last)
 	{
 		range_assign(first, static_cast<size_type>(std::distance(first, last)));
 	}
@@ -3142,7 +3236,7 @@ public:
 
 	// Overloads for colony iterators, since std::distance overloads for these are not possible without C++20 concepts and we must stick with ADL:
 	template <class iterator_type>
-	void assign(const iterator first, const iterator last)
+	void assign(const iterator &first, const iterator &last)
 	{
 		range_assign(first, static_cast<size_type>(first.distance(last)));
 	}
@@ -3150,7 +3244,7 @@ public:
 
 
 	template <class iterator_type>
-	void assign(const const_iterator first, const const_iterator last)
+	void assign(const const_iterator &first, const const_iterator &last)
 	{
 		range_assign(first, static_cast<size_type>(first.distance(last)));
 	}
@@ -3158,7 +3252,7 @@ public:
 
 
 	template <class iterator_type>
-	void assign(const reverse_iterator first, const reverse_iterator last)
+	void assign(const reverse_iterator &first, const reverse_iterator &last)
 	{
 		range_assign(first, static_cast<size_type>(first.distance(last)));
 	}
@@ -3166,7 +3260,7 @@ public:
 
 
 	template <class iterator_type>
-	void assign(const const_reverse_iterator first, const const_reverse_iterator last)
+	void assign(const const_reverse_iterator &first, const const_reverse_iterator &last)
 	{
 		range_assign(first, static_cast<size_type>(first.distance(last)));
 	}
@@ -3326,16 +3420,18 @@ private:
 	void consolidate(const skipfield_type new_min, const skipfield_type new_max)
 	{
 		colony temp(plf::limits(new_min, new_max));
+		temp.reserve(total_size);
+		temp.end_iterator.group_pointer->next_group = temp.unused_groups_head;
 
 		#if defined(PLF_MOVE_SEMANTICS_SUPPORT) && defined(PLF_TYPE_TRAITS_SUPPORT)
 			if PLF_CONSTEXPR (!std::is_trivial<element_type>::value && std::is_nothrow_move_constructible<element_type>::value)
 			{
-				temp.range_assign(std::make_move_iterator(begin_iterator), total_size);
+				temp.range_fill_unused_groups(total_size, plf::make_move_iterator(begin_iterator), 0, NULL, temp.begin_iterator.group_pointer);
 			}
 			else
 		#endif
 		{
-			temp.range_assign(begin_iterator, total_size);
+			temp.range_fill_unused_groups(total_size, begin_iterator, 0, NULL, temp.begin_iterator.group_pointer);
 		}
 
 		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
@@ -3355,54 +3451,80 @@ public:
 		check_capacities_conformance(block_limits);
 		const skipfield_type new_min = static_cast<skipfield_type>(block_limits.min), new_max = static_cast<skipfield_type>(block_limits.max);
 
-		if (min_block_capacity > new_max || max_block_capacity < new_min) // If none of the original blocks could potentially fit within the new limits, skip checking of blocks and just consolidate:
+		if (total_capacity != 0)
 		{
-			consolidate(new_min, new_max);
-			return;
-		}
-
-		if (min_block_capacity < new_min || max_block_capacity > new_max) // ie. If existing blocks could be outside of the new limits
-		{
-			// Otherwise need to check all group sizes here (not just back one, which is most likely largest), because splice might append smaller blocks after a larger block:
-			for (group_pointer_type current_group = begin_iterator.group_pointer; current_group != NULL; current_group = current_group->next_group)
+			if (total_size != 0)
 			{
-				if (current_group->capacity < new_min || current_group->capacity > new_max)
+				if (min_block_capacity > new_max || max_block_capacity < new_min) // If none of the original blocks could potentially fit within the new limits, skip checking of blocks and just consolidate:
 				{
 					consolidate(new_min, new_max);
 					return;
 				}
-			}
-		}
 
-		// If a consolidation or throw has not occured, process reserved/unused groups and deallocate where they don't fit the new limits:
-		min_block_capacity = new_min;
-		max_block_capacity = new_max;
-
-		for (group_pointer_type current_group = unused_groups_head, previous_group = NULL; current_group != NULL;)
-		{
-			const group_pointer_type next_group = current_group->next_group;
-
-			if (current_group->capacity < min_block_capacity || current_group->capacity > max_block_capacity)
-			{
-				total_capacity -= current_group->capacity;
-				deallocate_group(current_group);
-
-				if (previous_group == NULL)
+				if (min_block_capacity < new_min || max_block_capacity > new_max) // ie. If existing blocks could be outside of the new limits
 				{
-					unused_groups_head = next_group;
+					// Otherwise need to check all group sizes here (not just back one, which is most likely largest), because splice might append smaller blocks after a larger block:
+					for (group_pointer_type current_group = begin_iterator.group_pointer; current_group != NULL; current_group = current_group->next_group)
+					{
+						if (current_group->capacity < new_min || current_group->capacity > new_max)
+						{
+							consolidate(new_min, new_max);
+							return;
+						}
+					}
+				}
+			}
+			else // include first group to be checked in the loop below
+			{
+				begin_iterator.group_pointer->next_group = unused_groups_head;
+				unused_groups_head = begin_iterator.group_pointer;
+			}
+
+			// If a consolidation or throw has not occured, process reserved/unused groups and deallocate where they don't fit the new limits:
+
+			for (group_pointer_type current_group = unused_groups_head, previous_group = NULL; current_group != NULL;)
+			{
+				const group_pointer_type next_group = current_group->next_group;
+
+				if (current_group->capacity < new_min || current_group->capacity > new_max)
+				{
+					total_capacity -= current_group->capacity;
+					deallocate_group(current_group);
+
+					if (previous_group == NULL)
+					{
+						unused_groups_head = next_group;
+					}
+					else
+					{
+						previous_group->next_group = next_group;
+					}
 				}
 				else
 				{
-					previous_group->next_group = next_group;
+					previous_group = current_group;
 				}
-			}
-			else
-			{
-				previous_group = current_group;
+
+				current_group = next_group;
 			}
 
-			current_group = next_group;
+			if (total_size == 0)
+			{
+				if (unused_groups_head == NULL)
+				{
+					blank();
+				}
+				else
+				{
+					begin_iterator.group_pointer = unused_groups_head;
+					unused_groups_head = begin_iterator.group_pointer->next_group;
+					begin_iterator.group_pointer->next_group = NULL;
+				}
+			}
 		}
+
+		min_block_capacity = new_min;
+		max_block_capacity = new_max;
 	}
 
 
@@ -3509,7 +3631,7 @@ public:
 					if PLF_CONSTEXPR(std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value)
 				#endif
 				{
-					static_cast<allocator_type &>(*this) = std::move(static_cast<allocator_type &>(source));
+					static_cast<allocator_type &>(*this) = static_cast<allocator_type &>(source);
 					// Reconstruct rebinds:
 					group_allocator = group_allocator_type(*this);
 					aligned_struct_allocator = aligned_struct_allocator_type(*this);
@@ -3547,7 +3669,7 @@ public:
 			else // Allocator isn't movable so move elements from source and deallocate the source's blocks. Could throw here:
 			{
 				#ifdef PLF_TYPE_TRAITS_SUPPORT
-					if PLF_CONSTEXPR (!std::is_move_constructible<element_type>::value)
+					if PLF_CONSTEXPR (!(std::is_move_constructible<element_type>::value && std::is_move_assignable<element_type>::value))
 					{
 						range_assign(source.begin_iterator, source.total_size);
 					}
