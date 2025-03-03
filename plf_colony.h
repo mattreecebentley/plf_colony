@@ -3128,41 +3128,41 @@ public:
 		}
 
 		#ifdef PLF_TYPE_TRAITS_SUPPORT
-			if PLF_CONSTEXPR (!(std::is_trivially_destructible<element_type>::value && std::is_trivially_constructible<element_type>::value) && std::is_copy_assignable<element_type>::value)
+			if PLF_CONSTEXPR ((std::is_trivially_destructible<element_type>::value && std::is_trivially_constructible<element_type>::value) || !std::is_copy_assignable<element_type>::value)
 			{
-				if (total_size == 0)
-				{
-					prepare_groups_for_assign(size);
-					fill_unused_groups(size, element, 0, NULL, begin_iterator.group_pointer);
-				}
-				else if (size < total_size)
-				{
-					iterator current = begin_iterator;
-
-					do
-					{
-						*current++ = element;
-					} while (--size != 0);
-
-					erase(current, end_iterator);
-				}
-				else
-				{
-					iterator current = begin_iterator;
-
-					do
-					{
-						*current = element;
-					} while (++current != end_iterator);
-
-					insert(size - total_size, element);
-				}
+				prepare_groups_for_assign(size);
+				fill_unused_groups(size, element, 0, NULL, begin_iterator.group_pointer);
 			}
 			else
 		#endif
 		{
-			prepare_groups_for_assign(size);
-			fill_unused_groups(size, element, 0, NULL, begin_iterator.group_pointer);
+			if (total_size == 0)
+			{
+				prepare_groups_for_assign(size);
+				fill_unused_groups(size, element, 0, NULL, begin_iterator.group_pointer);
+			}
+			else if (size < total_size)
+			{
+				iterator current = begin_iterator;
+
+				do
+				{
+					*current++ = element;
+				} while (--size != 0);
+
+				erase(current, end_iterator);
+			}
+			else
+			{
+				iterator current = begin_iterator;
+
+				do
+				{
+					*current = element;
+				} while (++current != end_iterator);
+
+				insert(size - total_size, element);
+			}
 		}
 	}
 
@@ -3182,41 +3182,41 @@ private:
 		}
 
 		#ifdef PLF_TYPE_TRAITS_SUPPORT
-			if PLF_CONSTEXPR (!(std::is_trivially_destructible<element_type>::value && std::is_trivially_constructible<element_type>::value) && std::is_copy_assignable<element_type>::value)
+			if PLF_CONSTEXPR ((std::is_trivially_destructible<element_type>::value && std::is_trivially_constructible<element_type>::value) || !std::is_copy_assignable<element_type>::value)
 			{
-				if (total_size == 0)
-				{
-					prepare_groups_for_assign(size);
-					range_fill_unused_groups(size, it, 0, NULL, begin_iterator.group_pointer);
-				}
-				else if (size < total_size)
-				{
-					iterator current = begin_iterator;
-
-					do
-					{
-						*current++ = *it++;
-					} while (--size != 0);
-
-					erase(current, end_iterator);
-				}
-				else
-				{
-					iterator current = begin_iterator;
-
-					do
-					{
-						*current = *it++;
-					} while (++current != end_iterator);
-
-					range_insert(it, size - total_size);
-				}
+				prepare_groups_for_assign(size);
+				range_fill_unused_groups(size, it, 0, NULL, begin_iterator.group_pointer);
 			}
 			else
 		#endif
 		{
-			prepare_groups_for_assign(size);
-			range_fill_unused_groups(size, it, 0, NULL, begin_iterator.group_pointer);
+			if (total_size == 0)
+			{
+				prepare_groups_for_assign(size);
+				range_fill_unused_groups(size, it, 0, NULL, begin_iterator.group_pointer);
+			}
+			else if (size < total_size)
+			{
+				iterator current = begin_iterator;
+
+				do
+				{
+					*current++ = *it++;
+				} while (--size != 0);
+
+				erase(current, end_iterator);
+			}
+			else
+			{
+				iterator current = begin_iterator;
+
+				do
+				{
+					*current = *it++;
+				} while (++current != end_iterator);
+
+				range_insert(it, size - total_size);
+			}
 		}
 	}
 
