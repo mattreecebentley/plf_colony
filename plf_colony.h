@@ -3128,7 +3128,7 @@ public:
 		}
 
 		#ifdef PLF_TYPE_TRAITS_SUPPORT
-			if PLF_CONSTEXPR ((std::is_trivially_destructible<element_type>::value && std::is_trivially_constructible<element_type>::value) || !std::is_copy_assignable<element_type>::value)
+			if PLF_CONSTEXPR ((std::is_trivially_destructible<element_type>::value && std::is_trivially_constructible<element_type>::value && std::is_trivially_copy_assignable<element_type>::value) || !std::is_copy_assignable<element_type>::value) // ie. If there is no benefit nor difference to assigning vs constructing, or if we can't assign, use faster method:
 			{
 				prepare_groups_for_assign(size);
 				fill_unused_groups(size, element, 0, NULL, begin_iterator.group_pointer);
@@ -3182,7 +3182,7 @@ private:
 		}
 
 		#ifdef PLF_TYPE_TRAITS_SUPPORT
-			if PLF_CONSTEXPR ((std::is_trivially_destructible<element_type>::value && std::is_trivially_constructible<element_type>::value) || !std::is_copy_assignable<element_type>::value)
+			if PLF_CONSTEXPR ((std::is_trivially_destructible<element_type>::value && std::is_trivially_constructible<element_type>::value && std::is_trivially_copy_assignable<element_type>::value) || !std::is_copy_assignable<element_type>::value)
 			{
 				prepare_groups_for_assign(size);
 				range_fill_unused_groups(size, it, 0, NULL, begin_iterator.group_pointer);
