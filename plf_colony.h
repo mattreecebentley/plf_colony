@@ -75,6 +75,11 @@
 		#define PLF_CONSTFUNC constexpr
 	#endif
 #elif defined(__cplusplus) && __cplusplus >= 201103L // C++11 support, at least
+  #if __cplusplus >= 202002L  // to be able to use _LIBCPP_VERSION and __GLIBCXX__ below
+  	#include <version>
+  #else
+  	#include <ciso646>
+  #endif
 	#if defined(__GNUC__) && defined(__GNUC_MINOR__) && !defined(__clang__) // If compiler is GCC/G++
 		#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 3) || __GNUC__ > 4
 			#define PLF_MOVE_SEMANTICS_SUPPORT
