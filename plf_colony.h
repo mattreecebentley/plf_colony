@@ -2098,11 +2098,11 @@ private:
 					#ifdef PLF_TYPE_TRAITS_SUPPORT
 						if PLF_CONSTEXPR (!std::is_copy_constructible<element_type>::value)
 						{
-							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, *it++);
+							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, std::move(*it++));
 						}
 						else
 					#endif
-						PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, std::move(*it++));
+						PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, *it++);
 				#ifdef PLF_EXCEPTIONS_SUPPORT
 					}
 					catch (...)
@@ -3850,8 +3850,7 @@ public:
 		new_capacity -= total_capacity;
 
 		size_type number_of_max_groups = new_capacity / max_block_capacity;
-		skipfield_type remainder = static_cast<skipfield_type>(new_capacity - (number_of_max_groups * max_block_capacity));
-
+		skipfield_type remainder = static_cast<skipfield_type>(new_capacity - (number_of_max_groups * max_block_capacity)), negative_remainder = 0;
 
 		if (remainder == 0)
 		{
@@ -3860,7 +3859,19 @@ public:
 		}
 		else if (remainder < min_block_capacity)
 		{
+			// Note: negative_remainder is used to take the difference between the minimum block capacity limit and the actual remainder, and spread this negative difference over subsequent blocks which are in the usual case at max capacity.
+			negative_remainder = min_block_capacity - remainder;
 			remainder = min_block_capacity;
+
+  			// This line checks to see, if we have to reduce the size of the max-capacity blocks to spread the negative_remainder out, whether even reducing the max blocks to min capacity will be enough to keep the capacity under max_size(). We add 1 for the initial (remainder) block. This guards against situations where the min/max limits are very similar:
+			if (total_capacity + ((number_of_max_groups + 1) * min_block_capacity) > max_size())
+			{
+				#ifdef PLF_EXCEPTIONS_SUPPORT
+					throw std::length_error("Reserve cannot increase capacity to >= n without being > max_size() due to current capacity() and block capacity limits");
+				#else
+					std::terminate();
+				#endif
+			}
 		}
 
 
@@ -3877,8 +3888,11 @@ public:
 			}
 			else
 			{
-				first_unused_group = current_group = allocate_new_group(max_block_capacity, begin_iterator.group_pointer);
-				total_capacity += max_block_capacity;
+				const size_type extra_capacity = (max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder;
+				negative_remainder -= max_block_capacity - extra_capacity;
+
+				first_unused_group = current_group = allocate_new_group(extra_capacity, begin_iterator.group_pointer);
+				total_capacity += extra_capacity;
 				--number_of_max_groups;
 			}
 		}
@@ -3899,24 +3913,26 @@ public:
 
 		while (number_of_max_groups != 0)
 		{
+			const size_type extra_capacity = (max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder;
+			negative_remainder -= max_block_capacity - extra_capacity;
+
 			#ifdef PLF_EXCEPTIONS_SUPPORT
 				try
 				{
-					current_group->next_group = allocate_new_group(max_block_capacity, current_group);
+					current_group->next_group = allocate_new_group(extra_capacity, current_group);
 				}
 				catch (...)
 				{
-					deallocate_group(current_group->next_group);
 					current_group->next_group = unused_groups_head;
 					unused_groups_head = first_unused_group;
 					throw;
 				}
 			#else
-				current_group->next_group = allocate_new_group(max_block_capacity, current_group);
+				current_group->next_group = allocate_new_group(extra_capacity, current_group);
 			#endif
 
 			current_group = current_group->next_group;
-			total_capacity += max_block_capacity;
+			total_capacity += extra_capacity;
 			--number_of_max_groups;
 		}
 

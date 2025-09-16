@@ -1545,6 +1545,12 @@ int main()
 			i_colony.insert(i_colony2.begin(), i_colony2.end());
 
 			failpass("Range insert when not empty test", i_colony.size() == 6003);
+
+			i_colony2.reset();
+			i_colony2.reshape(plf::limits(50, 70));
+			i_colony2.reserve(150);
+
+			failpass("Improved reserve accuracy test", i_colony2.capacity() == 150);
 		}
 
 
@@ -1589,6 +1595,8 @@ int main()
 			failpass("Greater capacity assign test", i_colony.size() == 2000 && total == 40000);
 
 			i_colony.clear();
+
+			
 
 
 			for (unsigned int internal_loop_counter = 0; internal_loop_counter != 10; ++internal_loop_counter)
