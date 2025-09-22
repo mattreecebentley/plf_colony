@@ -75,6 +75,11 @@
 		#define PLF_CONSTFUNC constexpr
 	#endif
 #elif defined(__cplusplus) && __cplusplus >= 201103L // C++11 support, at least
+  #if __cplusplus >= 202002L  // to be able to use _LIBCPP_VERSION and __GLIBCXX__ below
+  	#include <version>
+  #else
+  	#include <ciso646>
+  #endif
 	#if defined(__GNUC__) && defined(__GNUC_MINOR__) && !defined(__clang__) // If compiler is GCC/G++
 		#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 3) || __GNUC__ > 4
 			#define PLF_MOVE_SEMANTICS_SUPPORT
@@ -265,7 +270,7 @@
 			namespace ranges
 			{
 				struct from_range_t {};
-				constexpr from_range_t from_range;
+				inline constexpr from_range_t from_range;
 			}
 		#endif
 	}
@@ -338,7 +343,7 @@ namespace plf
 
 	// To enable conversion to void * when allocator supplies non-raw pointers:
 	template <class source_pointer_type>
-	static PLF_CONSTFUNC void * void_cast(const source_pointer_type source_pointer) PLF_NOEXCEPT
+	inline PLF_CONSTFUNC void * void_cast(const source_pointer_type source_pointer) PLF_NOEXCEPT
 	{
 		#ifdef PLF_CPP20_SUPPORT
 			return static_cast<void *>(std::to_address(source_pointer));
@@ -350,7 +355,7 @@ namespace plf
 
 	#ifdef PLF_MOVE_SEMANTICS_SUPPORT
 		template <class iterator_type>
-		static PLF_CONSTFUNC std::move_iterator<iterator_type> make_move_iterator(iterator_type it)
+		inline PLF_CONSTFUNC std::move_iterator<iterator_type> make_move_iterator(iterator_type it)
 		{
 			return std::move_iterator<iterator_type>(std::move(it));
 		}
