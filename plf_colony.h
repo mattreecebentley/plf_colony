@@ -3863,7 +3863,7 @@ public:
 			negative_remainder = min_block_capacity - remainder;
 			remainder = min_block_capacity;
 
-  			// This line checks to see, if we have to reduce the size of the max-capacity blocks to spread the negative_remainder out, whether even reducing the max blocks to min capacity will be enough to keep the capacity under max_size(). We add 1 for the initial (remainder) block. This guards against situations where the min/max limits are very similar:
+  			// This line checks to see, if we have to reduce the size of the max-capacity blocks to spread the negative_remainder out, whether even reducing the max blocks to min capacity will be enough to keep the capacity under max_size(). We add 1 for the initial (remainder) block. This guards against situations where, for example, the min/max limits are very similar:
 			if (total_capacity + ((number_of_max_groups + 1) * min_block_capacity) > max_size())
 			{
 				#ifdef PLF_EXCEPTIONS_SUPPORT
@@ -3888,7 +3888,7 @@ public:
 			}
 			else
 			{
-				const size_type extra_capacity = (max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder;
+				const skipfield_type extra_capacity = (max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder;
 				negative_remainder -= max_block_capacity - extra_capacity;
 
 				first_unused_group = current_group = allocate_new_group(extra_capacity, begin_iterator.group_pointer);
@@ -3913,7 +3913,7 @@ public:
 
 		while (number_of_max_groups != 0)
 		{
-			const size_type extra_capacity = (max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder;
+			const skipfield_type extra_capacity = (max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder;
 			negative_remainder -= max_block_capacity - extra_capacity;
 
 			#ifdef PLF_EXCEPTIONS_SUPPORT
