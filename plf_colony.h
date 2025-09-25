@@ -590,10 +590,10 @@ private:
 
 	// colony member variables:
 
-	iterator 			end_iterator, begin_iterator;
+	iterator 				end_iterator, begin_iterator;
 	group_pointer_type	erasure_groups_head,	// Head of doubly-linked list of groups which have erased-element memory locations available for re-use
-						unused_groups_head;	// Head of singly-linked list of reserved groups retained by erase()/clear() or created by reserve()
-	size_type			total_size, total_capacity;
+								unused_groups_head;	// Head of singly-linked list of reserved groups retained by erase()/clear() or created by reserve()
+	size_type				total_size, total_capacity;
 	skipfield_type 		min_block_capacity, max_block_capacity;
 
 	group_allocator_type group_allocator;
@@ -3857,20 +3857,50 @@ public:
 			remainder = max_block_capacity;
 			--number_of_max_groups;
 		}
-		else if (remainder < min_block_capacity)
+		else
 		{
-			// Note: negative_remainder is used to take the difference between the minimum block capacity limit and the actual remainder, and spread this negative difference over subsequent blocks which are in the usual case at max capacity.
-			negative_remainder = min_block_capacity - remainder;
-			remainder = min_block_capacity;
-
-  			// This line checks to see, if we have to reduce the size of the max-capacity blocks to spread the negative_remainder out, whether even reducing the max blocks to min capacity will be enough to keep the capacity under max_size(). We add 1 for the initial (remainder) block. This guards against situations where, for example, the min/max limits are very similar:
-			if (total_capacity + ((number_of_max_groups + 1) * min_block_capacity) > max_size())
+			if (max_block_capacity - remainder >= min_block_capacity)
 			{
-				#ifdef PLF_EXCEPTIONS_SUPPORT
-					throw std::length_error("Reserve cannot increase capacity to >= n without being > max_size() due to current capacity() and block capacity limits");
-				#else
-					std::terminate();
-				#endif
+				// If there exists an unused group which's of low-enough capacity, deallocate that and add it's capacity to the remainder group
+				for (group_pointer_type current_unused_group = unused_groups_head, prev_unused_group = NULL; current_unused_group != NULL; prev_unused_group = current_unused_group, current_unused_group = current_unused_group->next_group)
+				{
+					if (std::numeric_limits<skipfield_type>::max() - unused_groups_head->capacity > remainder && /* make sure we don't overflow in next line */
+						max_block_capacity >= unused_groups_head->capacity + remainder)
+					{
+						remainder += current_unused_group->capacity;
+						total_capacity -= current_unused_group->capacity;
+						const group_pointer_type next_group = current_unused_group->next_group;
+						deallocate_group(current_unused_group);
+
+						if (prev_unused_group != NULL)
+						{
+							prev_unused_group->next_group = next_group;
+						}
+						else
+						{
+						  	unused_groups_head = next_group;
+						}
+
+						break;
+					}
+				}
+			}
+
+			if (remainder < min_block_capacity) // Also implies that we were unable to consolidate remainder with an existing unused group
+			{
+				// Note: negative_remainder is used to take the difference between the minimum block capacity limit and the actual remainder, and spread this negative difference over subsequent blocks which are in the usual case at max capacity.
+				negative_remainder = min_block_capacity - remainder;
+				remainder = min_block_capacity;
+
+	  			// This line checks to see, if we have to reduce the size of the max-capacity blocks to spread the negative_remainder out, whether even reducing the max blocks to min capacity will be enough to keep the capacity under max_size(). We add 1 for the initial (remainder) block. This guards against situations where, for example, the min/max limits are very similar:
+				if (total_capacity + ((number_of_max_groups + 1) * min_block_capacity) > max_size())
+				{
+					#ifdef PLF_EXCEPTIONS_SUPPORT
+						throw std::length_error("Reserve cannot increase capacity to >= n without being > max_size() due to current capacity() and block capacity limits");
+					#else
+						std::terminate();
+					#endif
+				}
 			}
 		}
 
@@ -3882,19 +3912,13 @@ public:
 			initialize(remainder);
 			begin_iterator.group_pointer->size = 0; // 1 by default in initialize function (optimised for insert())
 
-			if (number_of_max_groups == 0)
-			{
-				return;
-			}
-			else
-			{
-				const skipfield_type extra_capacity = (max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder;
-				negative_remainder -= max_block_capacity - extra_capacity;
+			if (number_of_max_groups == 0) return;
 
-				first_unused_group = current_group = allocate_new_group(extra_capacity, begin_iterator.group_pointer);
-				total_capacity += extra_capacity;
-				--number_of_max_groups;
-			}
+			const skipfield_type extra_capacity = (max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder;
+			negative_remainder -= max_block_capacity - extra_capacity;
+			first_unused_group = current_group = allocate_new_group(extra_capacity, begin_iterator.group_pointer);
+			total_capacity += extra_capacity;
+			--number_of_max_groups;
 		}
 		else // Non-empty colony, add first group:
 		{
