@@ -3859,16 +3859,20 @@ public:
 		}
 		else
 		{
-			if (max_block_capacity - remainder >= min_block_capacity)
+			if (unused_groups_head != NULL && max_block_capacity - remainder >= min_block_capacity)
 			{
 				// If there exists an unused group which's of low-enough capacity, deallocate that and add it's capacity to the remainder group
-				for (group_pointer_type current_unused_group = unused_groups_head, prev_unused_group = NULL; current_unused_group != NULL; prev_unused_group = current_unused_group, current_unused_group = current_unused_group->next_group)
+				group_pointer_type current_unused_group = unused_groups_head, prev_unused_group = NULL;
+
+				do
 				{
-					if (std::numeric_limits<skipfield_type>::max() - unused_groups_head->capacity > remainder && /* make sure we don't overflow in next line */
-						max_block_capacity >= unused_groups_head->capacity + remainder)
+					const skipfield_type current_capacity = current_unused_group->capacity;
+
+					if (std::numeric_limits<skipfield_type>::max() - current_capacity > remainder && /* make sure we don't overflow in next line */
+						max_block_capacity >= current_capacity + remainder)
 					{
-						remainder += current_unused_group->capacity;
-						total_capacity -= current_unused_group->capacity;
+						remainder += current_capacity;
+						total_capacity -= current_capacity;
 						const group_pointer_type next_group = current_unused_group->next_group;
 						deallocate_group(current_unused_group);
 
@@ -3883,16 +3887,20 @@ public:
 
 						break;
 					}
-				}
+
+					prev_unused_group = current_unused_group;
+					current_unused_group = current_unused_group->next_group;
+				} while (current_unused_group != NULL);
 			}
 
-			if (remainder < min_block_capacity) // Also implies that we were unable to consolidate remainder with an existing unused group
+
+			if (remainder < min_block_capacity) // Implies we were unable to consolidate remainder with an existing unused group, in the if-block above
 			{
 				// Note: negative_remainder is used to take the difference between the minimum block capacity limit and the actual remainder, and spread this negative difference over subsequent blocks which are in the usual case at max capacity.
 				negative_remainder = min_block_capacity - remainder;
 				remainder = min_block_capacity;
 
-	  			// This line checks to see, if we have to reduce the size of the max-capacity blocks to spread the negative_remainder out, whether even reducing the max blocks to min capacity will be enough to keep the capacity under max_size(). We add 1 for the initial (remainder) block. This guards against situations where, for example, the min/max limits are very similar:
+	  			// This line checks to see, if we have to reduce the size of the max-capacity blocks to spread the negative_remainder out, whether even reducing the max blocks to min capacity will be enough to keep the capacity under max_size(). We add 1 for the initial (remainder) block. This guards against situations where, for example, the min/max limits are very similar so spreading the negative remainder out is less doable:
 				if (total_capacity + ((number_of_max_groups + 1) * min_block_capacity) > max_size())
 				{
 					#ifdef PLF_EXCEPTIONS_SUPPORT
@@ -3910,26 +3918,19 @@ public:
 		if (begin_iterator.group_pointer == NULL) // Most common scenario - empty colony
 		{
 			initialize(remainder);
-			begin_iterator.group_pointer->size = 0; // 1 by default in initialize function (optimised for insert())
+			begin_iterator.group_pointer->size = 0; // Note: this is set to 1 by default in the initialize function (which is optimised for insert())
 
 			if (number_of_max_groups == 0) return;
 
-			const skipfield_type extra_capacity = (max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder;
-			negative_remainder -= max_block_capacity - extra_capacity;
-			first_unused_group = current_group = allocate_new_group(extra_capacity, begin_iterator.group_pointer);
-			total_capacity += extra_capacity;
+			// Make the first allocated unused group:
+			const skipfield_type new_block_capacity = (max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder;
+			negative_remainder -= max_block_capacity - new_block_capacity;
+			first_unused_group = current_group = allocate_new_group(new_block_capacity, begin_iterator.group_pointer);
+			total_capacity += new_block_capacity;
 			--number_of_max_groups;
 		}
-		else // Non-empty colony, add first group:
+		else // Non-empty colony, add first new unused group:
 		{
-			if ((std::numeric_limits<size_type>::max() - end_iterator.group_pointer->group_number) < (number_of_max_groups + 1))
-			#ifdef PLF_CPP20_SUPPORT
-				[[unlikely]]
-			#endif
-			{
-				reset_group_numbers();
-			}
-
 			first_unused_group = current_group = allocate_new_group(remainder, end_iterator.group_pointer);
 			total_capacity += remainder;
 		}
@@ -3937,13 +3938,13 @@ public:
 
 		while (number_of_max_groups != 0)
 		{
-			const skipfield_type extra_capacity = (max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder;
-			negative_remainder -= max_block_capacity - extra_capacity;
+			const skipfield_type new_block_capacity = (max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder;
+			negative_remainder -= max_block_capacity - new_block_capacity;
 
 			#ifdef PLF_EXCEPTIONS_SUPPORT
 				try
 				{
-					current_group->next_group = allocate_new_group(extra_capacity, current_group);
+					current_group->next_group = allocate_new_group(new_block_capacity, current_group);
 				}
 				catch (...)
 				{
@@ -3952,11 +3953,11 @@ public:
 					throw;
 				}
 			#else
-				current_group->next_group = allocate_new_group(extra_capacity, current_group);
+				current_group->next_group = allocate_new_group(new_block_capacity, current_group);
 			#endif
 
 			current_group = current_group->next_group;
-			total_capacity += extra_capacity;
+			total_capacity += new_block_capacity;
 			--number_of_max_groups;
 		}
 
