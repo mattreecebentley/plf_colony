@@ -1165,19 +1165,17 @@ private:
 
 	group_pointer_type allocate_new_group(const skipfield_type elements_per_group, const group_pointer_type previous = NULL)
 	{
-		const group_pointer_type new_group = PLF_ALLOCATE(group_allocator_type, group_allocator, 1, 0);
-		total_capacity += elements_per_group;
-
-		if (total_capacity > max_size()) // Just in case max_size is a lower amount than the actual memory available (uncommon platform)
+		if (max_size() - total_capacity < elements_per_group) // Just in case max_size is a lower amount than the actual memory available (uncommon platform). Comparison avoids overflow.
 		{
-			total_capacity -= elements_per_group;
-
 			#ifdef PLF_EXCEPTIONS_SUPPORT
 				throw std::length_error("New block allocation would create capacity greater than max_size()");
 			#else
 				std::terminate();
 			#endif
 		}
+
+		total_capacity += elements_per_group; // I don't know why GCC creates better/smaller codegen when this is placed here rather than at bottom, But it does.
+		const group_pointer_type new_group = PLF_ALLOCATE(group_allocator_type, group_allocator, 1, end_iterator.group_pointer);
 
 		#ifdef PLF_EXCEPTIONS_SUPPORT
 			try
@@ -3907,7 +3905,7 @@ public:
 				remainder = min_block_capacity;
 
 	  			// This line checks to see - if we have to reduce the size of the max-capacity blocks to spread the negative_remainder out - whether even reducing the max blocks to min capacity will be enough to keep the capacity under max_size(). We add 1 for the initial (remainder) block. This guards against situations where, for example, the min/max limits are very similar so spreading the negative remainder out is less doable:
-				if (total_capacity + ((number_of_max_groups + 1) * min_block_capacity) > max_size())
+				if (max_size() - total_capacity < ((number_of_max_groups + 1) * min_block_capacity))
 				{
 					#ifdef PLF_EXCEPTIONS_SUPPORT
 						throw std::length_error("Reserve cannot increase capacity to >= n without being > max_size() due to current capacity() and block capacity limits");
