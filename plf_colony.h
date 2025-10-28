@@ -1174,8 +1174,8 @@ private:
 			#endif
 		}
 
-		total_capacity += elements_per_group; // I don't know why GCC creates better/smaller codegen when this is placed here rather than at bottom, But it does.
 		const group_pointer_type new_group = PLF_ALLOCATE(group_allocator_type, group_allocator, 1, end_iterator.group_pointer);
+		total_capacity += elements_per_group; // I don't know why GCC creates better/smaller codegen when this is placed here rather than at bottom, But it does.
 
 		#ifdef PLF_EXCEPTIONS_SUPPORT
 			try
