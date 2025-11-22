@@ -1223,6 +1223,15 @@ int main()
 			failpass("Non-trivial type erase half of all elements", ss_nt.size() == 5000);
 
 
+			colony<small_struct_non_trivial> ss_nt2;
+			ss_nt2.insert(5, ss);
+			
+			ss_nt = ss_nt2;
+			
+			failpass("Non-trivial type range-assign", ss_nt.size() == 5);
+
+			
+			
 			for (unsigned int loop_counter = 0; loop_counter != 50; ++loop_counter)
 			{
 				ss_nt.clear();
@@ -1596,8 +1605,6 @@ int main()
 
 			i_colony.clear();
 
-			
-
 
 			for (unsigned int internal_loop_counter = 0; internal_loop_counter != 10; ++internal_loop_counter)
 			{
@@ -1691,6 +1698,49 @@ int main()
 
 			i_colony.clear();
 
+
+			for (unsigned int internal_loop_counter = 0; internal_loop_counter != 10; ++internal_loop_counter)
+			{
+				const unsigned int capacity = rand() & 65535;
+				i_vector.assign(capacity, 1);
+				i_colony.assign(i_vector.begin(), i_vector.end());
+
+				total = 0;
+				unsigned int subtract = 0;
+
+				for (colony<int>::iterator it3 = i_colony.begin(); it3 != i_colony.end(); )
+				{
+					if ((rand() & 7) == 0)
+					{
+						it3 = i_colony.erase(it3);
+						++subtract;
+					}
+					else
+					{
+						total += *it3++;
+					}
+				}
+
+				if (i_colony.size() != capacity - subtract)
+				{
+					printf("Fuzz-test range assign + erase capacity Fail: global loop counter: %u, internal loop counter: %u.\n", looper, internal_loop_counter);
+					getchar();
+					abort();
+				}
+
+				if (i_colony.size() != static_cast<unsigned int>(total))
+				{
+					printf("Fuzz-test range assign + erase sum Fail: global loop counter: %u, internal loop counter: %u.\n", looper, internal_loop_counter);
+					getchar();
+					abort();
+				}
+			}
+
+			message("Fuzz-test range assign + erase passed.");
+
+
+			i_colony.clear();
+
 			#ifdef PLF_TEST_INITIALIZER_LIST_SUPPORT
 				i_colony.assign({1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 				it = i_colony.begin();
@@ -1705,8 +1755,6 @@ int main()
 				}
 
 				failpass("Initializer_list assign test", i_colony.size() == 10 && !fail);
-
-				i_colony.clear();
 			#endif
 		}
 
