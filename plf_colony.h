@@ -3203,7 +3203,7 @@ private:
 	void reset_group_range_assign(iterator &it) PLF_NOEXCEPT
 	{
 		std::memset(static_cast<void *>(it.group_pointer->skipfield), 0, it.group_pointer->capacity * sizeof(skipfield_type));
-		it.group_pointer->size = it.element_pointer - to_aligned_pointer(it.group_pointer->elements);
+		it.group_pointer->size = static_cast<skipfield_type>(it.element_pointer - to_aligned_pointer(it.group_pointer->elements));
 	}
 
 
@@ -3267,21 +3267,21 @@ private:
 			total_size = 0;
 			begin_iterator.element_pointer = to_aligned_pointer(begin_iterator.group_pointer->elements);
 			begin_iterator.skipfield_pointer = begin_iterator.group_pointer->skipfield;
-         
+
 
 			for (iterator current(begin_iterator); current.group_pointer != nullptr;)
 			{
 				current.element_pointer = to_aligned_pointer(current.group_pointer->elements);
 				current.skipfield_pointer = current.group_pointer->skipfield;
 				current.group_pointer->free_list_head = std::numeric_limits<skipfield_type>::max();
-            
+
 				for (const aligned_pointer_type end = (current.group_pointer == end_iterator.group_pointer) ? end_iterator.element_pointer : to_aligned_pointer(current.group_pointer->skipfield); current.element_pointer != end;)
 				{
 					if (*(current.skipfield_pointer) != 0)
 					{
 						skipfield_type skipblock_length = *(current.skipfield_pointer);
 						iterator next_element(current.group_pointer, current.element_pointer + skipblock_length, current.skipfield_pointer + skipblock_length);
-						skipblock_length = (skipblock_length > size) ? size : skipblock_length;
+						skipblock_length = (skipblock_length > size) ? static_cast<skipfield_type>(size) : skipblock_length;
 
 						for (const aligned_pointer_type fill_end = current.element_pointer + skipblock_length; current.element_pointer != fill_end; ++current.element_pointer, ++current.skipfield_pointer)
 						{
