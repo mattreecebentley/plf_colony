@@ -701,8 +701,8 @@ public:
 	// Adaptive minimum based around aligned size, sizeof(group) and sizeof(colony):
 	static PLF_CONSTFUNC skipfield_type block_capacity_default_min() PLF_NOEXCEPT
 	{
-		PLF_CONSTFUNC const skipfield_type adaptive_size = static_cast<skipfield_type>(((sizeof(colony) + sizeof(group)) * 2) / sizeof(aligned_element_struct));
-		PLF_CONSTFUNC const skipfield_type max_block_capacity = block_capacity_default_max(); // Necessary to check against in situations with > 64bit pointer sizes and small sizeof(T)
+		const skipfield_type adaptive_size = static_cast<skipfield_type>(((sizeof(colony) + sizeof(group)) * 2) / sizeof(aligned_element_struct));
+		const skipfield_type max_block_capacity = block_capacity_default_max(); // Necessary to check against in situations with > 64bit pointer sizes and small sizeof(T)
 		return std::max(static_cast<skipfield_type>(8), std::min(adaptive_size, max_block_capacity));
 	}
 
