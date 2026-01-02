@@ -860,8 +860,6 @@ public:
 			skipfield_allocator(alloc),
 			tuple_allocator(alloc)
 		{
-			assert(&source != this);
-
 			#ifdef PLF_IS_ALWAYS_EQUAL_SUPPORT
 				if PLF_CONSTEXPR (!std::allocator_traits<allocator_type>::is_always_equal::value)
 			#endif
@@ -869,7 +867,6 @@ public:
 				if (alloc != static_cast<allocator_type &>(source))
 				{
 					blank();
-					static_cast<allocator_type &>(*this) = static_cast<allocator_type &>(source);
 					reserve_and_range_fill(source.total_size, plf::make_move_iterator(source.begin_iterator));
 					source.destroy_all_data();
 				}
@@ -895,7 +892,6 @@ public:
 			skipfield_allocator(*this),
 			tuple_allocator(*this)
 		{
-			assert(&source != this);
 			source.blank();
 		}
 	#endif
@@ -2055,7 +2051,7 @@ public:
 				// Update skipfield (earlier nodes already memset'd in fill_skipblock function):
 				*(skipfield_pointer + size) = new_skipblock_size;
 				*(skipfield_pointer + skipblock_size - 1) = new_skipblock_size;
-				erasure_groups_head->free_list_head += size; // set free list head to new start node
+				erasure_groups_head->free_list_head += static_cast<skipfield_type>(size); // set free list head to new start node
 
 				// Update free list with new head:
 				edit_free_list_head(element_pointer + size, prev_index);
@@ -2305,7 +2301,7 @@ private:
 
 				*(skipfield_pointer + size) = new_skipblock_size;
 				*(skipfield_pointer + skipblock_size - 1) = new_skipblock_size;
-				erasure_groups_head->free_list_head += size;
+				erasure_groups_head->free_list_head += static_cast<skipfield_type>(size);
 				edit_free_list_head(element_pointer + size, prev_index);
 
 				if (prev_index != std::numeric_limits<skipfield_type>::max())
@@ -3708,9 +3704,9 @@ public:
 			assert(&source != this);
 			destroy_all_data();
 
-			#ifdef PLF_IS_ALWAYS_EQUAL_SUPPORT // We need this to be constexpr to avoid warning errors on the 'throw' below
+			#ifdef PLF_IS_ALWAYS_EQUAL_SUPPORT
 				if PLF_CONSTEXPR (std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value || std::allocator_traits<allocator_type>::is_always_equal::value)
-				{
+				{ // Note: we need this to be constexpr to avoid warning errors on the potentially-throwing section below
 					move_assign(std::move(source));
 				}
 				else
@@ -3719,7 +3715,7 @@ public:
 			{
 				move_assign(std::move(source));
 			}
-			else // Allocator isn't movable so move elements from source and deallocate the source's blocks. Could throw here:
+			else // Allocator isn't propagatable so move elements from source and deallocate the source's blocks. Could throw here:
 			{
 				#ifdef PLF_TYPE_TRAITS_SUPPORT
 					if PLF_CONSTEXPR (!(std::is_move_constructible<element_type>::value && std::is_move_assignable<element_type>::value))
