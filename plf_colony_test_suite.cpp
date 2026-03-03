@@ -228,11 +228,13 @@ int main()
 			failpass("Trivially-copyable reverse_iterators for trivial types", std::is_trivially_copyable<colony_type::reverse_iterator>::value);
 			failpass("Trivially-copyable reverse_const_iterators for trivial types", std::is_trivially_copyable<colony_type::const_reverse_iterator>::value);
 		}
+
+		message("Press Enter to continue");
+		getchar();
 	}
 	#endif
 
 
-	getchar();
 
 	for (unsigned int looper = 0; looper != 100; ++looper)
 	{
