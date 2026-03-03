@@ -1,4 +1,4 @@
-// Copyright (c) 2025, Matthew Bentley (mattreecebentley@gmail.com) www.plflib.org
+// Copyright (c) 2026, Matthew Bentley (mattreecebentley@gmail.com) www.plflib.org
 
 // zLib license (https://www.zlib.net/zlib_license.html):
 // This software is provided 'as-is', without any express or implied
@@ -52,7 +52,7 @@
 	#endif
 	#if _MSC_VER >= 1800
 		#define PLF_VARIADICS_SUPPORT // Variadics, in this context, means both variadic templates and variadic macros are supported
-		#define PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+		#define PLF_DEFAULT_SUPPORT // Both support for default template arguments and defaulted class functions
 		#define PLF_INITIALIZER_LIST_SUPPORT
 	#endif
 	#if _MSC_VER >= 1900
@@ -81,7 +81,7 @@
 			#define PLF_VARIADICS_SUPPORT
 		#endif
 		#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 4) || __GNUC__ > 4
-			#define PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+			#define PLF_DEFAULT_SUPPORT
 			#define PLF_INITIALIZER_LIST_SUPPORT
 		#endif
 		#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 6) || __GNUC__ > 4
@@ -103,7 +103,7 @@
 			#define PLF_IS_ALWAYS_EQUAL_SUPPORT
 		#endif
 	#elif defined(__clang__) && !defined(__GLIBCXX__) && !defined(_LIBCPP_CXX03_LANG) && __clang_major__ >= 3
-		#define PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+		#define PLF_DEFAULT_SUPPORT
 		#define PLF_ALLOCATOR_TRAITS_SUPPORT
 		#define PLF_TYPE_TRAITS_SUPPORT
 
@@ -127,7 +127,7 @@
 			#define PLF_INITIALIZER_LIST_SUPPORT
 		#endif
 	#elif defined(__GLIBCXX__) // Using another compiler type with libstdc++ - we are assuming full c++11 compliance for compiler - which may not be true
-		#define PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+		#define PLF_DEFAULT_SUPPORT
 
 		#if __GLIBCXX__ >= 20080606
 			#define PLF_MOVE_SEMANTICS_SUPPORT
@@ -157,7 +157,7 @@
 			#define PLF_VARIADICS_SUPPORT
 		#endif
 	#else // Assume type traits and initializer support for other compilers and standard library implementations
-		#define PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+		#define PLF_DEFAULT_SUPPORT
 		#define PLF_MOVE_SEMANTICS_SUPPORT
 		#define PLF_VARIADICS_SUPPORT
 		#define PLF_TYPE_TRAITS_SUPPORT
@@ -336,7 +336,8 @@ namespace plf
 
 
 
-	// To enable conversion to void * when allocator supplies non-raw pointers:
+	// For converting the underlying skipfield storage * type to void * when the allocator supplies non-trivial pointers.
+	// The void * conversion is technically unnecessary since it will be implicitly converted when required, but it's more straightforward than having to identify the underlying storage type:
 	template <class source_pointer_type>
 	static PLF_CONSTFUNC void * void_cast(const source_pointer_type source_pointer) PLF_NOEXCEPT
 	{
@@ -346,6 +347,7 @@ namespace plf
 			return static_cast<void *>(&*source_pointer);
 		#endif
 	}
+
 
 
 	#ifdef PLF_MOVE_SEMANTICS_SUPPORT
@@ -492,7 +494,7 @@ private:
 
 
 
-	// To enable conversion when allocator supplies non-raw pointers:
+	// To simplify conversion when allocator supplies non-raw pointers:
 	template <class destination_pointer_type, class source_pointer_type>
 	static PLF_CONSTFUNC destination_pointer_type pointer_cast(const source_pointer_type source_pointer) PLF_NOEXCEPT
 	{
@@ -527,11 +529,18 @@ private:
 	}
 
 
-
 	// group == element memory block + skipfield + block metadata
+
+	// Skipfield implementation notes:
+	// (1) Follows low-complexity jump-counting pattern rules as described here: archive.org/details/matt_bentley_-_the_low_complexity_jump-counting_pattern
+	// (2) Initialized to 0 by-default, which means 'non-erased' ie. either no element has ever been constructed there, or an element has been constructed there. Whereas non-zero means an element has been constructed there and subsequently erased. The value of the first and last non-zero nodes in a run of non-zero nodes determines jump length. See the paper for details.
+	// (3) This definition means we can bulk-initialize each group's skipfield to 0, rather than bulk-initialize to non-zero then subsequently change individual skipfield nodes to 0 upon insertion - which is obviously slower. Defining unconstructed elements as 0 has no impact on iteration since they're after end(). Note that this definition is violated slightly during splice: unconstructed element nodes at the end of the destination colony's back block will have their corresponding skipfield nodes flipped to 'erased' in order to make iteration work, because they will not longer be after end() once the source colony's blocks are appended.
+	// (4) There will always be one additional skipfield node allocated compared to the group's number of elements. This ensures a faster ++ iterator operation (fewer checks are required when it is present). The extra node is unused and always 0, but checked, and not having it will result in out-of-bounds memory errors.
+
+
 	struct group
 	{
-		skipfield_pointer_type					skipfield;			// Skipfield storage. The element and skipfield arrays are allocated contiguously, in a single allocation, in this implementation, hence the skipfield pointer also functions as a 'one-past-end' pointer for the elements array. There will always be one additional skipfield node allocated compared to the number of elements. This is to ensure a faster ++ iterator operation (fewer checks are required when this is present). The extra node is unused and always zero, but checked, and not having it will result in out-of-bounds memory errors. This is present before elements in the group struct as it is referenced constantly by the ++ operator, hence having it first results in a minor performance increase.
+		skipfield_pointer_type					skipfield;			// Skipfield storage. The element and skipfield arrays are allocated contiguously, in a single allocation, in this implementation, hence the skipfield pointer also functions as a 'one-past-end' pointer for the elements array. This is present before elements in the group struct as it is referenced constantly by the ++ operator, hence having it first results in a minor performance increase.
 		group_pointer_type						next_group;			// Next group in the linked list of all groups. NULL if no following group. 2nd in struct because it is so frequently used during iteration.
 		const aligned_struct_pointer_type 	elements;			// Element storage. Allocated as a block of chars, this memory is then divided between elements & skipfield
 		group_pointer_type						previous_group;	// Previous group in the linked list of all groups. NULL if no preceding group.
@@ -1568,7 +1577,7 @@ public:
 
 
 	#ifdef PLF_CPP20_SUPPORT
-		iterator insert([[maybe_unused]] const_iterator hint, const element_type &element) // Note: hint is ignored, purely to serve other standard library functions
+		iterator insert([[maybe_unused]] const_iterator &hint, const element_type &element) // Note: hint is ignored, purely to serve other standard library functions
 		{
 			return insert(element);
 		}
@@ -1689,7 +1698,7 @@ public:
 
 
 		#ifdef PLF_CPP20_SUPPORT
-			iterator insert([[maybe_unused]] const_iterator hint, element_type &&element)
+			iterator insert([[maybe_unused]] const_iterator &hint, element_type &&element)
 			{
 				return insert(std::forward<element_type &&>(element));
 			}
@@ -1810,7 +1819,7 @@ public:
 
 		#ifdef PLF_CPP20_SUPPORT
 			template<typename... arguments>
-			iterator emplace_hint([[maybe_unused]] const_iterator hint, arguments &&... parameters)
+			iterator emplace_hint([[maybe_unused]] const_iterator &hint, arguments &&... parameters)
 			{
 				return emplace(std::forward<arguments>(parameters) ...);
 			}
@@ -1900,7 +1909,7 @@ private:
 				erasure_groups_head->size += elements_constructed_before_exception;
 				total_size += elements_constructed_before_exception;
 
-				std::memset(skipfield_pointer, 0, elements_constructed_before_exception * sizeof(skipfield_type));
+				std::memset(void_cast(skipfield_pointer), 0, elements_constructed_before_exception * sizeof(skipfield_type));
 
 				edit_free_list_head(location + elements_constructed_before_exception, prev_free_list_node);
 
@@ -1958,7 +1967,7 @@ private:
 			}
 		}
 
-		std::memset(skipfield_pointer, 0, size * sizeof(skipfield_type)); // reset skipfield nodes within skipblock to 0
+		std::memset(void_cast(skipfield_pointer), 0, size * sizeof(skipfield_type)); // reset skipfield nodes within skipblock to 0
 		erasure_groups_head->size += size;
 		total_size += size;
 	}
@@ -2212,7 +2221,7 @@ private:
 			}
 		}
 
-		std::memset(skipfield_pointer, 0, size * sizeof(skipfield_type)); // reset skipfield nodes within skipblock to 0
+		std::memset(void_cast(skipfield_pointer), 0, size * sizeof(skipfield_type)); // reset skipfield nodes within skipblock to 0
 		erasure_groups_head->size += size;
 		total_size += size;
 	}
@@ -2350,7 +2359,7 @@ public:
 	// Range insert:
 
 	template <class iterator_type>
-	void insert (const typename plf::enable_if<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type first, const iterator_type last)
+	void insert (const typename plf::enable_if<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type &first, const iterator_type &last)
 	{
 		range_insert(first, static_cast<size_type>(std::distance(first, last)));
 	}
@@ -2358,7 +2367,7 @@ public:
 
 
 	template <class iterator_type>
-	void insert (const iterator first, const iterator last)
+	void insert (const iterator &first, const iterator &last)
 	{
 		range_insert(first, static_cast<size_type>(first.distance(last)));
 	}
@@ -2366,7 +2375,7 @@ public:
 
 
 	template <class iterator_type>
-	void insert (const const_iterator first, const const_iterator last)
+	void insert (const const_iterator &first, const const_iterator &last)
 	{
 		range_insert(first, static_cast<size_type>(first.distance(last)));
 	}
@@ -2374,7 +2383,7 @@ public:
 
 
 	template <class iterator_type>
-	void insert (const reverse_iterator first, const reverse_iterator last)
+	void insert (const reverse_iterator &first, const reverse_iterator &last)
 	{
 		range_insert(first, static_cast<size_type>(first.distance(last)));
 	}
@@ -2382,7 +2391,7 @@ public:
 
 
 	template <class iterator_type>
-	void insert (const const_reverse_iterator first, const const_reverse_iterator last)
+	void insert (const const_reverse_iterator &first, const const_reverse_iterator &last)
 	{
 		range_insert(first, static_cast<size_type>(first.distance(last)));
 	}
@@ -2393,7 +2402,7 @@ public:
 		// Range insert, move_iterator overload:
 
 		template <class iterator_type>
-		void insert (const std::move_iterator<iterator_type> first, const std::move_iterator<iterator_type> last)
+		void insert (const std::move_iterator<iterator_type> &first, const std::move_iterator<iterator_type> &last)
 		{
 			range_insert(first, static_cast<size_type>(std::distance(first.base(), last.base())));
 		}
@@ -2482,7 +2491,7 @@ private:
 
 public:
 
-	iterator erase(const const_iterator it) // if uninitialized/invalid iterator supplied, function could generate an exception
+	iterator erase(const const_iterator &it) // if uninitialized/invalid iterator supplied, function could generate an exception
 	{
 		assert(total_size != 0);
 		assert(it.group_pointer != NULL); // ie. not uninitialized iterator
@@ -2700,7 +2709,7 @@ public:
 private:
 
 
-	void partially_erase_group(const const_iterator start, const aligned_pointer_type end)
+	void partially_erase_group(const const_iterator &start, const aligned_pointer_type end)
 	{
 		// For the partial block erasures, we have to remove the existing skipblocks within the range from the intra-block free list of skipblocks. However if there're no erasures in the block, we can avoid doing so.
 		const_iterator current = start;
@@ -2818,7 +2827,7 @@ public:
 
 	// Range erase:
 
-	iterator erase(const const_iterator iterator1, const const_iterator iterator2)	// if uninitialized/invalid iterators supplied, function could generate an exception. If iterator1 > iterator2, behaviour is undefined.
+	iterator erase(const const_iterator &iterator1, const const_iterator &iterator2)	// if uninitialized/invalid iterators supplied, function could generate an exception. If iterator1 > iterator2, behaviour is undefined.
 	{
 		// General code logic: if iterator1 and iterator2 point to elements in the same block, we skip to code section 3 (final block).
 		// If they aren't and iterator1 isn't the first non-erased element in first block, we erase part of that block and update accordingly in code Section 1.
@@ -2836,7 +2845,7 @@ public:
 			// ========================================================
 			if (current.element_pointer != to_aligned_pointer(current.group_pointer->elements) + *(current.group_pointer->skipfield)) // if iterator1 is not the first non-erased element in it's block - most common case
 			{
-				partially_erase_group(iterator1, pointer_cast<aligned_pointer_type>(iterator1.group_pointer->skipfield));
+				partially_erase_group(iterator1, to_aligned_pointer(iterator1.group_pointer->skipfield));
 				current.group_pointer = current.group_pointer->next_group;
 			}
 
@@ -2854,7 +2863,7 @@ public:
 					current.element_pointer = to_aligned_pointer(current.group_pointer->elements) + *(current.group_pointer->skipfield);
 					current.skipfield_pointer = current.group_pointer->skipfield + *(current.group_pointer->skipfield);
 
-					destroy_group(current, pointer_cast<aligned_pointer_type>(current.group_pointer->skipfield));
+					destroy_group(current, to_aligned_pointer(current.group_pointer->skipfield));
 				}
 
 				if (current.group_pointer->free_list_head != std::numeric_limits<skipfield_type>::max())
@@ -2928,7 +2937,7 @@ public:
 					current.group_pointer->previous_group->next_group = current.group_pointer->next_group;
 
 					end_iterator.group_pointer = current.group_pointer->previous_group;
-					end_iterator.element_pointer = pointer_cast<aligned_pointer_type>(end_iterator.group_pointer->skipfield);
+					end_iterator.element_pointer = to_aligned_pointer(end_iterator.group_pointer->skipfield);
 					end_iterator.skipfield_pointer = end_iterator.group_pointer->skipfield + end_iterator.group_pointer->capacity;
 					add_to_unused_groups_list(current.group_pointer);
 				}
@@ -3068,7 +3077,7 @@ private:
 
 	void reset_group_range_assign(iterator &it) PLF_NOEXCEPT
 	{
-		std::memset(static_cast<void *>(it.group_pointer->skipfield), 0, it.group_pointer->capacity * sizeof(skipfield_type));
+		std::memset(void_cast(it.group_pointer->skipfield), 0, it.group_pointer->capacity * sizeof(skipfield_type));
 		it.group_pointer->size = static_cast<skipfield_type>(it.element_pointer - to_aligned_pointer(it.group_pointer->elements));
 	}
 
@@ -3325,7 +3334,7 @@ public:
 		// Range assign, move_iterator overload:
 
 		template <class iterator_type>
-		void assign (const std::move_iterator<iterator_type> first, const std::move_iterator<iterator_type> last)
+		void assign (const std::move_iterator<iterator_type> &first, const std::move_iterator<iterator_type> &last)
 		{
 			range_assign(first, static_cast<size_type>(std::distance(first.base(), last.base())));
 		}
@@ -3390,15 +3399,15 @@ public:
 
 	size_type memory() const PLF_NOEXCEPT
 	{
-		size_type memory_use = sizeof(*this); // sizeof colony basic structure
-		end_iterator.group_pointer->next_group = unused_groups_head; // temporarily link the main groups and unused groups (reserved groups) in order to only have one loop below instead of several
+		size_type memory_use = sizeof(*this); // sizeof colony structure
+		end_iterator.group_pointer->next_group = unused_groups_head; // temporarily link the active & reserved (unused) groups in order to only have one loop below instead of two
 
 		for(group_pointer_type current = begin_iterator.group_pointer; current != NULL; current = current->next_group)
 		{
-			memory_use += sizeof(group) + (get_aligned_block_capacity(current->capacity) * sizeof(aligned_allocation_struct)); // add memory block sizes and the size of the group structs themselves. The original calculation, including divisor, is necessary in order to correctly round up the number of allocations
+			memory_use += sizeof(group) + (get_aligned_block_capacity(current->capacity) * sizeof(aligned_allocation_struct)); // add element/skipfield memory block sizes + size of the group struct
 		}
 
-		end_iterator.group_pointer->next_group = NULL; // unlink main groups and unused groups
+		end_iterator.group_pointer->next_group = NULL; // unlink active & reserved groups
 		return memory_use;
 	}
 
@@ -4209,7 +4218,7 @@ public:
 
 					if (distance_to_end > 2) // make erased middle nodes non-zero for get_iterator and is_active
 					{
-						std::memset(static_cast<void *>(end_iterator.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_end - 2));
+						std::memset(void_cast(end_iterator.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_end - 2));
 					}
 
 					const skipfield_type index = static_cast<skipfield_type>(end_iterator.element_pointer - to_aligned_pointer(end_iterator.group_pointer->elements));
@@ -4232,7 +4241,7 @@ public:
 
 					if (distance_to_end > 1) // make erased middle nodes non-zero for get_iterator and is_active
 					{
-						std::memset(static_cast<void *>(end_iterator.skipfield_pointer), 1, sizeof(skipfield_type) * (distance_to_end - 1));
+						std::memset(void_cast(end_iterator.skipfield_pointer), 1, sizeof(skipfield_type) * (distance_to_end - 1));
 					}
 				}
 			}
@@ -4725,9 +4734,16 @@ public:
 		typedef typename colony::aligned_pointer_type 	aligned_pointer_type;
 		typedef typename colony::skipfield_pointer_type skipfield_pointer_type;
 
-		group_pointer_type		group_pointer;
-		aligned_pointer_type 	element_pointer;
-		skipfield_pointer_type	skipfield_pointer;
+		#ifdef PLF_DEFAULT_SUPPORT
+			group_pointer_type		group_pointer{NULL};
+			aligned_pointer_type 	element_pointer{NULL};
+			skipfield_pointer_type	skipfield_pointer{NULL};
+		#else
+			group_pointer_type		group_pointer;
+			aligned_pointer_type 	element_pointer;
+			skipfield_pointer_type	skipfield_pointer;
+		#endif
+
 
 	public:
 		struct colony_iterator_tag {};
@@ -4778,23 +4794,31 @@ public:
 
 
 
-		colony_iterator() PLF_NOEXCEPT:
-			group_pointer(NULL),
+		colony_iterator() PLF_NOEXCEPT
+		#ifdef PLF_DEFAULT_SUPPORT
+			= default;
+		#else
+			: group_pointer(NULL),
 			element_pointer(NULL),
 			skipfield_pointer(NULL)
-		{}
+			{}
+		#endif
 
 
 
-		colony_iterator (const colony_iterator &source) PLF_NOEXCEPT: // Note: Surprisingly, use of = default here and in other simple constructors results in slowdowns of up to 10% in many benchmarks under GCC
-			group_pointer(source.group_pointer),
+		colony_iterator (const colony_iterator &source) PLF_NOEXCEPT
+		#ifdef PLF_DEFAULT_SUPPORT
+			= default;
+		#else
+			: group_pointer(source.group_pointer),
 			element_pointer(source.element_pointer),
 			skipfield_pointer(source.skipfield_pointer)
-		{}
+			{}
+		#endif
 
 
 
-		#ifdef PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+		#ifdef PLF_DEFAULT_SUPPORT
 			template <bool is_const_it = is_const, class = typename plf::enable_if<is_const_it>::type >
 			colony_iterator(const colony_iterator<false> &source) PLF_NOEXCEPT:
 		#else
@@ -4808,15 +4832,19 @@ public:
 
 
 		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-			colony_iterator(colony_iterator &&source) PLF_NOEXCEPT:
-				group_pointer(std::move(source.group_pointer)),
+			colony_iterator(colony_iterator &&source) PLF_NOEXCEPT
+			#ifdef PLF_DEFAULT_SUPPORT
+				= default;
+			#else
+				: group_pointer(std::move(source.group_pointer)),
 				element_pointer(std::move(source.element_pointer)),
 				skipfield_pointer(std::move(source.skipfield_pointer))
-			{}
+				{}
+			#endif
 
 
 
-			#ifdef PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+			#ifdef PLF_DEFAULT_SUPPORT
 				template <bool is_const_it = is_const, class = typename plf::enable_if<is_const_it>::type >
 				colony_iterator(colony_iterator<false> &&source) PLF_NOEXCEPT:
 			#else
@@ -4831,16 +4859,20 @@ public:
 
 
 		colony_iterator & operator = (const colony_iterator &source) PLF_NOEXCEPT
-		{
-			group_pointer = source.group_pointer;
-			element_pointer = source.element_pointer;
-			skipfield_pointer = source.skipfield_pointer;
-			return *this;
-		}
+		#ifdef PLF_DEFAULT_SUPPORT
+			= default;
+		#else
+			{
+				group_pointer = source.group_pointer;
+				element_pointer = source.element_pointer;
+				skipfield_pointer = source.skipfield_pointer;
+				return *this;
+			}
+		#endif
 
 
 
-		#ifdef PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+		#ifdef PLF_DEFAULT_SUPPORT
 			template <bool is_const_it = is_const, class = typename plf::enable_if<is_const_it>::type >
 			colony_iterator & operator = (const colony_iterator<false> &source) PLF_NOEXCEPT
 		#else
@@ -4857,17 +4889,21 @@ public:
 
 		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
 			colony_iterator & operator = (colony_iterator &&source) PLF_NOEXCEPT
-			{
-				assert(&source != this);
-				group_pointer = std::move(source.group_pointer);
-				element_pointer = std::move(source.element_pointer);
-				skipfield_pointer = std::move(source.skipfield_pointer);
-				return *this;
-			}
+			#ifdef PLF_DEFAULT_SUPPORT
+				= default;
+			#else
+				{
+					assert(&source != this);
+					group_pointer = std::move(source.group_pointer);
+					element_pointer = std::move(source.element_pointer);
+					skipfield_pointer = std::move(source.skipfield_pointer);
+					return *this;
+				}
+			#endif
 
 
 
-			#ifdef PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+			#ifdef PLF_DEFAULT_SUPPORT
 				template <bool is_const_it = is_const, class = typename plf::enable_if<is_const_it>::type >
 				colony_iterator & operator = (colony_iterator<false> &&source) PLF_NOEXCEPT
 			#else
@@ -5417,17 +5453,15 @@ public:
 
 
 
-		colony_reverse_iterator () PLF_NOEXCEPT
-		{}
+		colony_reverse_iterator (const colony_reverse_iterator &source) PLF_NOEXCEPT
+		#ifdef PLF_DEFAULT_SUPPORT
+			= default;
+		#else
+			: current(source.current) {}
+		#endif
 
 
-
-		colony_reverse_iterator (const colony_reverse_iterator &source) PLF_NOEXCEPT:
-			current(source.current)
-		{}
-
-
-		#ifdef PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+		#ifdef PLF_DEFAULT_SUPPORT
 			template <bool is_const_rit = is_const_r, class = typename plf::enable_if<is_const_rit>::type >
 			colony_reverse_iterator (const colony_reverse_iterator<false> &source) PLF_NOEXCEPT:
 		#else
@@ -5444,7 +5478,7 @@ public:
 		}
 
 
-		#ifdef PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+		#ifdef PLF_DEFAULT_SUPPORT
 			template <bool is_const_rit = is_const_r, class = typename plf::enable_if<is_const_rit>::type >
 			colony_reverse_iterator (const colony_iterator<false> &source) PLF_NOEXCEPT:
 		#else
@@ -5457,12 +5491,15 @@ public:
 
 
 		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-			colony_reverse_iterator (colony_reverse_iterator &&source) PLF_NOEXCEPT:
-				current(std::move(source.current))
-			{}
+			colony_reverse_iterator (colony_reverse_iterator &&source) PLF_NOEXCEPT
+			#ifdef PLF_DEFAULT_SUPPORT
+				= default;
+			#else
+				: current(std::move(source.current)) {}
+			#endif
 
 
-			#ifdef PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+			#ifdef PLF_DEFAULT_SUPPORT
 				template <bool is_const_rit = is_const_r, class = typename plf::enable_if<is_const_rit>::type >
 				colony_reverse_iterator (colony_reverse_iterator<false> &&source) PLF_NOEXCEPT:
 			#else
@@ -5481,7 +5518,7 @@ public:
 		}
 
 
-		#ifdef PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+		#ifdef PLF_DEFAULT_SUPPORT
 			template <bool is_const_rit = is_const_r, class = typename plf::enable_if<is_const_rit>::type >
 			colony_reverse_iterator& operator = (const colony_iterator<false> &source) PLF_NOEXCEPT
 		#else
@@ -5495,13 +5532,17 @@ public:
 
 
 		colony_reverse_iterator& operator = (const colony_reverse_iterator &source) PLF_NOEXCEPT
-		{
-			current = source.current;
-			return *this;
-		}
+		#ifdef PLF_DEFAULT_SUPPORT
+			= default;
+		#else
+			{
+				current = source.current;
+				return *this;
+			}
+		#endif
 
 
-		#ifdef PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+		#ifdef PLF_DEFAULT_SUPPORT
 			template <bool is_const_rit = is_const_r, class = typename plf::enable_if<is_const_rit>::type >
 			colony_reverse_iterator& operator = (const colony_reverse_iterator<false> &source) PLF_NOEXCEPT
 		#else
@@ -5515,14 +5556,18 @@ public:
 
 		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
 			colony_reverse_iterator& operator = (colony_reverse_iterator &&source) PLF_NOEXCEPT
-			{
-				assert(&source != this);
-				current = std::move(source.current);
-				return *this;
-			}
+			#ifdef PLF_DEFAULT_SUPPORT
+				= default;
+			#else
+				{
+					assert(&source != this);
+					current = std::move(source.current);
+					return *this;
+				}
+			#endif
 
 
-			#ifdef PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+			#ifdef PLF_DEFAULT_SUPPORT
 				template <bool is_const_rit = is_const_r, class = typename plf::enable_if<is_const_rit>::type >
 				colony_reverse_iterator& operator = (colony_reverse_iterator<false> &&source) PLF_NOEXCEPT
 			#else
@@ -5998,7 +6043,7 @@ typename plf::colony<element_type, allocator_type>::size_type erase(plf::colony<
 
 
 #undef PLF_CONSTRUCT_ELEMENT
-#undef PLF_DEFAULT_TEMPLATE_ARGUMENT_SUPPORT
+#undef PLF_DEFAULT_SUPPORT
 #undef PLF_ALIGNMENT_SUPPORT
 #undef PLF_INITIALIZER_LIST_SUPPORT
 #undef PLF_TYPE_TRAITS_SUPPORT

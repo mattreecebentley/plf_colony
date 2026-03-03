@@ -207,6 +207,33 @@ int main()
 	using namespace plf;
 
 
+	#ifdef PLF_TEST_TYPE_TRAITS_SUPPORT
+	{
+		title2("Trivially copyable iterators tests");
+
+		{
+			typedef plf::colony<small_struct_non_trivial> colony_type;
+			failpass("Trivially-copyable iterators for non-trivial types", std::is_trivially_copyable<colony_type::iterator>::value);
+			failpass("Trivially-copyable const_iterators for non-trivial types", std::is_trivially_copyable<colony_type::const_iterator>::value);
+
+			failpass("Trivially-copyable reverse_iterators for non-trivial types ", std::is_trivially_copyable<colony_type::reverse_iterator>::value);
+			failpass("Trivially-copyable reverse_const_iterators for non-trivial types", std::is_trivially_copyable<colony_type::const_reverse_iterator>::value);
+		}
+
+		{
+			typedef plf::colony<int> colony_type;
+			failpass("Trivially-copyable iterators for trivial types", std::is_trivially_copyable<colony_type::iterator>::value);
+			failpass("Trivially-copyable const_iterators for trivial types", std::is_trivially_copyable<colony_type::const_iterator>::value);
+
+			failpass("Trivially-copyable reverse_iterators for trivial types", std::is_trivially_copyable<colony_type::reverse_iterator>::value);
+			failpass("Trivially-copyable reverse_const_iterators for trivial types", std::is_trivially_copyable<colony_type::const_reverse_iterator>::value);
+		}
+	}
+	#endif
+
+
+	getchar();
+
 	for (unsigned int looper = 0; looper != 100; ++looper)
 	{
 		{
@@ -2301,6 +2328,7 @@ int main()
 			failpass("Manual summing pass over elements obtained from data()", (sum1 == sum2) && (range1 == range2));
 		}
 	}
+
 
 	title1("Test Suite PASS - Press ENTER to Exit");
 	getchar();
