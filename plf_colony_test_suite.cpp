@@ -228,9 +228,6 @@ int main()
 			failpass("Trivially-copyable reverse_iterators for trivial types", std::is_trivially_copyable<colony_type::reverse_iterator>::value);
 			failpass("Trivially-copyable reverse_const_iterators for trivial types", std::is_trivially_copyable<colony_type::const_reverse_iterator>::value);
 		}
-
-		message("Press Enter to continue");
-		getchar();
 	}
 	#endif
 
@@ -2279,6 +2276,67 @@ int main()
 
 		}
 
+		#ifdef PLF_TEST_CPP20_SUPPORT
+		{
+			title2("range/fill-insertion when skipblocks are present testing");
+
+			colony<int> i_colony(100, 1);
+
+			i_colony.erase(next(i_colony.begin(), 80), i_colony.end());
+			i_colony.insert(10, 2);
+
+			unsigned int total1s = 0, total2s = 0, total3s = 0;
+
+			for (colony<int>::const_iterator current = i_colony.begin(); current != i_colony.end(); ++current)
+			{
+				total1s += *current == 1;
+				total2s += *current == 2;
+			}
+
+			failpass("fill-insert smaller than pre-existing skipblock test", static_cast<int>(i_colony.size()) == 90 && total1s == 80 && total2s == 10);
+
+			i_colony.insert(40, 3);
+			total2s = 0;
+
+			for (colony<int>::const_iterator current = i_colony.begin(); current != i_colony.end(); ++current)
+			{
+				total2s += *current == 2;
+				total3s += *current == 3;
+			}
+
+			failpass("fill-insert larger than pre-existing skipblock test", static_cast<int>(i_colony.size()) == 130 && total2s == 10 && total3s == 40);
+
+
+
+			i_colony.erase(next(i_colony.begin(), 120), i_colony.end());
+			i_colony.insert({4, 4, 4, 4, 4});
+
+			unsigned int total4s = 0;
+			total3s = 0;
+
+			for (colony<int>::const_iterator current = i_colony.begin(); current != i_colony.end(); ++current)
+			{
+				total3s += *current == 3;
+				total4s += *current == 4;
+			}
+
+			failpass("range-insert smaller than pre-existing skipblock test", static_cast<int>(i_colony.size()) == 125 && total3s == 30 && total4s == 5);
+
+			i_colony.insert({5, 5, 5, 5, 5, 5, 5, 5, 5, 5});
+
+			total4s = 0;
+			unsigned int total5s = 0;
+
+			for (colony<int>::const_iterator current = i_colony.begin(); current != i_colony.end(); ++current)
+			{
+				total4s += *current == 4;
+				total5s += *current == 5;
+			}
+
+			failpass("range-insert larger than pre-existing skipblock test", static_cast<int>(i_colony.size()) == 135 && total4s == 5 && total5s == 10);
+
+		}
+		#endif
 
 		{
 			title2("data() tests");
