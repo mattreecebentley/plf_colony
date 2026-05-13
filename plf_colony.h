@@ -258,8 +258,12 @@
 		template <class T>
 		concept colony_iterator_concept = requires { typename T::colony_iterator_tag; };
 
-		#ifndef PLF_FROM_RANGE
-			#define PLF_FROM_RANGE
+		#ifndef PLF_RANGES
+			#define PLF_RANGES
+
+			// For matching ranges which return input_iterator's and match the container's element type:
+			template <typename range_type, class element_type>
+			concept compatible_range = std::ranges::input_range<range_type> && std::convertible_to<std::ranges::range_reference_t<range_type>, element_type>;
 
 			// Until such point as standard libraries include std::ranges::from_range_t, including this so the rangesv3 constructor overloads will work unambiguously:
 			namespace ranges
@@ -621,6 +625,7 @@ private:
 	size_type				total_size, total_capacity;
 	skipfield_type 		min_block_capacity, max_block_capacity;
 
+	// Under most compilers, the following will be 1 byte each - since the skipfield types are 2 bytes each at max, the following add nothing to the class sizeof in a 64-bit build, due to padding
 	group_allocator_type group_allocator;
 	aligned_struct_allocator_type aligned_struct_allocator;
 	skipfield_allocator_type skipfield_allocator;
@@ -1058,8 +1063,7 @@ public:
 	#ifdef PLF_CPP20_SUPPORT
 		// Ranges v3 constructors:
 
-		template<class range_type>
-			requires std::ranges::range<range_type>
+		template<compatible_range<element_type> range_type>
 		colony(ranges::from_range_t, range_type &&rg, const plf::limits block_limits, const allocator_type &alloc = allocator_type()):
 			allocator_type(alloc),
 			erasure_groups_head(NULL),
@@ -1079,8 +1083,7 @@ public:
 
 
 
-		template<class range_type>
-			requires std::ranges::range<range_type>
+		template<compatible_range<element_type> range_type>
 		colony(plf::ranges::from_range_t, range_type &&rg, const allocator_type &alloc = allocator_type()):
 			colony(plf::ranges::from_range, std::move(rg), block_capacity_default_limits(), alloc)
 		{}
@@ -1738,7 +1741,7 @@ public:
 							PLF_CONSTRUCT_ELEMENT(next_group->elements, std::forward<arguments>(parameters) ...);
 						#else
 							#ifdef PLF_TYPE_TRAITS_SUPPORT
-								if PLF_CONSTEXPR (std::is_nothrow_constructible<element_type>::value)
+								if PLF_CONSTEXPR (std::is_nothrow_constructible<element_type, arguments...>::value)
 								{
 									PLF_CONSTRUCT_ELEMENT(next_group->elements, std::forward<arguments>(parameters) ...);
 								}
@@ -1790,7 +1793,7 @@ public:
 					PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::forward<arguments>(parameters) ...);
 				#else
 					#ifdef PLF_TYPE_TRAITS_SUPPORT
-						if PLF_CONSTEXPR (std::is_nothrow_constructible<element_type>::value)
+						if PLF_CONSTEXPR (std::is_nothrow_constructible<element_type, arguments...>::value)
 						{
 							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::forward<arguments>(parameters) ...);
 						}
@@ -2359,7 +2362,7 @@ public:
 	// Range insert:
 
 	template <class iterator_type>
-	void insert (const typename plf::enable_if<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type &first, const iterator_type &last)
+	void insert (const typename plf::enable_if<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type first, const iterator_type last)
 	{
 		range_insert(first, static_cast<size_type>(std::distance(first, last)));
 	}
@@ -2402,7 +2405,7 @@ public:
 		// Range insert, move_iterator overload:
 
 		template <class iterator_type>
-		void insert (const std::move_iterator<iterator_type> &first, const std::move_iterator<iterator_type> &last)
+		void insert (const std::move_iterator<iterator_type> first, const std::move_iterator<iterator_type> last)
 		{
 			range_insert(first, static_cast<size_type>(std::distance(first.base(), last.base())));
 		}
@@ -2422,8 +2425,7 @@ public:
 
 
 	#ifdef PLF_CPP20_SUPPORT
-		template<class range_type>
-			requires std::ranges::range<range_type>
+		template<compatible_range<element_type> range_type>
 		void insert_range(range_type &&the_range)
 		{
 			range_insert(std::ranges::begin(the_range), static_cast<size_type>(std::ranges::distance(the_range)));
@@ -3354,8 +3356,7 @@ public:
 
 
 	#ifdef PLF_CPP20_SUPPORT
-		template<class range_type>
-			requires std::ranges::range<range_type>
+		template<compatible_range<element_type> range_type>
 		void assign_range(range_type &&the_range)
 		{
 			range_assign(std::ranges::begin(the_range), static_cast<size_type>(std::ranges::distance(the_range)));

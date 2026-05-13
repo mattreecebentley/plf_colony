@@ -180,6 +180,24 @@ struct small_struct
 };
 
 
+
+struct exceptions_test
+{
+	int num;
+
+	exceptions_test(const int num2) noexcept: num(num2) {};
+
+	exceptions_test(const exceptions_test &et)
+	{
+		if (et.num == 4) throw 123;
+		num = et.num;
+	};
+};
+
+
+
+
+
 int global_counter = 0;
 
 struct small_struct_non_trivial
@@ -2386,6 +2404,38 @@ int main()
 			delete data;
 
 			failpass("Manual summing pass over elements obtained from data()", (sum1 == sum2) && (range1 == range2));
+		}
+
+
+		{
+			title2("range fill partial recovery tests");
+			
+			colony<exceptions_test> i_colony;
+			exceptions_test input_data[10] = {6, 6, 6, 6, 4, 6, 6, 6, 6, 0};
+
+			try
+			{
+				i_colony.insert(input_data, input_data + 10);
+			}
+			catch(...)
+			{} // do nothing
+			
+			failpass("fill-insert initializer-list exceptions test", static_cast<int>(i_colony.size()) == 4);
+
+			i_colony.clear();
+			i_colony.reserve(20);
+			i_colony.insert(20, input_data[0]);
+			colony<exceptions_test>::iterator start = std::next(i_colony.begin(), 5), end = std::next(i_colony.begin(), 15);
+			i_colony.erase(start, end); // Create skip-block in middle of colony sequence
+
+			try
+			{
+				i_colony.insert(input_data, input_data + 10); // Insert directly into the skipblock and trigger an exception
+			}
+			catch(...)
+			{} // do nothing
+
+			failpass("fill-insert into skip-block exceptions test", static_cast<int>(i_colony.size()) == 14);
 		}
 	}
 
