@@ -2411,7 +2411,7 @@ int main()
 			title2("range fill partial recovery tests");
 			
 			colony<exceptions_test> i_colony;
-			exceptions_test input_data[10] = {6, 6, 6, 6, 4, 6, 6, 6, 6, 0};
+			exceptions_test input_data[10] = {6, 6, 6, 6, 4, 6, 6, 6, 6, 1};
 
 			try
 			{
@@ -2420,11 +2420,17 @@ int main()
 			catch(...)
 			{} // do nothing
 			
-			failpass("fill-insert initializer-list exceptions test", static_cast<int>(i_colony.size()) == 4);
+			int accumulator = 0;
+			for (colony<exceptions_test>::iterator current = i_colony.begin(); current != i_colony.end(); ++current)
+			{
+				accumulator += current->num;
+			}
+
+			failpass("fill-insert initializer-list exceptions test", static_cast<int>(i_colony.size()) == 4 && accumulator == 24);
 
 			i_colony.clear();
 			i_colony.reserve(20);
-			i_colony.insert(20, input_data[0]);
+			i_colony.insert(20, input_data[9]); // 20 1's
 			colony<exceptions_test>::iterator start = std::next(i_colony.begin(), 5), end = std::next(i_colony.begin(), 15);
 			i_colony.erase(start, end); // Create skip-block in middle of colony sequence
 
@@ -2435,7 +2441,13 @@ int main()
 			catch(...)
 			{} // do nothing
 
-			failpass("fill-insert into skip-block exceptions test", static_cast<int>(i_colony.size()) == 14);
+			accumulator = 0;
+			for (colony<exceptions_test>::iterator current = i_colony.begin(); current != i_colony.end(); ++current)
+			{
+				accumulator += current->num;
+			}
+
+			failpass("fill-insert into skip-block exceptions test", static_cast<int>(i_colony.size()) == 14 && accumulator == 34);
 		}
 	}
 

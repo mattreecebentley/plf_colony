@@ -1899,7 +1899,7 @@ private:
 
 
 
-	// For catch blocks in range_fill_skipblock and fill_skipblock
+	// For catch blocks in range_fill_skipblock and fill_skipblock - update existing skipblock and free-list indexes to reflect partially-reused skipblock:
 	void recover_from_partial_skipblock_fill(const aligned_pointer_type location, const aligned_pointer_type current_location, const skipfield_pointer_type skipfield_pointer, const skipfield_type prev_free_list_node)
 	{
 		#ifdef PLF_EXCEPTIONS_SUPPORT
@@ -1907,16 +1907,20 @@ private:
 				if PLF_CONSTEXPR ((!std::is_copy_constructible<element_type>::value && !std::is_nothrow_move_constructible<element_type>::value) || !std::is_nothrow_copy_constructible<element_type>::value) // to avoid unnecessary codegen
 			#endif
 			{
-				// Reconstruct existing skipblock and free-list indexes to reflect partially-reused skipblock:
 				const skipfield_type elements_constructed_before_exception = static_cast<skipfield_type>(current_location - location);
 				erasure_groups_head->size += elements_constructed_before_exception;
 				total_size += elements_constructed_before_exception;
 
-				std::memset(void_cast(skipfield_pointer), 0, elements_constructed_before_exception * sizeof(skipfield_type));
+				// Update skipblock:
+				const skipfield_type new_start_node_value = *skipfield_pointer - elements_constructed_before_exception;
+				const skipfield_pointer_type new_start_node = skipfield_pointer + elements_constructed_before_exception;
+				std::memset(void_cast(skipfield_pointer), 0, elements_constructed_before_exception * sizeof(skipfield_type)); // Reset skipfield for elements written before exception
+				*new_start_node = *(new_start_node + new_start_node_value - 1) = new_start_node_value; // Create new skipblock for unused elements
 
+				// Update free list of erased elements:
 				edit_free_list_head(location + elements_constructed_before_exception, prev_free_list_node);
 
-				const skipfield_type new_skipblock_head_index = static_cast<skipfield_type>((location - to_aligned_pointer(erasure_groups_head->elements)) + elements_constructed_before_exception);
+				const skipfield_type new_skipblock_head_index = static_cast<skipfield_type>(current_location - to_aligned_pointer(erasure_groups_head->elements));
 				erasure_groups_head->free_list_head = new_skipblock_head_index;
 
 				if (prev_free_list_node != std::numeric_limits<skipfield_type>::max())
