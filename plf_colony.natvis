@@ -9,7 +9,7 @@
 			<Item Name="capacity" ExcludeView="simple">total_capacity</Item>
 
 			<!-- see colony_iterator::operator++ for item iteration -->
-			<CustomListItems MaxItemsPerView="5000">
+			<CustomListItems MaxItemsPerView="100">
 				<Variable Name="group_pointer" InitialValue="begin_iterator.group_pointer" />
 				<Variable Name="element_pointer" InitialValue="begin_iterator.element_pointer" />
 				<Variable Name="skipfield_pointer" InitialValue="begin_iterator.skipfield_pointer" />
