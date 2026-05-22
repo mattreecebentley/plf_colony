@@ -369,6 +369,81 @@ namespace plf
 
 
 
+
+#ifndef PLF_UNINITIALIZED_TOOLS
+	#define PLF_UNINITIALIZED_TOOLS
+
+	// Allocator-aware uninitialized_copy/move/fill_n:
+
+	// Template to check whether an allocator has a custom construct function, or just relies on allocator_traits (eg. std::allocator since C++20):
+	#ifdef PLF_TYPE_TRAITS_SUPPORT
+		template<typename allocator_type, typename = std::void_t<>>
+		struct allocator_has_construct : std::false_type {};
+
+		// Tests for dummy type int:
+		template<typename allocator_type>
+		struct allocator_has_construct< allocator_type, std::void_t<decltype(std::declval<allocator_type&>().construct(std::declval<int*>(), std::declval<int>()))> > : std::true_type {};
+	#endif
+
+
+	template <class allocator_type, class iterator_type>
+	void uninitialized_copy(iterator_type begin, const iterator_type end, iterator_type destination,
+	#ifdef PLF_CPP20_SUPPORT
+		[[maybe_unused]]
+	#endif
+		allocator_type &alloc)
+	{
+		#ifdef PLF_TYPE_TRAITS_SUPPORT
+			if PLF_CONSTEXPR (!allocator_has_construct<allocator_type>::value) // If allocator has no construct method, we can take advantage of optimized routines for POD types
+			{
+				std::uninitialized_copy(begin, end, destination);
+			}
+			else
+		#endif
+		{
+			for (; begin != end; ++begin, ++destination)
+			{
+				PLF_CONSTRUCT(allocator_type, alloc, &*destination, *begin);
+			}
+		}
+	}
+
+
+
+	template <class allocator_type, class iterator_type>
+	void uninitialized_move(iterator_type begin, const iterator_type end, iterator_type destination, allocator_type &alloc)
+	{
+		uninitialized_copy(plf::make_move_iterator(begin), plf::make_move_iterator(end), destination, alloc);
+	}
+
+
+
+	template <class allocator_type, class iterator_type, class element_type>
+	void uninitialized_fill_n(iterator_type begin, std::size_t size, const element_type &element,
+	#ifdef PLF_CPP20_SUPPORT
+		[[maybe_unused]]
+	#endif
+		allocator_type &alloc)
+	{
+		#ifdef PLF_TYPE_TRAITS_SUPPORT
+			if PLF_CONSTEXPR (!allocator_has_construct<allocator_type>::value)
+			{
+				std::uninitialized_fill_n(begin, size, element);
+			}
+			else
+		#endif
+		{
+			for (; size != 0; ++begin, --size)
+			{
+				PLF_CONSTRUCT(allocator_type, alloc, &*begin, element);
+			}
+		}
+	}
+
+#endif
+
+
+
 struct limits
 {
 	size_t min, max;
@@ -1862,11 +1937,11 @@ private:
 				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type))
 				{
 					alignas (alignof(aligned_element_struct)) element_type aligned_copy = element; // to avoid potentially violating memory boundaries in line below, create an initial object copy of same (but aligned) type
-					std::uninitialized_fill_n(end_iterator.element_pointer, size, *to_aligned_pointer(&aligned_copy));
+					plf::uninitialized_fill_n(end_iterator.element_pointer, size, *to_aligned_pointer(&aligned_copy), static_cast<allocator_type &>(*this));
 				}
 				else
 				{
-					std::uninitialized_fill_n(pointer_cast<pointer>(end_iterator.element_pointer), size, element);
+					plf::uninitialized_fill_n(pointer_cast<pointer>(end_iterator.element_pointer), size, element, static_cast<allocator_type &>(*this));
 				}
 
 				end_iterator.element_pointer += size;
@@ -1941,11 +2016,11 @@ private:
 				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type))
 				{
 					alignas (alignof(aligned_element_struct)) element_type aligned_copy = element;
-					std::uninitialized_fill_n(location, size, *to_aligned_pointer(&aligned_copy));
+					plf::uninitialized_fill_n(location, size, *to_aligned_pointer(&aligned_copy), static_cast<allocator_type &>(*this));
 				}
 				else
 				{
-					std::uninitialized_fill_n(pointer_cast<pointer>(location), size, element);
+					plf::uninitialized_fill_n(pointer_cast<pointer>(location), size, element, static_cast<allocator_type &>(*this));
 				}
 			}
 			else
@@ -5000,17 +5075,25 @@ public:
 		{
 			assert(group_pointer != NULL);
 
-			if (--skipfield_pointer >= group_pointer->skipfield) // ie. not already at beginning of group prior to decrementation
+			--element_pointer;
+			const skipfield_pointer_type skipfield = group_pointer->skipfield;
+
+			if (--skipfield_pointer >= skipfield)
 			{
-				element_pointer -= static_cast<size_type>(*skipfield_pointer) + 1u;
-				if ((skipfield_pointer -= *skipfield_pointer) >= group_pointer->skipfield) return *this; // ie. skipfield jump value does not takes us beyond beginning of group
+				const skipfield_type skip = *skipfield_pointer;
+				element_pointer -= skip;
+				skipfield_pointer -= skip;
+			} // We now have to re-check below if this subtraction has taken us past the beginning of the block.
+
+			if (skipfield_pointer < skipfield && group_pointer->previous_group != NULL)
+			{
+				group_pointer = group_pointer->previous_group;
+				skipfield_pointer = group_pointer->skipfield + group_pointer->capacity - 1;
+				const skipfield_type skip = *skipfield_pointer;
+				element_pointer = (to_aligned_pointer(group_pointer->skipfield) - 1) - skip;
+				skipfield_pointer -= skip;
 			}
 
-			group_pointer = group_pointer->previous_group;
-			const skipfield_pointer_type skipfield = group_pointer->skipfield + group_pointer->capacity - 1;
-			const skipfield_type skip = *skipfield;
-			element_pointer = (to_aligned_pointer(group_pointer->skipfield) - 1) - skip;
-			skipfield_pointer = skipfield - skip;
 			return *this;
 		}
 
@@ -5229,10 +5312,10 @@ public:
 							skipfield_pointer -= distance;
 							return;
 						}
-						else if (group_pointer->previous_group == NULL) // ie. we've gone before begin(), so bound to begin()
+						else if (group_pointer->previous_group == NULL) // ie. we've gone before begin(), so bound to rbegin()
 						{
-							element_pointer = to_aligned_pointer(group_pointer->elements);
-							skipfield_pointer = group_pointer->skipfield;
+							element_pointer = to_aligned_pointer(group_pointer->elements) - 1;
+							skipfield_pointer = group_pointer->skipfield - 1;
 							return;
 						}
 						else
@@ -5397,17 +5480,12 @@ public:
 
 
 
-
 	// Reverse iterators:
+	// Note: despite iterator being trivially_copyable here, defining reverse_iterator via std::reverse_iterator<iterator> results in it not being trivially_copyable here, with substantially more codegen, at least under gcc/libstdc++.
 
 	template <bool is_const_r>
 	class colony_reverse_iterator
 	{
-	private:
-		typedef typename colony::group_pointer_type 	group_pointer_type;
-		typedef typename colony::aligned_pointer_type 	aligned_pointer_type;
-		typedef typename colony::skipfield_pointer_type skipfield_pointer_type;
-
 	protected:
 		iterator current;
 
@@ -5425,7 +5503,7 @@ public:
 
 
 		template <class distance_type>
-		friend void advance(colony_reverse_iterator &it, distance_type distance)
+		friend void advance(colony_reverse_iterator &it, const distance_type distance)
 		{
 			it.advance(static_cast<difference_type>(distance));
 		}
@@ -5445,7 +5523,7 @@ public:
 		friend colony_reverse_iterator prev(const colony_reverse_iterator &it, const difference_type distance)
 		{
 			colony_reverse_iterator return_iterator(it);
-			return_iterator.advance(-(static_cast<difference_type>(distance)));
+			return_iterator.advance(static_cast<difference_type>(-distance));
 			return return_iterator;
 		}
 
@@ -5629,34 +5707,9 @@ public:
 
 
 
-		// In this case we have to redefine the algorithm, rather than using the internal iterator's -- operator, in order for the reverse_iterator to be allowed to reach rend() ie. begin_iterator - 1
 		colony_reverse_iterator & operator ++ ()
 		{
-			group_pointer_type &group_pointer = current.group_pointer;
-			aligned_pointer_type &element_pointer = current.element_pointer;
-			skipfield_pointer_type &skipfield_pointer = current.skipfield_pointer;
-
-			assert(group_pointer != NULL);
-
-			if (--skipfield_pointer >= group_pointer->skipfield)
-			{
-				element_pointer -= static_cast<size_type>(*skipfield_pointer) + 1u;
-				if ((skipfield_pointer -= *skipfield_pointer) >= group_pointer->skipfield) return *this;
-			}
-
-			if (group_pointer->previous_group != NULL)
-			{
-				group_pointer = group_pointer->previous_group;
-				const skipfield_pointer_type skipfield = group_pointer->skipfield + group_pointer->capacity - 1;
-				const skipfield_type skip = *skipfield;
-				element_pointer = (to_aligned_pointer(group_pointer->skipfield) - 1) - skip;
-				skipfield_pointer = skipfield - skip;
-			}
-			else // bound to rend()
-			{
-				--element_pointer;
-			}
-
+			--current;
 			return *this;
 		}
 
@@ -5743,7 +5796,12 @@ public:
 
 
 
-		// distance implementation:
+		void advance(const difference_type distance)
+		{
+ 			current.advance(-distance);
+		}
+
+
 
  		difference_type distance(const colony_reverse_iterator &last) const
  		{
@@ -5751,216 +5809,6 @@ public:
  		}
 
 
-
-		// Advance for reverse_iterator and const_reverse_iterator - this needs to be implemented slightly differently to forward-iterator's advance, as current needs to be able to reach rend() (ie. begin() - 1) and to be bounded by rbegin():
-		void advance(difference_type distance)
-		{
-			group_pointer_type &group_pointer = current.group_pointer;
-			aligned_pointer_type &element_pointer = current.element_pointer;
-			skipfield_pointer_type &skipfield_pointer = current.skipfield_pointer;
-
-			assert(element_pointer != NULL);
-
-			if (distance > 0)
-			{
-				if (group_pointer->previous_group == NULL && element_pointer == to_aligned_pointer(group_pointer->elements) - 1) return; // Check if we're already at rend()
-
-				if (group_pointer->free_list_head == std::numeric_limits<skipfield_type>::max())
-				{
-					const difference_type distance_from_beginning = element_pointer - to_aligned_pointer(group_pointer->elements);
-
-					if (distance <= distance_from_beginning)
-					{
-						element_pointer -= distance;
-						skipfield_pointer -= distance;
-						return;
-					}
-					else if (group_pointer->previous_group == NULL) // Either we've reached rend() or gone beyond it, so bound to rend()
-					{
-						element_pointer = to_aligned_pointer(group_pointer->elements) - 1;
-						skipfield_pointer = group_pointer->skipfield - 1;
-						return;
-					}
-					else
-					{
-						distance -= distance_from_beginning;
-					}
-				}
-				else
-				{
-					for(const skipfield_pointer_type begin = group_pointer->skipfield + *(group_pointer->skipfield); skipfield_pointer != begin;)
-					{
-						--skipfield_pointer;
-						skipfield_pointer -= *skipfield_pointer;
-
-						if (--distance == 0)
-						{
-							element_pointer = to_aligned_pointer(group_pointer->elements) + (skipfield_pointer - group_pointer->skipfield);
-							return;
-						}
-					}
-
-					if (group_pointer->previous_group == NULL)
-					{
-						element_pointer = to_aligned_pointer(group_pointer->elements) - 1; // If we've reached rend(), bound to that
-						skipfield_pointer = group_pointer->skipfield - 1;
-						return;
-					}
-				}
-
-				group_pointer = group_pointer->previous_group;
-
-
-				// Intermediary groups - at the start of this code block and the subsequent block, the position of the iterator is assumed to be the first non-erased element in the next group:
-				while(static_cast<difference_type>(group_pointer->size) < distance)
-				{
-					if (group_pointer->previous_group == NULL) // bound to rend()
-					{
-						element_pointer = to_aligned_pointer(group_pointer->elements) - 1;
-						skipfield_pointer = group_pointer->skipfield - 1;
-						return;
-					}
-
-					distance -= static_cast<difference_type>(group_pointer->size);
-					group_pointer = group_pointer->previous_group;
-				}
-
-
-				// Final group (if not already reached)
-				if (static_cast<difference_type>(group_pointer->size) == distance)
-				{
-					element_pointer = to_aligned_pointer(group_pointer->elements) + *(group_pointer->skipfield);
-					skipfield_pointer = group_pointer->skipfield + *(group_pointer->skipfield);
-					return;
-				}
-				else if (group_pointer->free_list_head == std::numeric_limits<skipfield_type>::max())
-				{
-					element_pointer = (to_aligned_pointer(group_pointer->elements) + group_pointer->size) - distance;
-					skipfield_pointer = (group_pointer->skipfield + group_pointer->size) - distance;
-					return;
-				}
-				else
-				{
-					skipfield_pointer = group_pointer->skipfield + group_pointer->capacity;
-
-					do
-					{
-						--skipfield_pointer;
-						skipfield_pointer -= *skipfield_pointer;
-					} while(--distance != 0);
-
-					element_pointer = to_aligned_pointer(group_pointer->elements) + (skipfield_pointer - group_pointer->skipfield);
-					return;
-				}
-			}
-			else if (distance < 0)
-			{
-				if (group_pointer->next_group == NULL && (element_pointer == (to_aligned_pointer(group_pointer->skipfield) - 1) - *(group_pointer->skipfield + (to_aligned_pointer(group_pointer->skipfield) - to_aligned_pointer(group_pointer->elements)) - 1))) return; // Check if we're already at rbegin()
-
-				if (element_pointer != to_aligned_pointer(group_pointer->elements) + *(group_pointer->skipfield)) // ie. != first non-erased element in group
-				{
-					if (group_pointer->free_list_head == std::numeric_limits<skipfield_type>::max()) // ie. if there are no erasures in the group
-					{
-						const difference_type distance_from_end = to_aligned_pointer(group_pointer->skipfield) - element_pointer;
-
-						if (distance < distance_from_end)
-						{
-							element_pointer += distance;
-							skipfield_pointer += distance;
-							return;
-						}
-						else if (group_pointer->next_group == NULL) // either we've reached end() or gone beyond it, so bound to back of block
-						{
-							element_pointer += distance_from_end - 1;
-							skipfield_pointer += distance_from_end - 1;
-							return;
-						}
-						else
-						{
-							distance -= distance_from_end;
-						}
-					}
-					else
-					{
-						for (const skipfield_pointer_type end = skipfield_pointer + (to_aligned_pointer(group_pointer->skipfield) - element_pointer);;)
-						{
-							++skipfield_pointer;
-							skipfield_pointer += *skipfield_pointer;
-							--distance;
-
-							if (skipfield_pointer == end)
-							{
-								break;
-							}
-							else if (distance == 0)
-							{
-								element_pointer = to_aligned_pointer(group_pointer->elements) + (skipfield_pointer - group_pointer->skipfield);
-								return;
-							}
-						}
-
-						if (group_pointer->next_group == NULL) return;
-					}
-
-					group_pointer = group_pointer->next_group;
-
-					if (distance == 0)
-					{
-						element_pointer = to_aligned_pointer(group_pointer->elements) + *(group_pointer->skipfield);
-						skipfield_pointer = group_pointer->skipfield + *(group_pointer->skipfield);
-						return;
-					}
-				}
-
-
-				// Intermediary groups:
-				while(static_cast<difference_type>(group_pointer->size) <= distance)
-				{
-					if (group_pointer->next_group == NULL) // bound to last element slot in block
-					{
-						skipfield_pointer = group_pointer->skipfield + group_pointer->capacity - 1;
-						element_pointer = (to_aligned_pointer(group_pointer->skipfield) - 1) - *skipfield_pointer;
-						skipfield_pointer -= *skipfield_pointer;
-						return;
-					}
-					else if ((distance -= group_pointer->size) == 0)
-					{
-						group_pointer = group_pointer->next_group;
-						element_pointer = to_aligned_pointer(group_pointer->elements) + *(group_pointer->skipfield);
-						skipfield_pointer = group_pointer->skipfield + *(group_pointer->skipfield);
-						return;
-					}
-					else
-					{
-						group_pointer = group_pointer->next_group;
-					}
-				}
-
-
-				// Final group (if not already reached):
-				if (group_pointer->free_list_head == std::numeric_limits<skipfield_type>::max())
-				{
-					element_pointer = to_aligned_pointer(group_pointer->elements) + distance;
-					skipfield_pointer = group_pointer->skipfield + distance;
-					return;
-				}
-				else // we already know size > distance from previous loop - so it's safe to ignore endpoint check condition while incrementing:
-				{
-					skipfield_pointer = group_pointer->skipfield + *(group_pointer->skipfield);
-
-					do
-					{
-						++skipfield_pointer;
-						skipfield_pointer += *skipfield_pointer;
-					} while(--distance != 0);
-
-					element_pointer = to_aligned_pointer(group_pointer->elements) + (skipfield_pointer - group_pointer->skipfield);
-					return;
-				}
-
-				return;
-			}
-		}
 
 	}; // colony_reverse_iterator
 

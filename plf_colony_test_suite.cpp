@@ -1,4 +1,5 @@
 // Basic feature testing for colony.
+// NOTE: This test suite throws exceptions to test catch handling. You might see this show up in the debug output when you run it in MSVC. It doesn't mean something has gone wrong.
 
 #define PLF_COLONY_TEST_DEBUG
 
@@ -548,7 +549,7 @@ int main()
 
 			total = 0;
 
-			for(colony<int *>::iterator the_iterator = --(colony<int *>::iterator(p_colony.end())); the_iterator != p_colony.begin(); advance(the_iterator, -2))
+			for(colony<int *>::iterator the_iterator = --(colony<int *>::iterator(p_colony.end())); the_iterator > p_colony.begin(); advance(the_iterator, -2))
 			{
 				++total;
 			}
@@ -2408,7 +2409,7 @@ int main()
 
 
 		{
-			title2("range fill partial recovery tests");
+			title2("range/fill insert partial recovery tests");
 			
 			colony<exceptions_test> i_colony;
 			exceptions_test input_data[10] = {6, 6, 6, 6, 4, 6, 6, 6, 6, 1};
