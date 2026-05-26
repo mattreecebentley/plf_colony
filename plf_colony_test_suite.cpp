@@ -4,6 +4,9 @@
 #define PLF_COLONY_TEST_DEBUG
 
 #if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
+	#pragma warning ( push )
+	#pragma warning ( disable : 6031 )
+
 	#if _MSC_VER >= 1600
 		#define PLF_TEST_MOVE_SEMANTICS_SUPPORT
 	#endif
@@ -65,7 +68,7 @@
 		#define PLF_TEST_INITIALIZER_LIST_SUPPORT
 	#endif
 
-	#if __cplusplus > 201704L && ((((defined(__clang__) && !defined(__APPLE_CC__) && __clang_major__ >= 14) || (defined(__GNUC__) && (__GNUC__ > 11 || (__GNUC__ == 11 && __GNUC_MINOR__ > 0)))) && ((defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 14) || (defined(__GLIBCXX__) && __GLIBCXX__ >= 201806L))) || (!defined(__clang__) && !defined(__GNUC__)))
+	#if __cplusplus > 201704L && ((((defined(__clang__) && !defined(__APPLE_CC__) && __clang_major__ >= 14) || (defined(__GNUC__) && (__GNUC__ > 11 || (__GNUC__ == 11 && __GNUC_MINOR__ > 0)))) && ((defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 14) || (defined(__GLIBCXX__) && __GLIBCXX__ >= 201806L) || (defined(_MSC_VER) && _MSC_VER >= 1929))) || (!defined(__clang__) && !defined(__GNUC__)))
 		#define PLF_TEST_CPP20_SUPPORT
 	#endif
 #endif
@@ -151,9 +154,9 @@ void failpass(const char *test_type, bool condition)
 	{
 	private:
 		int i;
-		non_copyable_type(const non_copyable_type &); // non construction-copyable
-		non_copyable_type& operator=(const non_copyable_type &); // non copyable
 	public:
+		non_copyable_type(const non_copyable_type&); // non construction-copyable
+		non_copyable_type& operator=(const non_copyable_type&); // non copyable
 		non_copyable_type(int a) : i(a) {}
 	};
 
@@ -186,7 +189,7 @@ struct exceptions_test
 {
 	int num;
 
-	exceptions_test(const int num2) noexcept: num(num2) {};
+	exceptions_test(const int num2): num(num2) {};
 
 	exceptions_test(const exceptions_test &et)
 	{
@@ -521,10 +524,10 @@ int main()
 
 			total = 0;
 
-			for(colony<int *>::reverse_iterator the_iterator = p_colony.rbegin(); the_iterator != p_colony.rend(); ++the_iterator)
+			for(colony<int *>::reverse_iterator the_iterator = p_colony.rbegin(); the_iterator != p_colony.rend();)
 			{
 				colony<int *>::iterator it = the_iterator.base();
-				p_colony.erase(--it);
+				the_iterator = colony<int *>::reverse_iterator(p_colony.erase(--it));
 				++total;
 			}
 
@@ -2432,7 +2435,7 @@ int main()
 			i_colony.clear();
 			i_colony.reserve(20);
 			i_colony.insert(20, input_data[9]); // 20 1's
-			colony<exceptions_test>::iterator start = std::next(i_colony.begin(), 5), end = std::next(i_colony.begin(), 15);
+			colony<exceptions_test>::iterator start = next(i_colony.begin(), 5), end = next(i_colony.begin(), 15);
 			i_colony.erase(start, end); // Create skip-block in middle of colony sequence
 
 			try

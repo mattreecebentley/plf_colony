@@ -39,9 +39,8 @@
 
 
 #if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
-	 // Suppress incorrect (unfixed MSVC bug at warning level 4) warnings re: constant expressions in constexpr-if statements
 	#pragma warning ( push )
-	#pragma warning ( disable : 4127 )
+	#pragma warning ( disable : 4127 ) // Suppress incorrect (unfixed MSVC bug at warning level 4) warnings re: constant expressions in constexpr-if statements
 
 	#if _MSC_VER >= 1600
 		#define PLF_MOVE_SEMANTICS_SUPPORT
@@ -62,6 +61,7 @@
 		#define PLF_NOEXCEPT noexcept
 		#define PLF_NOEXCEPT_ALLOCATOR noexcept(noexcept(allocator_type()))
 		#define PLF_IS_ALWAYS_EQUAL_SUPPORT
+		#define PLF_VOIDT_SUPPORT
 	#endif
 
 	#if defined(_MSVC_LANG) && (_MSVC_LANG >= 201703L)
@@ -174,6 +174,7 @@
 	#if __cplusplus >= 201703L && ((defined(__clang__) && ((__clang_major__ == 3 && __clang_minor__ == 9) || __clang_major__ > 3)) || (defined(__GNUC__) && __GNUC__ >= 7) || (!defined(__clang__) && !defined(__GNUC__))) // assume correct C++17 implementation for non-gcc/clang compilers
 		#undef PLF_CONSTEXPR
 		#define PLF_CONSTEXPR constexpr
+		#define PLF_VOIDT_SUPPORT
 	#endif
 
 	#if __cplusplus > 201704L && ((((defined(__clang__) && !defined(__APPLE_CC__) && __clang_major__ >= 14) || (defined(__GNUC__) && (__GNUC__ > 11 || (__GNUC__ == 11 && __GNUC_MINOR__ > 0)))) && ((defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 14) || (defined(__GLIBCXX__) && __GLIBCXX__ >= 201806L))) || (!defined(__clang__) && !defined(__GNUC__)))
@@ -376,7 +377,7 @@ namespace plf
 	// Allocator-aware uninitialized_copy/move/fill_n:
 
 	// Template to check whether an allocator has a custom construct function, or just relies on allocator_traits (eg. std::allocator since C++20):
-	#ifdef PLF_TYPE_TRAITS_SUPPORT
+	#ifdef PLF_VOIDT_SUPPORT
 		template<typename allocator_type, typename = std::void_t<>>
 		struct allocator_has_construct : std::false_type {};
 
@@ -393,7 +394,7 @@ namespace plf
 	#endif
 		allocator_type &alloc)
 	{
-		#ifdef PLF_TYPE_TRAITS_SUPPORT
+		#ifdef PLF_VOIDT_SUPPORT
 			if PLF_CONSTEXPR (!allocator_has_construct<allocator_type>::value) // If allocator has no construct method, we can take advantage of optimized routines for POD types
 			{
 				std::uninitialized_copy(begin, end, destination);
@@ -410,11 +411,13 @@ namespace plf
 
 
 
-	template <class allocator_type, class iterator_type>
-	void uninitialized_move(iterator_type begin, const iterator_type end, iterator_type destination, allocator_type &alloc)
-	{
-		uninitialized_copy(plf::make_move_iterator(begin), plf::make_move_iterator(end), destination, alloc);
-	}
+	#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+		template <class allocator_type, class iterator_type>
+		void uninitialized_move(iterator_type begin, const iterator_type end, iterator_type destination, allocator_type &alloc)
+		{
+			uninitialized_copy(plf::make_move_iterator(begin), plf::make_move_iterator(end), destination, alloc);
+		}
+	#endif
 
 
 
@@ -425,7 +428,7 @@ namespace plf
 	#endif
 		allocator_type &alloc)
 	{
-		#ifdef PLF_TYPE_TRAITS_SUPPORT
+		#ifdef PLF_VOIDT_SUPPORT
 			if PLF_CONSTEXPR (!allocator_has_construct<allocator_type>::value)
 			{
 				std::uninitialized_fill_n(begin, size, element);
@@ -1212,7 +1215,7 @@ public:
 
 	reverse_iterator rbegin() PLF_NOEXCEPT
 	{
-		return (end_iterator.group_pointer != NULL) ? ++reverse_iterator(end_iterator.group_pointer, end_iterator.element_pointer, end_iterator.skipfield_pointer) : reverse_iterator(begin_iterator.group_pointer, begin_iterator.element_pointer - 1, begin_iterator.skipfield_pointer - 1);
+		return reverse_iterator(end_iterator);
 	}
 
 
@@ -1226,7 +1229,7 @@ public:
 
 	reverse_iterator rend() PLF_NOEXCEPT
 	{
-		return reverse_iterator(begin_iterator.group_pointer, begin_iterator.element_pointer - 1, begin_iterator.skipfield_pointer - 1);
+		return reverse_iterator(begin_iterator);
 	}
 
 
@@ -1240,14 +1243,14 @@ public:
 
 	const_reverse_iterator crbegin() const PLF_NOEXCEPT
 	{
-		return (end_iterator.group_pointer != NULL) ? ++const_reverse_iterator(end_iterator.group_pointer, end_iterator.element_pointer, end_iterator.skipfield_pointer) : const_reverse_iterator(begin_iterator.group_pointer, begin_iterator.element_pointer - 1, begin_iterator.skipfield_pointer - 1);
+		return const_reverse_iterator(end_iterator);
 	}
 
 
 
 	const_reverse_iterator crend() const PLF_NOEXCEPT
 	{
-		return const_reverse_iterator(begin_iterator.group_pointer, begin_iterator.element_pointer - 1, begin_iterator.skipfield_pointer - 1);
+		return const_reverse_iterator(begin_iterator);
 	}
 
 
@@ -4736,7 +4739,7 @@ public:
 		const size_t number_of_blocks;					// size of each of the arrays above
 
 
-		colony_data(const colony::size_type size) :
+		colony_data(const typename colony::size_type size) :
 			block_pointers(pointer_cast<aligned_pointer_type *>(PLF_ALLOCATE(uchar_allocator_type, *this, size * sizeof(aligned_pointer_type), NULL))),
 			bitfield_pointers(pointer_cast<unsigned char **>(PLF_ALLOCATE(uchar_allocator_type, *this, size * sizeof(unsigned char *), NULL))),
 			block_capacities(pointer_cast<size_t *>(PLF_ALLOCATE(uchar_allocator_type, *this, size * sizeof(size_t), NULL))),
@@ -5044,19 +5047,35 @@ public:
 		colony_iterator & operator ++ ()
 		{
 			assert(group_pointer != NULL); // covers uninitialised colony_iterator
-			skipfield_type skip = *(++skipfield_pointer);
 
-			if ((element_pointer += static_cast<size_type>(skip) + 1u) == to_aligned_pointer(group_pointer->skipfield) && group_pointer->next_group != NULL) // ie. beyond end of current memory block. Second condition allows iterator to reach end(), which may be 1 past end of block, if block has been fully used and another block is not allocated
-			{
-				group_pointer = group_pointer->next_group;
-				const aligned_pointer_type elements = to_aligned_pointer(group_pointer->elements);
-				const skipfield_pointer_type skipfield = group_pointer->skipfield;
-				skip = *skipfield;
-				element_pointer = elements + skip;
-				skipfield_pointer = skipfield;
-			}
+			#if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__) // This version creates significantly faster release code under MSVC in some scenarios, but not in any other compilers
+				element_pointer += *(++skipfield_pointer) + 1;
+				skipfield_pointer += *skipfield_pointer;
 
-			skipfield_pointer += skip;
+				if (element_pointer == to_aligned_pointer(group_pointer->skipfield) && group_pointer->next_group != NULL) // ie. beyond end of current memory block. Second condition allows iterator to reach end(), which may be 1 past end of block, if block has been fully used and another block is not allocated
+				{
+					group_pointer = group_pointer->next_group;
+					element_pointer = to_aligned_pointer(group_pointer->elements);
+					skipfield_pointer = group_pointer->skipfield;
+					element_pointer += *skipfield_pointer;
+					skipfield_pointer += *skipfield_pointer;
+				}
+			#else
+				skipfield_type skip = *(++skipfield_pointer);
+
+				if ((element_pointer += static_cast<size_type>(skip) + 1u) == to_aligned_pointer(group_pointer->skipfield) && group_pointer->next_group != NULL)
+				{
+					group_pointer = group_pointer->next_group;
+					const aligned_pointer_type elements = to_aligned_pointer(group_pointer->elements);
+					const skipfield_pointer_type skipfield = group_pointer->skipfield;
+					skip = *skipfield;
+					element_pointer = elements + skip;
+					skipfield_pointer = skipfield;
+				}
+
+				skipfield_pointer += skip;
+			#endif
+
 			return *this;
 		}
 
@@ -5075,25 +5094,17 @@ public:
 		{
 			assert(group_pointer != NULL);
 
-			--element_pointer;
-			const skipfield_pointer_type skipfield = group_pointer->skipfield;
-
-			if (--skipfield_pointer >= skipfield)
+			if (--skipfield_pointer >= group_pointer->skipfield) // ie. not already at beginning of group prior to decrementation
 			{
-				const skipfield_type skip = *skipfield_pointer;
-				element_pointer -= skip;
-				skipfield_pointer -= skip;
-			} // We now have to re-check below if this subtraction has taken us past the beginning of the block.
-
-			if (skipfield_pointer < skipfield && group_pointer->previous_group != NULL)
-			{
-				group_pointer = group_pointer->previous_group;
-				skipfield_pointer = group_pointer->skipfield + group_pointer->capacity - 1;
-				const skipfield_type skip = *skipfield_pointer;
-				element_pointer = (to_aligned_pointer(group_pointer->skipfield) - 1) - skip;
-				skipfield_pointer -= skip;
+				element_pointer -= static_cast<size_type>(*skipfield_pointer) + 1u;
+				if ((skipfield_pointer -= *skipfield_pointer) >= group_pointer->skipfield) return *this; // ie. skipfield jump value does not takes us beyond beginning of group
 			}
 
+			group_pointer = group_pointer->previous_group;
+			const skipfield_pointer_type skipfield = group_pointer->skipfield + group_pointer->capacity - 1;
+			const skipfield_type skip = *skipfield;
+			element_pointer = (to_aligned_pointer(group_pointer->skipfield) - 1) - skip;
+			skipfield_pointer = skipfield - skip;
 			return *this;
 		}
 
@@ -5481,7 +5492,8 @@ public:
 
 
 	// Reverse iterators:
-	// Note: despite iterator being trivially_copyable here, defining reverse_iterator via std::reverse_iterator<iterator> results in it not being trivially_copyable here, with substantially more codegen, at least under gcc/libstdc++.
+	// Note: despite iterator being trivially_copyable, defining reverse_iterator via std::reverse_iterator<iterator> results in it not being trivially_copyable here, at least under libstdc++.
+	// Hence we have a custom implementation.
 
 	template <bool is_const_r>
 	class colony_reverse_iterator
@@ -5556,9 +5568,7 @@ public:
 
 		colony_reverse_iterator (const colony_iterator<is_const_r> &source) PLF_NOEXCEPT:
 			current(source)
-		{
-			++(*this);
-		}
+		{}
 
 
 		#ifdef PLF_DEFAULT_SUPPORT
@@ -5568,9 +5578,7 @@ public:
 			colony_reverse_iterator (const colony_iterator<!is_const_r> &source) PLF_NOEXCEPT:
 		#endif
 			current(source)
-		{
-			++(*this);
-		}
+		{}
 
 
 		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
@@ -5695,14 +5703,14 @@ public:
 
 		reference operator * () const PLF_NOEXCEPT
 		{
-			return *pointer_cast<pointer>(current.element_pointer);
+			return *--iterator(current);
 		}
 
 
 
 		pointer operator -> () const PLF_NOEXCEPT
 		{
-			return pointer_cast<pointer>(current.element_pointer);
+			return pointer_cast<pointer>(--iterator(current).element_pointer);
 		}
 
 
@@ -5743,7 +5751,7 @@ public:
 
 		colony_iterator<is_const_r> base() const PLF_NOEXCEPT
 		{
-			return (current.group_pointer != NULL) ? ++(colony_iterator<is_const_r>(current)) : colony_iterator<is_const_r>(NULL, NULL, NULL);
+			return colony_iterator<is_const_r>(current);
 		}
 
 
@@ -5791,10 +5799,6 @@ public:
 
 
 	private:
-		// Used by rend(), etc:
-		colony_reverse_iterator(const group_pointer_type group_p, const aligned_pointer_type element_p, const skipfield_pointer_type skipfield_p) PLF_NOEXCEPT: current(group_p, element_p, skipfield_p) {}
-
-
 
 		void advance(const difference_type distance)
 		{
@@ -5807,9 +5811,6 @@ public:
  		{
  			return last.current.distance(current);
  		}
-
-
-
 	}; // colony_reverse_iterator
 
 
