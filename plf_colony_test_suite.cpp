@@ -447,9 +447,16 @@ int main()
 				numtotal += **the_iterator;
 			}
 
-
 			failpass("Reverse iteration count test", total == 400);
 			failpass("Reverse iterator access test", numtotal == 6000);
+
+			{
+				colony<int> numbers;
+				numbers.insert(1);
+				colony<int>::reverse_iterator rit = numbers.rend(), rit2 = prev(rit, 1), rit3 = numbers.rbegin();
+				failpass("Reverse iteration prev/rbegin/rend test", rit2 == rit3);
+			}
+
 
 			colony<int *>::reverse_iterator r_iterator = p_colony.rbegin();
 			advance(r_iterator, 50);
