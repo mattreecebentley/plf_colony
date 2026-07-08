@@ -1,79 +1,8 @@
-// Basic feature testing for colony.
 // NOTE: This test suite throws exceptions to test catch handling. You might see this show up in the debug output when you run it in MSVC. It doesn't mean something has gone wrong.
 
 #define PLF_COLONY_TEST_DEBUG
 
-#if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
-	#pragma warning ( push )
-	#pragma warning ( disable : 6031 )
-
-	#if _MSC_VER >= 1600
-		#define PLF_TEST_MOVE_SEMANTICS_SUPPORT
-	#endif
-	#if _MSC_VER >= 1700
-		#define PLF_TEST_TYPE_TRAITS_SUPPORT
-	#endif
-	#if _MSC_VER >= 1800
-		#define PLF_TEST_VARIADICS_SUPPORT // Variadics, in this context, means both variadic templates and variadic macros are supported
-		#define PLF_TEST_INITIALIZER_LIST_SUPPORT
-	#endif
-
-	#if defined(_MSVC_LANG) && (_MSVC_LANG >= 202002L) && _MSC_VER >= 1929
-		#define PLF_TEST_CPP20_SUPPORT
-	#endif
-#elif defined(__cplusplus) && __cplusplus >= 201103L // C++11 support, at least
-	#define PLF_TEST_MOVE_SEMANTICS_SUPPORT
-
-	#if defined(__GNUC__) && defined(__GNUC_MINOR__) && !defined(__clang__) // If compiler is GCC/G++
-		#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 3) || __GNUC__ > 4 // 4.2 and below do not support variadic templates
-			#define PLF_TEST_MOVE_SEMANTICS_SUPPORT
-			#define PLF_TEST_VARIADICS_SUPPORT
-		#endif
-		#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 4) || __GNUC__ > 4 // 4.3 and below do not support initializer lists
-			#define PLF_TEST_INITIALIZER_LIST_SUPPORT
-		#endif
-		#if __GNUC__ >= 5 // GCC v4.9 and below do not support std::is_trivially_copyable
-			#define PLF_TEST_TYPE_TRAITS_SUPPORT
-		#endif
-	#elif defined(__clang__) && !defined(__GLIBCXX__) && !defined(_LIBCPP_CXX03_LANG)
-		#if __clang_major__ >= 3 // clang versions < 3 don't support __has_feature() or traits
-			#define PLF_TEST_TYPE_TRAITS_SUPPORT
-
-			#if __has_feature(cxx_rvalue_references) && !defined(_LIBCPP_HAS_NO_RVALUE_REFERENCES)
-				#define PLF_TEST_MOVE_SEMANTICS_SUPPORT
-			#endif
-			#if __has_feature(cxx_variadic_templates) && !defined(_LIBCPP_HAS_NO_VARIADICS)
-				#define PLF_TEST_VARIADICS_SUPPORT
-			#endif
-			#if (__clang_major__ == 3 && __clang_minor__ >= 1) || __clang_major__ > 3
-				#define PLF_TEST_INITIALIZER_LIST_SUPPORT
-			#endif
-		#endif
-	#elif defined(__GLIBCXX__)
-		#if __GLIBCXX__ >= 20080606
-			#define PLF_TEST_MOVE_SEMANTICS_SUPPORT
-			#define PLF_TEST_VARIADICS_SUPPORT
-		#endif
-		#if __GLIBCXX__ >= 20090421
-			#define PLF_TEST_INITIALIZER_LIST_SUPPORT
-		#endif
-		#if __GLIBCXX__ >= 20150422
-			#define PLF_TEST_TYPE_TRAITS_SUPPORT
-		#endif
-	#elif !(defined(_LIBCPP_CXX03_LANG) || defined(_LIBCPP_HAS_NO_RVALUE_REFERENCES) || defined(_LIBCPP_HAS_NO_VARIADICS))
-		// Assume full support for other compilers and standard libraries
-		#define PLF_TEST_VARIADICS_SUPPORT
-		#define PLF_TEST_TYPE_TRAITS_SUPPORT
-		#define PLF_TEST_MOVE_SEMANTICS_SUPPORT
-		#define PLF_TEST_INITIALIZER_LIST_SUPPORT
-	#endif
-
-	#if __cplusplus > 201704L && ((((defined(__clang__) && !defined(__APPLE_CC__) && __clang_major__ >= 14) || (defined(__GNUC__) && (__GNUC__ > 11 || (__GNUC__ == 11 && __GNUC_MINOR__ > 0)))) && ((defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 14) || (defined(__GLIBCXX__) && __GLIBCXX__ >= 201806L) || (defined(_MSC_VER) && _MSC_VER >= 1929))) || (!defined(__clang__) && !defined(__GNUC__)))
-		#define PLF_TEST_CPP20_SUPPORT
-	#endif
-#endif
-
-
+#include "plf_tools.h"
 
 #include <numeric> // std::accumulate
 #include <functional> // std::greater, std::bind2nd
@@ -82,11 +11,11 @@
 #include <cstdio> // log redirection, printf
 #include <cstdlib> // abort
 
-#ifdef MOVE_SEMANTICS_SUPPORT
+#ifdef PLF_MOVE_SEMANTICS_SUPPORT
 	#include <utility> // std::move
 #endif
 
-#ifdef PLF_TEST_CPP20_SUPPORT
+#ifdef PLF_CPP20_SUPPORT
 	#include <ranges>
 #endif
 
@@ -131,7 +60,7 @@ void failpass(const char *test_type, bool condition)
 
 
 
-#ifdef PLF_TEST_VARIADICS_SUPPORT
+#ifdef PLF_VARIADICS_SUPPORT
 	struct perfect_forwarding_test
 	{
 		const bool success;
@@ -229,7 +158,7 @@ int main()
 	using namespace plf;
 
 
-	#ifdef PLF_TEST_TYPE_TRAITS_SUPPORT
+	#ifdef PLF_TYPE_TRAITS_SUPPORT
 	{
 		title2("Trivially copyable iterators tests");
 
@@ -253,6 +182,9 @@ int main()
 	}
 	#endif
 
+
+	printf("\nExceptions will be thrown (and caught) by this suite in order to test sub-function exception recovery. Tests loop many times in order to catch edge cases (via random number generation). Press enter to continue.\n");
+	getchar();
 
 
 	for (unsigned int looper = 0; looper != 100; ++looper)
@@ -384,7 +316,7 @@ int main()
 
 
 
-			#ifdef PLF_TEST_CPP20_SUPPORT
+			#ifdef PLF_CPP20_SUPPORT
 				colony<int *>::const_iterator plus_two_hundred_c = plus_two_hundred;
 				colony<int *> colony_copy(plus_twenty, plus_two_hundred_c);
 
@@ -434,7 +366,7 @@ int main()
 
 			failpass("Inequality operator test", p_colony2 != p_colony3);
 
-			#ifdef PLF_TEST_CPP20_SUPPORT
+			#ifdef PLF_CPP20_SUPPORT
 				failpass("Spaceship operator test", (p_colony2 <=> p_colony3) != 0);
 			#endif
 
@@ -515,7 +447,7 @@ int main()
 			failpass("Partial erase iteration test", total == 200);
 			failpass("Post-erase size test", p_colony.size() == 200);
 
-			#ifdef PLF_TEST_INITIALIZER_LIST_SUPPORT
+			#ifdef PLF_INITIALIZER_LIST_SUPPORT
 				{
 					colony<int> trim_colony(2000, 10, {200, 200});
 					trim_colony.reserve(4000);
@@ -566,7 +498,7 @@ int main()
 
 			failpass("Negative multiple iteration test", total == 200);
 
-			#ifdef PLF_TEST_MOVE_SEMANTICS_SUPPORT
+			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
 				p_colony2 = std::move(p_colony);
 				failpass("Move test", p_colony2.size() == 400);
 
@@ -629,7 +561,7 @@ int main()
 
 			failpass("Iterator != test", it2 != it1);
 
-			#ifdef PLF_TEST_CPP20_SUPPORT
+			#ifdef PLF_CPP20_SUPPORT
 				failpass("Iterator <=> test 1", (it2 <=> it1) == std::strong_ordering::greater);
 
 				failpass("Iterator <=> test 2", (it1 <=> it2) == std::strong_ordering::less);
@@ -1501,7 +1433,7 @@ int main()
 		{
 			title2("Different insertion-style tests");
 
-			#ifdef PLF_TEST_INITIALIZER_LIST_SUPPORT
+			#ifdef PLF_INITIALIZER_LIST_SUPPORT
 				colony<int> i_colony({1, 2, 3});
 
 				failpass("Initializer-list constructor test", i_colony.size() == 3);
@@ -1513,7 +1445,7 @@ int main()
 
 			failpass("Range constructor test", i_colony2.size() == 3);
 
-			#ifdef PLF_TEST_CPP20_SUPPORT
+			#ifdef PLF_CPP20_SUPPORT
 				std::ranges::take_view<std::ranges::ref_view<plf::colony<int>>> rng = i_colony2 | std::ranges::views::take(2);
 
 				colony<int> i_colony_range(plf::ranges::from_range, rng);
@@ -1535,7 +1467,7 @@ int main()
 
 			failpass("Range insertion test", i_colony2.size() == 500503);
 
-			#ifdef PLF_TEST_CPP20_SUPPORT
+			#ifdef PLF_CPP20_SUPPORT
 				i_colony2.insert(some_ints.begin(), some_ints.cend());
 
 				failpass("Range insertion with differing iterators test", i_colony2.size() == 501003);
@@ -1543,7 +1475,7 @@ int main()
 				i_colony2.insert(some_ints.begin(), some_ints.end());
 			#endif
 
-			#ifdef PLF_TEST_MOVE_SEMANTICS_SUPPORT
+			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
 	 			i_colony3.insert(plf::make_move_iterator(i_colony2.begin()), plf::make_move_iterator(i_colony2.end()));
 
 	 			failpass("Range move-insertion test", i_colony3.size() == 506003);
@@ -1796,7 +1728,7 @@ int main()
 
 			i_colony.clear();
 
-			#ifdef PLF_TEST_INITIALIZER_LIST_SUPPORT
+			#ifdef PLF_INITIALIZER_LIST_SUPPORT
 				i_colony.assign({1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 				it = i_colony.begin();
 
@@ -1814,7 +1746,7 @@ int main()
 		}
 
 
-		#ifdef PLF_TEST_VARIADICS_SUPPORT
+		#ifdef PLF_VARIADICS_SUPPORT
 			{
 				title2("Perfect Forwarding tests");
 
@@ -2295,7 +2227,7 @@ int main()
 				i_colony.insert(count);
 			}
 
-			#ifdef PLF_TEST_MOVE_SEMANTICS_SUPPORT // approximating checking for C++11 here
+			#ifdef PLF_MOVE_SEMANTICS_SUPPORT // approximating checking for C++11 here
 				erase_if(i_colony, std::bind(std::greater<int>(), std::placeholders::_1, 499));
 			#else // C++03 or lower
 				erase_if(i_colony, std::bind2nd(std::greater<int>(), 499));
@@ -2305,7 +2237,7 @@ int main()
 
 		}
 
-		#ifdef PLF_TEST_CPP20_SUPPORT
+		#ifdef PLF_CPP20_SUPPORT
 		{
 			title2("range/fill-insertion when skipblocks are present testing");
 
