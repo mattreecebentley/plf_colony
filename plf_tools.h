@@ -29,11 +29,12 @@
 	#define PLF_CONSTEXPR
 	#define PLF_CONSTFUNC
 
+
 	#define PLF_EXCEPTIONS_SUPPORT
 
-	#if ((defined(__clang__) || defined(__GNUC__)) && !defined(__EXCEPTIONS)) || (defined(_MSC_VER) && !defined(_CPPUNWIND))
-		#undef PLF_EXCEPTIONS_SUPPORT
-		#include <exception> // std::terminate
+	#if !(defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND))
+	#undef PLF_EXCEPTIONS_SUPPORT
+	#include <exception> // std::terminate
 	#endif
 
 
@@ -245,8 +246,9 @@
 #if (defined(PLF_INCLUDE_TOOLS) || defined(PLF_INCLUDE_UNINITIALIZED_TOOLS)) && !defined(PLF_TOOLS)  // uninitialized_tools uses plf::make_move_iterator, hence needs these tools
 	#define PLF_TOOLS
 
+	#include <memory> // to_address
+
 	#ifdef PLF_CPP20_SUPPORT
-		#include <memory> // to_address
 		#include <ranges>
 	#endif
 
