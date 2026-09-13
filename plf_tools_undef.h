@@ -28,3 +28,5 @@
 #if defined(_MSVC_LANG) && (_MSVC_LANG >= 202002L) && _MSC_VER < 1951
 	#pragma warning ( pop )
 #endif
+
+#undef PLF_COMPILER_DEFINES
