@@ -20,8 +20,10 @@
 
 
 #if !defined(PLF_COMPILER_DEFINES)
-	#define PLF_COMPILER_DEFINES // Persistent define, so one container containing another plf container doesn't cause re-definitions
+	#define PLF_COMPILER_DEFINES // Persistent define, so one container hold another plf container as elements doesn't cause re-definitions
 	// Compiler-specific defines:
+
+	#include <memory> // std::allocator/allocator_traits. This inclusion is also to pull in at least one standard library header so that any necessary library macros are usable below (eg. _LIBCPP_VERSION)
 
 	// Define default cases before possibly redefining:
 	#define PLF_NOEXCEPT throw()
@@ -33,8 +35,8 @@
 	#define PLF_EXCEPTIONS_SUPPORT
 
 	#if !(defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND))
-	#undef PLF_EXCEPTIONS_SUPPORT
-	#include <exception> // std::terminate
+		#undef PLF_EXCEPTIONS_SUPPORT
+		#include <exception> // std::terminate
 	#endif
 
 
@@ -192,7 +194,7 @@
 			#define PLF_VOIDT_SUPPORT
 		#endif
 
-		#if __cplusplus >= 202001L && ((((defined(__clang__) && __clang_major__ >= 15) || (defined(__GNUC__) && (__GNUC__ >= 12))) && ((defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 15) || (defined(__GLIBCXX__) &&	_GLIBCXX_RELEASE >= 12))) || (!defined(__clang__) && !defined(__GNUC__)))
+		#if __cplusplus >= 202001L && ((((defined(__clang__) && __clang_major__ >= 15) || (defined(__GNUC__) && (__GNUC__ >= 12))) && ((defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 15) || (defined(__GLIBCXX__) &&	_GLIBCXX_RELEASE >= 12))) || (!defined(__clang__) && !defined(__GNUC__))) // detecting the library version is required so that, for example, std::to_address can be used when PLF_CPP20_SUPPORT is defined
 			#define PLF_CPP20_SUPPORT
 			#undef PLF_CONSTFUNC
 			#define PLF_CONSTFUNC constexpr
@@ -365,7 +367,7 @@
 		// To simplify conversion when allocator supplies non-raw pointers:
 		template <class destination_pointer_type, class source_pointer_type>
 		static PLF_CONSTFUNC destination_pointer_type pointer_cast(const source_pointer_type source_pointer) PLF_NOEXCEPT
-		{                              
+		{
 			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_CPP20_SUPPORT) // constexpr necessary to avoid a branch for every call
 				if constexpr (std::is_trivially_constructible<destination_pointer_type>::value)
 				{
@@ -426,7 +428,7 @@
 
 
 		// These countr/countl implementations work in pre-C++20 modes, but also skip zero-checks in >= C++20 if the architecture was going to end up using BSR instead of some other instruction set.
-		// Hence if you use them, you must make sure value != 0 (for countr_one/countl_one, value != std::numeric_limits<storage_type>::max()). These implementations do not work with types > unsigned long long.
+		// Hence if you use them, you must make sure value != 0 (or for countr_one/countl_one, that value != std::numeric_limits<storage_type>::max()). These implementations do not work with types > unsigned long long.
 
 		template<typename storage_type>
 		static PLF_CONSTFUNC std::size_t countr_zero(const storage_type value)
