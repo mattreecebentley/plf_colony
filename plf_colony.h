@@ -169,7 +169,7 @@ public:
 private:
 
 	// Calculate the capacity of a group's elements+skipfield memory block when expressed in multiples of the value_type's alignment (rounding up).
-	static size_type get_aligned_block_capacity(const skipfield_type elements_per_group)
+	static size_type get_aligned_block_capacity(const skipfield_type elements_per_group) PLF_NOEXCEPT
 	{
 		return ((elements_per_group * (sizeof(aligned_element_struct) + sizeof(skipfield_type))) + sizeof(skipfield_type) + sizeof(aligned_allocation_struct) - 1) / sizeof(aligned_allocation_struct);
 	}
@@ -223,7 +223,7 @@ private:
 		skipfield_pointer_type					skipfield;			// Skipfield storage. The element and skipfield arrays are allocated contiguously, in a single allocation, in this implementation, hence the skipfield pointer also functions as a 'one-past-end' pointer for the elements array. This is present before elements in the group struct as it is referenced constantly by the ++ operator, hence having it first results in a minor performance increase.
 		group_pointer_type						next_group;			// Next group in the linked list of all groups. NULL if no following group. 2nd in struct because it is so frequently used during iteration.
 		const aligned_struct_pointer_type 	elements;			// Element storage. Allocated as a block of chars, this memory is then divided between elements & skipfield
-		group_pointer_type						previous_group;	// Previous group in the linked list of all groups. NULL if no preceding group.
+		group_pointer_type						previous_group;	// Previous group in the linked list of all groups. NULL if no preceding group. And yes, there is a small but repeatable benchmark performance difference to placing the member here, instead of with next_group, due to the fact that it's used less. Not an arbitrary decision.
 		skipfield_type 							free_list_head;	// The index of the last erased element in the group. The last erased element will, in turn, contain the number of the index of the next erased element, and so on. If this is == maximum skipfield_type value then free_list is empty ie. no erasures have occurred in the group (or if they have, the erased locations have subsequently been reused via insert/emplace/assign).
 		const skipfield_type 					capacity;			// The element capacity of this particular group - can also be calculated from reinterpret_cast<aligned_pointer_type>(group->skipfield) - group->elements, however this space is effectively free due to struct padding and the sizeof(skipfield_type), and calculating it once is faster in benchmarking.
 		skipfield_type 							size; 				// The total number of active elements in group - changes with insert and erase commands - used to check for empty group in erase function, as an indication to remove the group. Also used in combination with capacity to check if group is full, which is used in the next/previous/advance/distance overloads, and range-erase.
@@ -299,16 +299,16 @@ private:
 
 
 
-		aligned_pointer_type first_element() const PLF_NOEXCEPT
+		aligned_pointer_type front() const PLF_NOEXCEPT
 		{
-			return pointer_cast<aligned_pointer_type>(elements) + *skipfield;
+			return pointer_cast<aligned_pointer_type>(elements);
 		}
 
 
 
-		aligned_pointer_type front() const PLF_NOEXCEPT
+		aligned_pointer_type first_element() const PLF_NOEXCEPT
 		{
-			return pointer_cast<aligned_pointer_type>(elements);
+			return front() + *skipfield;
 		}
 
 
@@ -1084,6 +1084,7 @@ private:
 
 
 
+
 	void update_skipblock(const iterator &new_location, const skipfield_type prev_free_list_index) PLF_NOEXCEPT
 	{
 		const skipfield_type new_value = static_cast<skipfield_type>(*(new_location.skipfield_pointer) - 1);
@@ -1171,80 +1172,87 @@ private:
 
 
 
-public:
+ 	#if defined(PLF_VARIADICS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT) // emplace and move-insert support
+ 		#define PLF_EMPLACE_ELEMENT(location) PLF_CONSTRUCT_ELEMENT(location, std::forward<arguments>(parameters) ...)
+ 		#define PLF_NOTHROW_TEST_TYPE arguments...
 
+ 		template<typename... arguments>
+ 		iterator emplace_implementation(arguments &&... parameters)
 
-	void reset() PLF_NOEXCEPT
-	{
-		destroy_all_data();
-		blank();
-	}
+	#elif defined(PLF_MOVE_SEMANTICS_SUPPORT) // No emplace support, type traits may be available - this is possible under older versions of MSVC, as type_traits were implemented before variadic templates
+		#define PLF_EMPLACE_ELEMENT(location) PLF_CONSTRUCT_ELEMENT(location, std::forward<el_type>(element))
+		#define PLF_NOTHROW_TEST_TYPE el_type
 
+		template<class el_type>
+		iterator emplace_implementation(el_type &&element)
 
+	#else // Only regular insert support ie. C++03/98 compilers
+		#define PLF_EMPLACE_ELEMENT(location) PLF_CONSTRUCT_ELEMENT(location, element)
+		#define PLF_NOTHROW_TEST_TYPE element_type
 
-	iterator insert(const element_type &element)
+		iterator emplace_implementation(const element_type &element)
+	#endif
 	{
 		if (end_iterator.element_pointer != NULL)
 		{
-			if (erasure_groups_head == NULL) // ie. there are no erased elements
+			if (erasure_groups_head == NULL)
 			{
 				if (end_iterator.element_pointer != end_iterator.group_pointer->past_back())
 				{
-					PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, element);
+					PLF_EMPLACE_ELEMENT(end_iterator.element_pointer);
 
 					const iterator return_iterator = end_iterator;
 					++end_iterator.element_pointer;
 					++end_iterator.skipfield_pointer;
 					++(end_iterator.group_pointer->size);
 					++total_size;
+
 					return return_iterator;
+				}
+
+				reset_group_numbers_if_necessary();
+				group_pointer_type next_group;
+
+				if (unused_groups_head == NULL)
+				{
+					next_group = allocate_new_group(static_cast<skipfield_type>(std::min(total_size, static_cast<size_type>(max_block_capacity))), end_iterator.group_pointer);
+
+					#ifndef PLF_EXCEPTIONS_SUPPORT
+						PLF_EMPLACE_ELEMENT(next_group->elements);
+					#else
+						#ifdef PLF_TYPE_TRAITS_SUPPORT
+							if PLF_CONSTEXPR (std::is_nothrow_constructible<element_type, PLF_NOTHROW_TEST_TYPE>::value)
+							{
+								PLF_EMPLACE_ELEMENT(next_group->elements);
+							}
+							else
+						#endif
+						{
+							try
+							{
+								PLF_EMPLACE_ELEMENT(next_group->elements);
+							}
+							catch (...)
+							{
+								deallocate_group_remove_capacity(next_group);
+								throw;
+							}
+						}
+					#endif
 				}
 				else
 				{
-					reset_group_numbers_if_necessary();
-					group_pointer_type next_group;
-
-					if (unused_groups_head == NULL)
-					{
-						next_group = allocate_new_group(static_cast<skipfield_type>(std::min(total_size, static_cast<size_type>(max_block_capacity))), end_iterator.group_pointer);
-
-						#ifndef PLF_EXCEPTIONS_SUPPORT
-							PLF_CONSTRUCT_ELEMENT(next_group->elements, element);
-						#else
-							#ifdef PLF_TYPE_TRAITS_SUPPORT
-								if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value)
-								{
-									PLF_CONSTRUCT_ELEMENT(next_group->elements, element);
-								}
-								else
-							#endif
-							{
-								try
-								{
-									PLF_CONSTRUCT_ELEMENT(next_group->elements, element);
-								}
-								catch (...)
-								{
-									deallocate_group_remove_capacity(next_group);
-									throw;
-								}
-							}
-						#endif
-					}
-					else
-					{
-						PLF_CONSTRUCT_ELEMENT(unused_groups_head->elements, element);
-						next_group = reuse_unused_group();
-					}
-
-					end_iterator.group_pointer->next_group = next_group;
-					end_iterator.group_pointer = next_group;
-					end_iterator.element_pointer = next_group->front() + 1;
-					end_iterator.skipfield_pointer = next_group->skipfield + 1;
-					++total_size;
-
-					return iterator(next_group, next_group->front(), next_group->skipfield);
+					PLF_EMPLACE_ELEMENT(unused_groups_head->elements);
+					next_group = reuse_unused_group();
 				}
+
+				end_iterator.group_pointer->next_group = next_group;
+				end_iterator.group_pointer = next_group;
+				end_iterator.element_pointer = next_group->front() + 1;
+				end_iterator.skipfield_pointer = next_group->skipfield + 1;
+				++total_size;
+
+				return iterator(next_group, next_group->front(), next_group->skipfield);
 			}
 			else // there are erased elements, reuse those memory locations
 			{
@@ -1252,30 +1260,30 @@ public:
 
 				// We always reuse the element at the start of the skipblock, this is also where the free-list information for that skipblock is stored. Get the previous free-list node's index from this memory space, before we write to our element to it. 'Next' index is always the free_list_head (as represented by the maximum value of the skipfield type) here so we don't need to get it:
 				const skipfield_type prev_free_list_index = *pointer_cast<skipfield_pointer_type>(new_location.element_pointer);
-				PLF_CONSTRUCT_ELEMENT(new_location.element_pointer, element);
+				PLF_EMPLACE_ELEMENT(new_location.element_pointer);
 				update_skipblock(new_location, prev_free_list_index);
 
 				return new_location;
 			}
 		}
-		else // ie. newly-constructed colony, no insertions yet and no groups
+		else
 		{
 			initialize(min_block_capacity);
 
 			#ifndef PLF_EXCEPTIONS_SUPPORT
-				PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, element);
+				PLF_EMPLACE_ELEMENT(end_iterator.element_pointer++);
 			#else
 				#ifdef PLF_TYPE_TRAITS_SUPPORT
-					if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value)
+					if PLF_CONSTEXPR (std::is_nothrow_constructible<element_type, PLF_NOTHROW_TEST_TYPE>::value)
 					{
-						PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, element);
+						PLF_EMPLACE_ELEMENT(end_iterator.element_pointer++);
 					}
 					else
 				#endif
 				{
 					try
 					{
-						PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, element);
+						PLF_EMPLACE_ELEMENT(end_iterator.element_pointer++);
 					}
 					catch (...)
 					{
@@ -1291,258 +1299,69 @@ public:
 		}
 	}
 
+	#undef PLF_EMPLACE_ELEMENT
+	#undef PLF_NOTHROW_TEST_TYPE
+
+
+
+public:
+
+
+	void reset() PLF_NOEXCEPT
+	{
+		destroy_all_data();
+		blank();
+	}
+
+
+
+	iterator insert(const element_type &element)
+	{
+		return emplace_implementation(element);
+	}
+
+
+
+	#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+		iterator insert(element_type &&element)
+		{
+			return emplace_implementation(std::move(element));
+		}
+
+
+
+		#ifdef PLF_VARIADICS_SUPPORT
+			template<typename... arguments>
+			iterator emplace(arguments &&... parameters)
+			{
+				return emplace_implementation(std::forward<arguments>(parameters) ...);
+			}
+		#endif
+	#endif
+
 
 
 	#ifdef PLF_CPP20_SUPPORT
 		iterator insert([[maybe_unused]] const_iterator &hint, const element_type &element) // Note: hint is ignored, purely to serve other standard library functions
 		{
-			return insert(element);
+			return emplace_implementation(element);
 		}
-	#endif
 
 
 
-	#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-		iterator insert(element_type &&element) // The move-insert function is near-identical to the regular insert function, with the exception of the element construction method and is_nothrow tests.
+		iterator insert([[maybe_unused]] const_iterator &hint, element_type &&element)
 		{
-			if (end_iterator.element_pointer != NULL)
-			{
-				if (erasure_groups_head == NULL)
-				{
-					if (end_iterator.element_pointer != end_iterator.group_pointer->past_back())
-					{
-						PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, std::move(element));
-
-						const iterator return_iterator = end_iterator;
-						++end_iterator.element_pointer;
-						++end_iterator.skipfield_pointer;
-						++(end_iterator.group_pointer->size);
-						++total_size;
-
-						return return_iterator;
-					}
-					else
-					{
-						reset_group_numbers_if_necessary();
-						group_pointer_type next_group;
-
-						if (unused_groups_head == NULL)
-						{
-							next_group = allocate_new_group(static_cast<skipfield_type>(std::min(total_size, static_cast<size_type>(max_block_capacity))), end_iterator.group_pointer);
-
-							#ifndef PLF_EXCEPTIONS_SUPPORT
-								PLF_CONSTRUCT_ELEMENT(next_group->elements, std::move(element));
-							#else
-								#ifdef PLF_TYPE_TRAITS_SUPPORT
-									if PLF_CONSTEXPR (std::is_nothrow_move_constructible<element_type>::value)
-									{
-										PLF_CONSTRUCT_ELEMENT(next_group->elements, std::move(element));
-									}
-									else
-								#endif
-								{
-									try
-									{
-										PLF_CONSTRUCT_ELEMENT(next_group->elements, std::move(element));
-									}
-									catch (...)
-									{
-										deallocate_group_remove_capacity(next_group);
-										throw;
-									}
-								}
-							#endif
-						}
-						else
-						{
-							PLF_CONSTRUCT_ELEMENT(unused_groups_head->elements, std::move(element));
-							next_group = reuse_unused_group();
-						}
-
-						end_iterator.group_pointer->next_group = next_group;
-						end_iterator.group_pointer = next_group;
-						end_iterator.element_pointer = next_group->front() + 1;
-						end_iterator.skipfield_pointer = next_group->skipfield + 1;
-						++total_size;
-
-						return iterator(next_group, next_group->front(), next_group->skipfield);
-					}
-				}
-				else
-				{
-					const iterator new_location(erasure_groups_head, erasure_groups_head->front() + erasure_groups_head->free_list_head, erasure_groups_head->skipfield + erasure_groups_head->free_list_head);
-
-					const skipfield_type prev_free_list_index = *pointer_cast<skipfield_pointer_type>(new_location.element_pointer);
-					PLF_CONSTRUCT_ELEMENT(new_location.element_pointer, std::move(element));
-					update_skipblock(new_location, prev_free_list_index);
-
-					return new_location;
-				}
-			}
-			else
-			{
-				initialize(min_block_capacity);
-
-				#ifndef PLF_EXCEPTIONS_SUPPORT
-					PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::move(element));
-				#else
-					#ifdef PLF_TYPE_TRAITS_SUPPORT
-						if PLF_CONSTEXPR (std::is_nothrow_move_constructible<element_type>::value)
-						{
-							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::move(element));
-						}
-						else
-					#endif
-					{
-						try
-						{
-							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::move(element));
-						}
-						catch (...)
-						{
-							reset();
-							throw;
-						}
-					}
-				#endif
-
-				++end_iterator.skipfield_pointer;
-				total_size = 1;
-				return begin_iterator;
-			}
+			return emplace_implementation(std::move(element));
 		}
 
 
 
-		#ifdef PLF_CPP20_SUPPORT
-			iterator insert([[maybe_unused]] const_iterator &hint, element_type &&element)
-			{
-				return insert(std::forward<element_type &&>(element));
-			}
-		#endif
-	#endif
-
-
-
-	#ifdef PLF_VARIADICS_SUPPORT
 		template<typename... arguments>
-		iterator emplace(arguments &&... parameters) // The emplace function is near-identical to the regular insert function, with the exception of the element construction method, and change to is_nothrow tests.
+		iterator emplace_hint([[maybe_unused]] const_iterator &hint, arguments &&... parameters)
 		{
-			if (end_iterator.element_pointer != NULL)
-			{
-				if (erasure_groups_head == NULL)
-				{
-					if (end_iterator.element_pointer != end_iterator.group_pointer->past_back())
-					{
-						PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, std::forward<arguments>(parameters) ...);
-
-						const iterator return_iterator = end_iterator;
-						++end_iterator.element_pointer;
-						++end_iterator.skipfield_pointer;
-						++(end_iterator.group_pointer->size);
-						++total_size;
-						return return_iterator;
-					}
-
-					reset_group_numbers_if_necessary();
-					group_pointer_type next_group;
-
-					if (unused_groups_head == NULL)
-					{
-						next_group = allocate_new_group(static_cast<skipfield_type>(std::min(total_size, static_cast<size_type>(max_block_capacity))), end_iterator.group_pointer);
-
-						#ifndef PLF_EXCEPTIONS_SUPPORT
-							PLF_CONSTRUCT_ELEMENT(next_group->elements, std::forward<arguments>(parameters) ...);
-						#else
-							#ifdef PLF_TYPE_TRAITS_SUPPORT
-								if PLF_CONSTEXPR (std::is_nothrow_constructible<element_type, arguments...>::value)
-								{
-									PLF_CONSTRUCT_ELEMENT(next_group->elements, std::forward<arguments>(parameters) ...);
-								}
-								else
-							#endif
-							{
-								try
-								{
-									PLF_CONSTRUCT_ELEMENT(next_group->elements, std::forward<arguments>(parameters) ...);
-								}
-								catch (...)
-								{
-									deallocate_group_remove_capacity(next_group);
-									throw;
-								}
-							}
-						#endif
-					}
-					else
-					{
-						PLF_CONSTRUCT_ELEMENT(unused_groups_head->elements, std::forward<arguments>(parameters) ...);
-						next_group = reuse_unused_group();
-					}
-
-					end_iterator.group_pointer->next_group = next_group;
-					end_iterator.group_pointer = next_group;
-					end_iterator.element_pointer = next_group->front() + 1;
-					end_iterator.skipfield_pointer = next_group->skipfield + 1;
-					++total_size;
-
-					return iterator(next_group, next_group->front(), next_group->skipfield);
-				}
-				else
-				{
-					const iterator new_location(erasure_groups_head, erasure_groups_head->front() + erasure_groups_head->free_list_head, erasure_groups_head->skipfield + erasure_groups_head->free_list_head);
-
-					const skipfield_type prev_free_list_index = *pointer_cast<skipfield_pointer_type>(new_location.element_pointer);
-					PLF_CONSTRUCT_ELEMENT(new_location.element_pointer, std::forward<arguments>(parameters) ...);
-					update_skipblock(new_location, prev_free_list_index);
-
-					return new_location;
-				}
-			}
-			else
-			{
-				initialize(min_block_capacity);
-
-				#ifndef PLF_EXCEPTIONS_SUPPORT
-					PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::forward<arguments>(parameters) ...);
-				#else
-					#ifdef PLF_TYPE_TRAITS_SUPPORT
-						if PLF_CONSTEXPR (std::is_nothrow_constructible<element_type, arguments...>::value)
-						{
-							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::forward<arguments>(parameters) ...);
-						}
-						else
-					#endif
-					{
-						try
-						{
-							PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer++, std::forward<arguments>(parameters) ...);
-						}
-						catch (...)
-						{
-							reset();
-							throw;
-						}
-					}
-				#endif
-
-				++end_iterator.skipfield_pointer;
-				total_size = 1;
-				return begin_iterator;
-			}
+			return emplace_implementation(std::forward<arguments>(parameters) ...);
 		}
-
-
-
-		#ifdef PLF_CPP20_SUPPORT
-			template<typename... arguments>
-			iterator emplace_hint([[maybe_unused]] const_iterator &hint, arguments &&... parameters)
-			{
-				return emplace(std::forward<arguments>(parameters) ...);
-			}
-		#endif
 	#endif
-
 
 
 
