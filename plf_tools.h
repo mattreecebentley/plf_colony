@@ -57,8 +57,8 @@
 			#define PLF_CPP11_SUPPORT
 			#define PLF_ALIGNMENT_SUPPORT
 			#undef PLF_NOEXCEPT
-			#undef PLF_NOEXCEPT_ALLOCATOR
 			#define PLF_NOEXCEPT noexcept
+			#undef PLF_NOEXCEPT_ALLOCATOR
 			#define PLF_NOEXCEPT_ALLOCATOR noexcept(noexcept(allocator_type()))
 			#define PLF_IS_ALWAYS_EQUAL_SUPPORT
 			#define PLF_VOIDT_SUPPORT
@@ -98,8 +98,8 @@
 			#endif
 			#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 6) || __GNUC__ > 4
 				#undef PLF_NOEXCEPT
-				#undef PLF_NOEXCEPT_ALLOCATOR
 				#define PLF_NOEXCEPT noexcept
+				#undef PLF_NOEXCEPT_ALLOCATOR
 				#define PLF_NOEXCEPT_ALLOCATOR noexcept(noexcept(allocator_type()))
 			#endif
 			#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 7) || __GNUC__ > 4
@@ -126,8 +126,8 @@
 			#if __has_feature(cxx_noexcept)
 				#define PLF_CPP11_SUPPORT
 				#undef PLF_NOEXCEPT
-				#undef PLF_NOEXCEPT_ALLOCATOR
 				#define PLF_NOEXCEPT noexcept
+				#undef PLF_NOEXCEPT_ALLOCATOR
 				#define PLF_NOEXCEPT_ALLOCATOR noexcept(noexcept(allocator_type()))
 			#endif
 			#if __clang_major__ >= 4 || __clang_minor__ >= 8
@@ -153,10 +153,11 @@
 				#define PLF_INITIALIZER_LIST_SUPPORT
 			#endif
 			#if __GLIBCXX__ >= 20120322
+				#define PLF_CPP11_SUPPORT
 				#define PLF_ALLOCATOR_TRAITS_SUPPORT
 				#undef PLF_NOEXCEPT
-				#undef PLF_NOEXCEPT_ALLOCATOR
 				#define PLF_NOEXCEPT noexcept
+				#undef PLF_NOEXCEPT_ALLOCATOR
 				#define PLF_NOEXCEPT_ALLOCATOR noexcept(noexcept(allocator_type()))
 			#endif
 			#if __GLIBCXX__ >= 20130322
@@ -181,8 +182,8 @@
 			#define PLF_ALIGNMENT_SUPPORT
 			#define PLF_INITIALIZER_LIST_SUPPORT
 			#undef PLF_NOEXCEPT
-			#undef PLF_NOEXCEPT_ALLOCATOR
 			#define PLF_NOEXCEPT noexcept
+			#undef PLF_NOEXCEPT_ALLOCATOR
 			#define PLF_NOEXCEPT_ALLOCATOR noexcept(noexcept(allocator_type()))
 			#define PLF_IS_ALWAYS_EQUAL_SUPPORT
 			#define PLF_CPP11_SUPPORT
@@ -202,6 +203,15 @@
 
 		#if __cplusplus >= 202302L && (((defined(__clang__) && __clang_major__ >= 14) || (defined(__GNUC__) && (__GNUC__ >= 12))) || (!defined(__clang__) && !defined(__GNUC__)))
 			#define PLF_CONSTEVAL_SUPPORT
+		#endif
+	#endif
+
+
+	#ifdef PLF_CPP11_SUPPORT
+		#include <cstdint>
+
+		#if INTPTR_MAX >= INT64_MAX // If compilation is at least 64-bit
+			#define PLF_64BIT_SUPPORT
 		#endif
 	#endif
 
@@ -238,7 +248,11 @@
 	#endif
 
 
-	#define PLF_CONSTRUCT_ELEMENT(location, element) PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(location), element)
+	#ifdef PLF_VARIADICS_SUPPORT
+		#define PLF_CONSTRUCT_ELEMENT(location, ...) PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(location), __VA_ARGS__)
+	#else
+		#define PLF_CONSTRUCT_ELEMENT(location, element) PLF_CONSTRUCT(allocator_type, *this, pointer_cast<pointer>(location), element)
+	#endif
 
 #endif // PLF_COMPILER_DEFINES
 
@@ -557,6 +571,54 @@
 		{
 			return plf::countl_zero(~value);
 		}
+
+
+
+		#ifdef PLF_64BIT_SUPPORT
+			// Writes each bit as a character, 8 bits at a time, with each byte of a 64-bit integer holding one character. The characters are written one byte at a time by shifting, so the result does not depend on the byte order, and compilers merge the 8 stores into one. By Michiel van Slobbe (https://github.com/mvanslobbe)
+			template <bool most_significant_first, typename storage_type, class char_type>
+			PLF_CONSTFUNC void bits_to_chars(const storage_type *buffer, char_type * const output, const char_type zero, const char_type one, const std::size_t total_size)
+			{
+				// Byte n of the mask (n = 0 is the least significant byte) keeps bit 7 - n of the source byte when the most significant bit comes first, or bit n otherwise. Byte n of the result becomes character n of the 8 written.
+				// zeros is the zero character in all 8 bytes.
+				const uint_least64_t mask = most_significant_first ? 0x0102040810204080ULL : 0x8040201008040201ULL;
+				const uint_least64_t zeros = 0x0101010101010101ULL * static_cast<unsigned char>(zero), difference = static_cast<unsigned char>(zero ^ one);
+				const std::size_t type_bitwidth = sizeof(storage_type) * 8;
+
+				for (std::size_t index = 0, end = ((total_size + type_bitwidth - 1) / type_bitwidth); index != end; ++index)
+				{
+					if (buffer[index] == 0) continue; // The string is already filled with zero characters
+
+					const std::size_t bit_index = index * type_bitwidth, bits = (total_size - bit_index < type_bitwidth) ? total_size - bit_index : type_bitwidth;
+					storage_type value = buffer[index];
+					std::size_t subindex = 0;
+
+					for (; subindex + 8 <= bits; subindex += 8, value = static_cast<storage_type>(value >> 8))
+					{
+						// Multiplying by 0x0101010101010101 copies the low byte of value into all 8 bytes, and the mask leaves each byte either 0 or a single bit (at most 0x80).
+						// Adding 0x7F to each byte then sets its top bit (0x80) only if the byte was not 0. The largest sum is 0x80 + 0x7F = 0xFF, so nothing carries into the next byte.
+						const uint_least64_t spread = ((static_cast<uint_least64_t>(value & 0xFF) * 0x0101010101010101ULL) & mask) + 0x7F7F7F7F7F7F7F7FULL;
+						// 0x8080808080808080 keeps the top bit of each byte and >> 7 moves it to the bottom, so each byte is 1 for a set bit and 0 otherwise.
+						// Multiplying by (zero ^ one) turns each 1 into (zero ^ one), again without carries, and XOR-ing with zeros gives zero ^ (zero ^ one) == one for set bits and zero for the rest.
+						const uint_least64_t characters = zeros ^ (((spread & 0x8080808080808080ULL) >> 7) * difference);
+						char_type * const destination = output + (most_significant_first ? total_size - (bit_index + subindex + 8) : bit_index + subindex);
+						destination[0] = static_cast<char_type>(characters >> 0);
+						destination[1] = static_cast<char_type>(characters >> 8);
+						destination[2] = static_cast<char_type>(characters >> 16);
+						destination[3] = static_cast<char_type>(characters >> 24);
+						destination[4] = static_cast<char_type>(characters >> 32);
+						destination[5] = static_cast<char_type>(characters >> 40);
+						destination[6] = static_cast<char_type>(characters >> 48);
+						destination[7] = static_cast<char_type>(characters >> 56);
+					}
+
+					for (; subindex != bits; ++subindex, value = static_cast<storage_type>(value >> 1))
+					{
+						output[most_significant_first ? total_size - (bit_index + subindex + 1) : bit_index + subindex] = (value & 1) ? one : zero;
+					}
+				}
+			}
+		#endif
 
 	} // plf namespace
 
