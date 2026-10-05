@@ -3031,9 +3031,10 @@ public:
 				}
 				else
 				{
-					begin_iterator.group_pointer = unused_groups_head;
+					// The previous begin group may have been deallocated above, so point both begin and end at the new group, and reset it, as groups on the unused list are not reset:
+					begin_iterator.group_pointer = end_iterator.group_pointer = unused_groups_head;
 					unused_groups_head = begin_iterator.group_pointer->next_group;
-					begin_iterator.group_pointer->next_group = NULL;
+					reset_only_group_left(begin_iterator.group_pointer);
 				}
 			}
 		}
