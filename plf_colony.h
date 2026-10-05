@@ -4883,7 +4883,7 @@ public:
 			{
 				distance += iterator2.skipfield_pointer - iterator1.skipfield_pointer;
 			}
- 			else if (iterator1.element_pointer == iterator2.group_pointer->first_element() && iterator2.element_pointer + 1 + *(iterator2.skipfield_pointer + 1) == iterator2.group_pointer->past_back()) // ie. if iterator1 is at beginning of block (have to check this in case first and last are in the same block to begin with) and iterator2 is last element in the block. This check won't work for back block (as end() may not be past end of block), but that's fine, it's just an optimization.
+ 			else if (iterator2.group_pointer->next_group != NULL && iterator1.element_pointer == iterator2.group_pointer->first_element() && iterator2.element_pointer + 1 + *(iterator2.skipfield_pointer + 1) == iterator2.group_pointer->past_back()) // ie. if iterator2 is not in the back block, iterator1 is at beginning of block (have to check this in case first and last are in the same block to begin with) and iterator2 is last element in the block. This check can't be used for the back block, as iterator2 may be end() there, which isn't an element, and if end() is at the end of a full back block, skipfield_pointer + 1 is past the skipfield.
 			{
 				distance += static_cast<difference_type>(iterator2.group_pointer->size) - 1;
 			}
