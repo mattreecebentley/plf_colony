@@ -2325,16 +2325,21 @@ private:
 
 			edit_free_list_head(start.element_pointer, start.group_pointer->free_list_head);
 			start.group_pointer->free_list_head = start_index;
+
+			if (distance_to_end > 2) // if the skipblock is longer than 2 nodes, fill in the middle nodes with non-zero values so that get_iterator() and is_active() will work
+			{
+				std::memset(plf::void_cast(start.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_end - 2));
+			}
 		}
 		else
 		{
 			// Just update existing skipblock, no need to create new free list node:
 			*(start.skipfield_pointer - previous_node_value) = *(start.skipfield_pointer + distance_to_end - 1) = static_cast<skipfield_type>(previous_node_value + distance_to_end);
-		}
 
-		if (distance_to_end > 2) // if the skipblock is longer than 2 nodes, fill in the middle nodes with non-zero values so that get_iterator() will work
-		{
-			std::memset(plf::void_cast(start.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_end - 2));
+			if (distance_to_end > 1) // the start node is now a middle node of the joined skipblock, so fill it and any following middle nodes with non-zero values so that get_iterator() and is_active() will work
+			{
+				std::memset(plf::void_cast(start.skipfield_pointer), 1, sizeof(skipfield_type) * (distance_to_end - 1));
+			}
 		}
 
 		// Update group and hive size:
