@@ -2586,7 +2586,7 @@ private:
 			if PLF_CONSTEXPR (!std::is_trivially_destructible<element_type>::value)
 		#endif
 		{
-			if (it.element_pointer == it.group_pointer->past_back())
+			if (it.element_pointer == it.group_pointer->past_back() && it.group_pointer->next_group != NULL) // If this is the back block, it is already end(), so leave it there
 			{
 				it.group_pointer = it.group_pointer->next_group;
 				it.set_to_first_element_in_group();

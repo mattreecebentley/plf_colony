@@ -1746,6 +1746,18 @@ int main()
 
 			message("Fuzz-test range assign + erase passed.");
 
+			{ // Range assign that ends on an erased slot at the end of a full back block, with a non-trivially-destructible type
+				colony<small_struct_non_trivial> nt_colony(plf::limits(3, 3));
+				nt_colony.insert(1);
+				nt_colony.insert(2);
+				nt_colony.erase(nt_colony.insert(3)); // 1 2 _ : the block is full and ends with an erased slot
+
+				const std::vector<small_struct_non_trivial> nt_vector(3, small_struct_non_trivial(4));
+				nt_colony.assign(nt_vector.begin(), nt_vector.end());
+
+				failpass("Range assign to end of full back block test", nt_colony.size() == 3 && nt_colony.begin()->number == 4);
+			}
+
 
 			i_colony.clear();
 
