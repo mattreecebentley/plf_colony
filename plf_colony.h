@@ -3324,11 +3324,8 @@ public:
 				if (unused_groups_head != NULL) // some of the reserved blocks were not removed as they were too large, so use one of these to make the new begin group
 				{
 					end_iterator.group_pointer = begin_iterator.group_pointer = unused_groups_head;
-					end_iterator.element_pointer = begin_iterator.element_pointer = unused_groups_head->front();
-					end_iterator.skipfield_pointer = begin_iterator.skipfield_pointer = unused_groups_head->skipfield;
-
 					unused_groups_head = unused_groups_head->next_group;
-					begin_iterator.group_pointer->next_group = NULL;
+					reset_only_group_left(begin_iterator.group_pointer); // Groups on the unused list are not reset, so reset it here, as reuse_unused_group() does
 				}
 				else
 				{

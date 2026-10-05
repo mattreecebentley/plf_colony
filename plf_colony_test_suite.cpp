@@ -477,6 +477,29 @@ int main()
 				}
 			#endif
 
+			{ // trim_capacity(n) on an empty colony, where the first block is deallocated and an unused block that had erasures becomes the only block
+				colony<int> trim_colony(plf::limits(3, 4));
+
+				for (int counter = 0; counter != 8; ++counter)
+				{
+					trim_colony.insert(counter); // blocks of 3, 3 and 4 elements
+				}
+
+				trim_colony.erase(--trim_colony.end());
+				trim_colony.clear();
+				trim_colony.trim_capacity(4); // deallocates both 3-element blocks
+				trim_colony.insert(1);
+
+				unsigned int count = 0;
+
+				for (colony<int>::iterator current = trim_colony.begin(); current != trim_colony.end(); ++current)
+				{
+					if (++count == 2) break; // There is only one element
+				}
+
+				failpass("trim_capacity(n) after clear test", count == 1 && trim_colony.capacity() == 4);
+			}
+
 			const unsigned int temp_capacity = static_cast<unsigned int>(p_colony.capacity());
 			p_colony.shrink_to_fit();
 			failpass("Shrink_to_fit test", p_colony.capacity() < temp_capacity);
