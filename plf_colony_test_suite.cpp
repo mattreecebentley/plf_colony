@@ -820,6 +820,21 @@ int main()
 
 			failpass("Index-to-iterator test", temp2 == temp_iterator);
 
+			{ // distance() to end() when end() is in a back block that has erasures
+				colony<int> one_slot_left(plf::limits(3, 3));
+				one_slot_left.insert(1);
+				one_slot_left.insert(2);
+				one_slot_left.erase(one_slot_left.begin()); // _ 2 and one unused slot: end() is at the block's last slot
+
+				colony<int> full(plf::limits(3, 3));
+				full.insert(1);
+				full.insert(2);
+				full.insert(3);
+				full.erase(++full.begin()); // 1 _ 3: end() is past the end of the full block
+
+				failpass("Distance to end() in back block test", distance(one_slot_left.begin(), one_slot_left.end()) == 1 && distance(full.begin(), full.end()) == 2);
+			}
+
 
 			for (colony<int>::iterator the_iterator = i_colony.begin(); the_iterator != i_colony.end();)
 			{
