@@ -837,6 +837,32 @@ int main()
 			failpass("is_active test 4", i_colony.is_active(temp_iterator) == false);
   			failpass("get_iterator test 4", i_colony.get_iterator(&(*temp_iterator)) == i_colony.end());
 
+			{ // Range-erase next to an existing skipblock joins the two; every erased element must still be reported as erased
+				colony<int> skip_colony;
+
+				for (int i = 0; i != 10; ++i)
+				{
+					skip_colony.insert(i);
+				}
+
+				colony<int>::iterator first = skip_colony.begin();
+				advance(first, 3);
+				skip_colony.erase(first); // 0 1 2 _ 4 5 6 7 8 9
+
+				first = skip_colony.begin();
+				advance(first, 3);
+				colony<int>::iterator last = first;
+				advance(last, 3);
+
+				const colony<int>::const_iterator erased_iterator = first; // element 4, the first element of the range
+				int * const erased_pointer = &(*first);
+
+				skip_colony.erase(first, last); // 0 1 2 _ _ _ _ 7 8 9
+
+				failpass("is_active range-erase join test", skip_colony.is_active(erased_iterator) == false);
+				failpass("get_iterator range-erase join test", skip_colony.get_iterator(erased_pointer) == skip_colony.end());
+			}
+
 			i_colony.reshape(plf::limits(3, i_colony.block_capacity_limits().max));
 
 			const unsigned int temp_capacity2 = static_cast<unsigned int>(i_colony.capacity());
