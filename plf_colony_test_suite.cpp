@@ -196,6 +196,7 @@ int main()
 			colony<int *> p_colony;
 
 			failpass("Colony empty", p_colony.empty());
+			failpass("Distance on empty colony", distance(p_colony.begin(), p_colony.end()) == 0 && distance(p_colony.rbegin(), p_colony.rend()) == 0);
 
 			int ten = 10;
 			p_colony.insert(&ten);

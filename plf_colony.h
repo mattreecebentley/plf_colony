@@ -4838,6 +4838,14 @@ public:
 			// In the initial and final groups, manual incrementation must be used to calculate distance, if there have been any erasures in those groups.
 			// If there are no prior erasures in either of those groups we can use pointer arithmetic to calculate the distances.
 
+			if (element_pointer == last.element_pointer) // Includes begin() == end() on a colony without blocks, where the group pointers are NULL
+			#ifdef PLF_CPP20_SUPPORT
+				[[unlikely]]
+			#endif
+			{
+				return 0;
+			}
+
 			assert(!(group_pointer == NULL) && !(last.group_pointer == NULL));  // Check that they are both initialized
 
 			difference_type distance = 0;
