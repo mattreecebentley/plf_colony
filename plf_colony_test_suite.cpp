@@ -1908,6 +1908,32 @@ int main()
 
 			failpass("Reshape test 4", colony1.capacity() == 3400);
 
+			{ // reshape() on an empty colony, where the first block no longer fits and is deallocated but a later block is kept
+				colony<int> reshaped;
+
+				for (int counter = 0; counter != 1000; ++counter)
+				{
+					reshaped.insert(counter);
+				}
+
+				reshaped.clear();
+				reshaped.reshape(plf::limits(100, 255));
+
+				for (int counter = 0; counter != 300; ++counter)
+				{
+					reshaped.insert(counter);
+				}
+
+				int total = 0;
+
+				for (colony<int>::iterator current = reshaped.begin(); current != reshaped.end(); ++current)
+				{
+					total += *current;
+				}
+
+				failpass("Reshape after clear test", reshaped.size() == 300 && total == 44850);
+			}
+
 		}
 
 		{
