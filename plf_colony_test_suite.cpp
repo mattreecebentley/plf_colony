@@ -148,6 +148,21 @@ struct small_struct_non_trivial
 
 
 
+int sort_live_count = 0; // number of sort_counted objects constructed and not yet destroyed
+
+struct sort_counted // small enough for sort() to sort copies of the elements, with non-throwing copy operations and no move operations
+{
+	int number;
+
+	sort_counted(const int num) : number(num) { ++sort_live_count; }
+	sort_counted(const sort_counted &source) PLF_NOEXCEPT : number(source.number) { ++sort_live_count; }
+	sort_counted & operator = (const sort_counted &source) PLF_NOEXCEPT { number = source.number; return *this; }
+	~sort_counted() { --sort_live_count; }
+	bool operator < (const sort_counted &source) const { return number < source.number; }
+};
+
+
+
 
 
 int main()
@@ -1511,6 +1526,19 @@ int main()
 			}
 
 			failpass("Less-than sort with allocation optimization 3 test - large type 2", sorted);
+		}
+
+		{
+			colony<sort_counted> sc_colony;
+
+			for (int counter = 0; counter != 100; ++counter)
+			{
+				sc_colony.insert(sort_counted(100 - counter));
+			}
+
+			sc_colony.sort();
+
+			failpass("Sort destroys its temporary copies test", sort_live_count == 100);
 		}
 
 

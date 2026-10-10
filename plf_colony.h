@@ -3893,15 +3893,15 @@ public:
 			#endif
 			{
 				std::copy(sort_array, end, begin_iterator);
+			}
 
-				#ifdef PLF_TYPE_TRAITS_SUPPORT
-					if (!std::is_trivially_destructible<element_type>::value)
-				#endif
+			#ifdef PLF_TYPE_TRAITS_SUPPORT
+				if (!std::is_trivially_destructible<element_type>::value)
+			#endif
+			{
+				for (element_type *current = sort_array; current != end; ++current) // Destroy the temporary copies whichever branch above assigned them back
 				{
-					for (element_type *current = sort_array; current != end; ++current)
-					{
-						PLF_DESTROY(allocator_type, *this, current);
-					}
+					PLF_DESTROY(allocator_type, *this, current);
 				}
 			}
 
