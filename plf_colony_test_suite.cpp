@@ -1562,7 +1562,7 @@ int main()
 			#ifdef PLF_CPP20_SUPPORT
 				std::ranges::take_view<std::ranges::ref_view<plf::colony<int>>> rng = i_colony2 | std::ranges::views::take(2);
 
-				colony<int> i_colony_range(plf::ranges::from_range, rng);
+				colony<int> i_colony_range(plf::from_range, rng);
 
 				failpass("Rangesv3 constructor test", i_colony_range.size() == 2);
 			#endif

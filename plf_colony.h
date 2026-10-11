@@ -768,7 +768,7 @@ public:
 		// Ranges v3 constructors:
 
 		template<plf::compatible_range<element_type> range_type>
-		colony(ranges::from_range_t, range_type &&rg, const plf::limits block_limits, const allocator_type &alloc = allocator_type()):
+		colony(plf::from_range_t, range_type &&rg, const plf::limits block_limits, const allocator_type &alloc = allocator_type()):
 			allocator_type(alloc),
 			erasure_groups_head(NULL),
 			unused_groups_head(NULL),
@@ -788,8 +788,8 @@ public:
 
 
 		template<plf::compatible_range<element_type> range_type>
-		colony(plf::ranges::from_range_t, range_type &&rg, const allocator_type &alloc = allocator_type()):
-			colony(plf::ranges::from_range, std::move(rg), block_capacity_default_limits(), alloc)
+		colony(plf::from_range_t, range_type &&rg, const allocator_type &alloc = allocator_type()):
+			colony(plf::from_range, std::move(rg), block_capacity_default_limits(), alloc)
 		{}
 	#endif
 
