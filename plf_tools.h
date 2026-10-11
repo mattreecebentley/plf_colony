@@ -43,6 +43,7 @@
 	#if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
 		#if _MSC_VER >= 1600
 			#define PLF_MOVE_SEMANTICS_SUPPORT
+			#define PLF_DECLTYPE_SUPPORT
 		#endif
 		#if _MSC_VER >= 1700
 			#define PLF_TYPE_TRAITS_SUPPORT
@@ -94,6 +95,7 @@
 		#if defined(__GNUC__) && defined(__GNUC_MINOR__) && !defined(__clang__) // If compiler is GCC/G++
 			#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 3) || __GNUC__ > 4
 				#define PLF_MOVE_SEMANTICS_SUPPORT
+				#define PLF_DECLTYPE_SUPPORT
 				#define PLF_VARIADICS_SUPPORT
 			#endif
 			#if (__GNUC__ == 4 && __GNUC_MINOR__ >= 4) || __GNUC__ > 4
@@ -127,6 +129,9 @@
 			#if __has_feature(cxx_alignas) && __has_feature(cxx_alignof)
 				#define PLF_ALIGNMENT_SUPPORT
 			#endif
+			#if __has_feature(cxx_decltype)
+				#define PLF_DECLTYPE_SUPPORT
+			#endif
 			#if __has_feature(cxx_noexcept)
 				#define PLF_CPP11_SUPPORT
 				#undef PLF_NOEXCEPT
@@ -148,6 +153,7 @@
 			#endif
 		#elif defined(__GLIBCXX__) // Using another compiler type with libstdc++ - we are assuming full c++11 compliance for compiler - which may not be true
 			#define PLF_DEFAULT_SUPPORT
+			#define PLF_DECLTYPE_SUPPORT
 
 			#if __GLIBCXX__ >= 20080606
 				#define PLF_MOVE_SEMANTICS_SUPPORT
@@ -178,6 +184,7 @@
 				#define PLF_VARIADICS_SUPPORT
 			#endif
 		#else // Assume type traits and initializer support for other compilers and standard library implementations
+			#define PLF_DECLTYPE_SUPPORT
 			#define PLF_DEFAULT_SUPPORT
 			#define PLF_MOVE_SEMANTICS_SUPPORT
 			#define PLF_VARIADICS_SUPPORT
@@ -279,7 +286,7 @@
 	#ifdef PLF_CPP20_SUPPORT
 		#include <ranges>
 	#endif
-	
+
 
 	namespace plf
 	{
