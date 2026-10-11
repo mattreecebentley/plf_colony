@@ -514,7 +514,7 @@
 		template<typename storage_type>
 		static PLF_CONSTFUNC std::size_t countr_one(const storage_type value)
 		{
-			return plf::countr_zero(~value);
+			return plf::countr_zero(static_cast<storage_type>(~value));
 		}
 
 
@@ -549,21 +549,21 @@
 			#elif ((defined(__GNUC__) && __GNUC__ >= 4) || defined(__clang__)) && !defined(PLF_CPP20_SUPPORT)
 				if PLF_CONSTEXPR (sizeof(storage_type) <= sizeof(unsigned))
 				{
-					return static_cast<std::size_t>(__builtin_clz(value) - (sizeof(unsigned) - sizeof(storage_type)));
+					return static_cast<std::size_t>(__builtin_clz(value) - ((sizeof(unsigned) - sizeof(storage_type)) * 8));
 				}
 				else if PLF_CONSTEXPR (sizeof(storage_type) <= sizeof(unsigned long))
 				{
-					return static_cast<std::size_t>(__builtin_clzl(value) - (sizeof(unsigned long) - sizeof(storage_type)));
+					return static_cast<std::size_t>(__builtin_clzl(value) - ((sizeof(unsigned long) - sizeof(storage_type)) * 8));
 				}
 				#ifdef PLF_CPP11_SUPPORT
 					else if PLF_CONSTEXPR (sizeof(storage_type) <= sizeof(unsigned long long))
 					{
-						return static_cast<std::size_t>(__builtin_clzll(value) - (sizeof(unsigned long long) - sizeof(storage_type)));
+						return static_cast<std::size_t>(__builtin_clzll(value) - ((sizeof(unsigned long long) - sizeof(storage_type)) * 8));
 					}
 				#else
 					else if PLF_CONSTEXPR (sizeof(storage_type) <= sizeof(std::size_t) && sizeof(std::size_t) >= 8)
 					{
-						return static_cast<std::size_t>(__builtin_clzll(value) - (sizeof(std::size_t) - sizeof(storage_type)));
+						return static_cast<std::size_t>(__builtin_clzll(value) - ((sizeof(std::size_t) - sizeof(storage_type)) * 8));
 					}
 				#endif
 			#elif defined(PLF_CPP20_SUPPORT)
@@ -581,7 +581,7 @@
 		template<typename storage_type>
 		static PLF_CONSTFUNC std::size_t countl_one(const storage_type value)
 		{
-			return plf::countl_zero(~value);
+			return plf::countl_zero(static_cast<storage_type>(~value));
 		}
 
 
