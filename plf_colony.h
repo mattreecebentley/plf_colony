@@ -2773,7 +2773,7 @@ public:
 
 
 	// Overloads for colony iterators, since std::distance overloads for these are not possible without C++20 concepts and we must stick with ADL:
-	template <class iterator_type, bool is_const>
+	template <bool is_const>
 	void assign(const colony_iterator<is_const> &first, const colony_iterator<is_const> &last)
 	{
 		range_assign(first, static_cast<size_type>(first.distance(last)));
@@ -2781,7 +2781,7 @@ public:
 
 
 
-	template <class iterator_type, bool is_const>
+	template <bool is_const>
 	void assign(const colony_reverse_iterator<is_const> &first, const colony_reverse_iterator<is_const> &last)
 	{
 		range_assign(first, static_cast<size_type>(first.distance(last)));

@@ -1852,6 +1852,49 @@ int main()
 			}
 
 
+			{ // Range assign from another colony's iterators, const iterators and reverse iterators, with erased elements in the source
+				colony<int> source;
+
+				for (int counter = 0; counter != 1000; ++counter)
+				{
+					source.insert(counter);
+				}
+
+				for (colony<int>::iterator current = source.begin(); current != source.end();)
+				{
+					if (*current % 3 == 0)
+					{
+						current = source.erase(current);
+					}
+					else
+					{
+						++current;
+					}
+				}
+
+				colony<int> forward_colony, const_colony, reverse_colony;
+				forward_colony.assign(source.begin(), source.end());
+				const_colony.assign(source.cbegin(), source.cend());
+				reverse_colony.assign(source.rbegin(), source.rend());
+
+				bool forward_matches = forward_colony.size() == source.size(), const_matches = const_colony.size() == source.size(), reverse_matches = reverse_colony.size() == source.size();
+
+				colony<int>::iterator forward_it = forward_colony.begin(), const_it = const_colony.begin(), reverse_it = reverse_colony.begin();
+				colony<int>::reverse_iterator source_reverse_it = source.rbegin();
+
+				for (colony<int>::iterator current = source.begin(); current != source.end() && forward_matches && const_matches && reverse_matches; ++current, ++forward_it, ++const_it, ++reverse_it, ++source_reverse_it)
+				{
+					forward_matches = *forward_it == *current;
+					const_matches = *const_it == *current;
+					reverse_matches = *reverse_it == *source_reverse_it;
+				}
+
+				failpass("Range assign from colony iterators test", forward_matches);
+				failpass("Range assign from colony const_iterators test", const_matches);
+				failpass("Range assign from colony reverse_iterators test", reverse_matches);
+			}
+
+
 			i_colony.clear();
 
 			#ifdef PLF_INITIALIZER_LIST_SUPPORT
