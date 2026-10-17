@@ -1390,9 +1390,10 @@ private:
 	void fill(const element_type &element, const skipfield_type size)
 	{
 		#ifdef PLF_TYPE_TRAITS_SUPPORT
-			if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value)
+			if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value &&
+				(((sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value)) || sizeof(aligned_element_struct) == sizeof(element_type)))
 			{
-				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type))
+				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value)
 				{
 					aligned_element_struct aligned_copy;
 					std::memcpy(static_cast<void *>(&aligned_copy), static_cast<const void *>(&element), sizeof(element_type));
@@ -1474,9 +1475,10 @@ private:
 	void fill_skipblock(const element_type &element, const aligned_pointer_type location, const skipfield_pointer_type skipfield_pointer, const skipfield_type size)
 	{
 		#ifdef PLF_TYPE_TRAITS_SUPPORT
-			if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value)
+			if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value &&
+				(((sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value)) || sizeof(aligned_element_struct) == sizeof(element_type)))
 			{
-				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type))
+				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value)
 				{
 					aligned_element_struct aligned_copy;
 					std::memcpy(static_cast<void *>(&aligned_copy), static_cast<const void *>(&element), sizeof(element_type));
@@ -3441,8 +3443,8 @@ public:
 			if (number_of_max_groups == 0) return;
 
 			// Make the first allocated unused group:
-			const skipfield_type new_block_capacity = (max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder;
-			negative_remainder -= max_block_capacity - new_block_capacity;
+			const skipfield_type new_block_capacity = static_cast<skipfield_type>((max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder);
+			negative_remainder -= static_cast<skipfield_type>(max_block_capacity - new_block_capacity);
 			first_unused_group = current_group = allocate_new_group(new_block_capacity, begin_iterator.group_pointer);
 			--number_of_max_groups;
 		}
@@ -3473,8 +3475,8 @@ public:
 
 		while (number_of_max_groups != 0)
 		{
-			const skipfield_type new_block_capacity = (max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder;
-			negative_remainder -= max_block_capacity - new_block_capacity;
+			const skipfield_type new_block_capacity = static_cast<skipfield_type>((max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder);
+			negative_remainder -= static_cast<skipfield_type>(max_block_capacity - new_block_capacity);
 
 			#ifdef PLF_EXCEPTIONS_SUPPORT
 				try
