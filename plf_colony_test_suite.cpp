@@ -1575,6 +1575,32 @@ int main()
 
 			failpass("Fill insertion test", i_colony2.size() == 500003);
 
+			{
+				colony<int> i_colony4;
+				i_colony4.insert(1);
+				i_colony4.insert(4, 2);
+
+				failpass("Fill insertion into partly-filled back block test", distance(i_colony4.begin(), i_colony4.end()) == 5);
+			}
+
+			{
+				colony<unsigned char> uc_colony(5, 1);
+				uc_colony.insert(5, 2);
+				uc_colony.erase(uc_colony.begin());
+				uc_colony.erase(uc_colony.begin());
+				uc_colony.insert(2, 3);
+
+				int uc_total = 0;
+
+				for (colony<unsigned char>::iterator it = uc_colony.begin(); it != uc_colony.end(); ++it)
+				{
+					uc_total += *it;
+				}
+
+				failpass("Fill insertion for 1-byte types test", uc_colony.size() == 10 && uc_total == 19);
+			}
+
+
 			std::vector<int> some_ints(500, 2);
 
 			i_colony2.insert(some_ints.begin(), some_ints.end());

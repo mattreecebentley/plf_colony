@@ -1394,8 +1394,9 @@ private:
 			{
 				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type))
 				{
-					alignas (alignof(aligned_element_struct)) element_type aligned_copy = element; // to avoid potentially violating memory boundaries in line below, create an initial object copy of same (but aligned) type
-					plf::uninitialized_fill_n(end_iterator.element_pointer, size, *pointer_cast<aligned_pointer_type>(&aligned_copy), static_cast<allocator_type &>(*this));
+					aligned_element_struct aligned_copy;
+					std::memcpy(static_cast<void *>(&aligned_copy), static_cast<const void *>(&element), sizeof(element_type));
+					plf::uninitialized_fill_n(end_iterator.element_pointer, size, aligned_copy, static_cast<allocator_type &>(*this));
 				}
 				else
 				{
@@ -1477,8 +1478,9 @@ private:
 			{
 				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type))
 				{
-					alignas (alignof(aligned_element_struct)) element_type aligned_copy = element;
-					plf::uninitialized_fill_n(location, size, *pointer_cast<aligned_pointer_type>(&aligned_copy), static_cast<allocator_type &>(*this));
+					aligned_element_struct aligned_copy;
+					std::memcpy(static_cast<void *>(&aligned_copy), static_cast<const void *>(&element), sizeof(element_type));
+					plf::uninitialized_fill_n(location, size, aligned_copy, static_cast<allocator_type &>(*this));
 				}
 				else
 				{
