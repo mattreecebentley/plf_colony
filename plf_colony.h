@@ -1391,7 +1391,7 @@ private:
 	{
 		#ifdef PLF_TYPE_TRAITS_SUPPORT
 			if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value &&
-				(((sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value)) || sizeof(aligned_element_struct) == sizeof(element_type)))
+				((sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value) || sizeof(aligned_element_struct) == sizeof(element_type)))
 			{
 				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value)
 				{
@@ -1476,7 +1476,7 @@ private:
 	{
 		#ifdef PLF_TYPE_TRAITS_SUPPORT
 			if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value &&
-				(((sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value)) || sizeof(aligned_element_struct) == sizeof(element_type)))
+				((sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value) || sizeof(aligned_element_struct) == sizeof(element_type)))
 			{
 				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value)
 				{
@@ -3443,7 +3443,7 @@ public:
 			if (number_of_max_groups == 0) return;
 
 			// Make the first allocated unused group:
-			const skipfield_type new_block_capacity = static_cast<skipfield_type>((max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder);
+			const skipfield_type new_block_capacity = std::max(static_cast<skipfield_type>(max_block_capacity - negative_remainder), min_block_capacity);
 			negative_remainder -= static_cast<skipfield_type>(max_block_capacity - new_block_capacity);
 			first_unused_group = current_group = allocate_new_group(new_block_capacity, begin_iterator.group_pointer);
 			--number_of_max_groups;
@@ -3475,7 +3475,7 @@ public:
 
 		while (number_of_max_groups != 0)
 		{
-			const skipfield_type new_block_capacity = static_cast<skipfield_type>((max_block_capacity - negative_remainder < min_block_capacity) ? min_block_capacity : max_block_capacity - negative_remainder);
+			const skipfield_type new_block_capacity = std::max(static_cast<skipfield_type>(max_block_capacity - negative_remainder), min_block_capacity);
 			negative_remainder -= static_cast<skipfield_type>(max_block_capacity - new_block_capacity);
 
 			#ifdef PLF_EXCEPTIONS_SUPPORT
@@ -4830,7 +4830,7 @@ public:
 
 		// distance implementation:
 
-		difference_type distance(const colony_iterator &last) const
+		difference_type distance(const colony_iterator &iterator2) const
 		{
 			// Code logic:
 			// If iterators are the same, return 0
@@ -4840,7 +4840,7 @@ public:
 			// In the initial and final groups, manual incrementation must be used to calculate distance, if there have been any erasures in those groups.
 			// If there are no prior erasures in either of those groups we can use pointer arithmetic to calculate the distances.
 
-			if (element_pointer == last.element_pointer) // Includes begin() == end() on a colony without blocks, where the group pointers are NULL
+			if (element_pointer == iterator2.element_pointer) // Includes begin() == end() on a colony without blocks, where the group pointers are NULL
 			#ifdef PLF_CPP20_SUPPORT
 				[[unlikely]]
 			#endif
@@ -4848,17 +4848,10 @@ public:
 				return 0;
 			}
 
-			assert(!(group_pointer == NULL) && !(last.group_pointer == NULL));  // Check that they are both initialized
+			if (iterator2 < *this) return -iterator2.distance(*this);
 
 			difference_type distance = 0;
-			colony_iterator iterator1 = *this, iterator2 = last;
-			const bool swap_iterators = iterator1 > iterator2;
-
-			if (swap_iterators)
-			{
-				iterator1 = last;
-				iterator2 = *this;
-			}
+			colony_iterator iterator1 = *this;
 
 			if (iterator1.group_pointer != iterator2.group_pointer) // if not in same group, process intermediate groups
 			{
@@ -4912,8 +4905,6 @@ public:
 				}
 			}
 
-
-			if (swap_iterators) distance = -distance;
 
 			return distance;
 		}
