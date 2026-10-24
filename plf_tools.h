@@ -206,7 +206,7 @@
 			#define PLF_VOIDT_SUPPORT
 		#endif
 
-		#if __cplusplus >= 202001L && ((((defined(__clang__) && __clang_major__ >= 15) || (defined(__GNUC__) && (__GNUC__ >= 12))) && ((defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 15) || (defined(__GLIBCXX__) &&	_GLIBCXX_RELEASE >= 12))) || (!defined(__clang__) && !defined(__GNUC__))) // detecting the library version is required so that, for example, std::to_address can be used when PLF_CPP20_SUPPORT is defined
+		#if __cplusplus >= 202001L && ((((defined(__clang__) && __clang_major__ >= 15) || (defined(__GNUC__) && (__GNUC__ >= 12))) && ((defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 17) || (defined(__GLIBCXX__) &&	_GLIBCXX_RELEASE >= 12))) || (!defined(__clang__) && !defined(__GNUC__))) // detecting the library version is required so that, for example, std::to_address can be used when PLF_CPP20_SUPPORT is defined
 			#define PLF_CPP20_SUPPORT
 			#undef PLF_CONSTFUNC
 			#define PLF_CONSTFUNC constexpr
