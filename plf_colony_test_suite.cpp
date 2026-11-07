@@ -165,6 +165,32 @@ struct sort_counted // small enough for sort() to sort copies of the elements, w
 
 
 
+// Checks that max_elements_per_allocation() gives the largest block capacity whose elements and skipfield fit in each amount, or 0 if not even the smallest block fits:
+template <class colony_type>
+bool max_elements_per_allocation_correct()
+{
+	const plf::limits hard_limits = colony_type::block_capacity_hard_limits();
+
+	for (size_t amount = 0; amount != 5000; ++amount)
+	{
+		const size_t capacity = colony_type::max_elements_per_allocation(amount);
+
+		if (capacity == 0)
+		{
+			if (colony_type::block_allocation_amount(hard_limits.min) <= amount) return false;
+		}
+		else if (capacity < hard_limits.min || capacity > hard_limits.max || colony_type::block_allocation_amount(capacity) > amount || (capacity != hard_limits.max && colony_type::block_allocation_amount(capacity + 1) <= amount))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+
+
 int main()
 {
 	freopen("error.log","w", stderr); // For catching assertion failure info when run outside of a command line prompt
@@ -2065,6 +2091,12 @@ int main()
 
 				failpass("Reshape after clear test", reshaped.size() == 300 && total == 44850);
 			}
+
+			failpass("max_elements_per_allocation test", colony<int>::max_elements_per_allocation(0) == 0 && colony<int>::max_elements_per_allocation(64) == 12 && max_elements_per_allocation_correct<colony<char> >() && max_elements_per_allocation_correct<colony<int> >() && max_elements_per_allocation_correct<colony<double> >() && max_elements_per_allocation_correct<colony<small_struct> >() && max_elements_per_allocation_correct<colony<int, std::allocator<int>, plf::memory_use> >());
+
+			#ifdef PLF_CPP20_SUPPORT
+				static_assert(colony<int>::max_elements_per_allocation(64) == 12);
+			#endif
 
 		}
 
