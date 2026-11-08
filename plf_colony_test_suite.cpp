@@ -176,6 +176,75 @@ struct sort_counted // small enough for sort() to sort copies of the elements, w
 
 
 
+struct sort_throwing_copy // Small, but its copy may throw, so sort() copies it into the sort array with uninitialized_copy where type traits are supported
+{
+	int number;
+
+	explicit sort_throwing_copy(const int num) PLF_NOEXCEPT : number(num) {}
+	sort_throwing_copy(const sort_throwing_copy &source) : number(source.number) { if (source.number < 0) throw 123; }
+	sort_throwing_copy & operator = (const sort_throwing_copy &source) { if (source.number < 0) throw 123; number = source.number; return *this; }
+	bool operator < (const sort_throwing_copy &source) const { return number < source.number; }
+	bool operator == (const sort_throwing_copy &source) const { return number == source.number; }
+};
+
+
+
+int sort_throwing_live_count = 0; // number of sort_throws_on_copy objects constructed and not yet destroyed
+bool sort_throwing_armed = false;
+
+struct sort_throws_on_copy // Small, and its copy throws for the value 500 while sort_throwing_armed is true
+{
+	int number;
+
+	explicit sort_throws_on_copy(const int num) : number(num) { ++sort_throwing_live_count; }
+	sort_throws_on_copy(const sort_throws_on_copy &source) : number(source.number) { if (sort_throwing_armed && source.number == 500) throw 123; ++sort_throwing_live_count; }
+	sort_throws_on_copy & operator = (const sort_throws_on_copy &source) { number = source.number; return *this; }
+	~sort_throws_on_copy() { --sort_throwing_live_count; }
+	bool operator < (const sort_throws_on_copy &source) const { return number < source.number; }
+	bool operator == (const sort_throws_on_copy &source) const { return number == source.number; }
+};
+
+
+
+struct sort_non_trivial // Small and not trivially copyable, with non-throwing copy and move operations, so sort() moves it into the sort array and back where move semantics are supported
+{
+	int number;
+
+	explicit sort_non_trivial(const int num) PLF_NOEXCEPT : number(num) {}
+	sort_non_trivial(const sort_non_trivial &source) PLF_NOEXCEPT : number(source.number) {}
+	sort_non_trivial & operator = (const sort_non_trivial &source) PLF_NOEXCEPT { number = source.number; return *this; }
+
+	#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+		sort_non_trivial(sort_non_trivial &&source) PLF_NOEXCEPT : number(source.number) { source.number = -1; } // A moved-from element is -1, so an element moved from twice is seen
+		sort_non_trivial & operator = (sort_non_trivial &&source) PLF_NOEXCEPT { number = source.number; source.number = -1; return *this; }
+	#endif
+
+	bool operator < (const sort_non_trivial &source) const { return number < source.number; }
+	bool operator == (const sort_non_trivial &source) const { return number == source.number; }
+};
+
+
+
+struct sort_by_last_digit // A custom comparator for sort(), comparing the last digit first
+{
+	bool operator () (const int first, const int second) const { return (first % 10 != second % 10) ? first % 10 < second % 10 : first < second; }
+	bool operator () (const std::string &first, const std::string &second) const { return (first[first.size() - 1] != second[second.size() - 1]) ? first[first.size() - 1] < second[second.size() - 1] : first < second; }
+};
+
+
+
+// sort() must give the same order as sorting a copy of the elements:
+template <class colony_type, class comparison_function>
+bool sort_matches_sorted_copy(colony_type &source, comparison_function compare)
+{
+	std::vector<typename colony_type::value_type> expected(source.begin(), source.end());
+	std::sort(expected.begin(), expected.end(), compare);
+	source.sort(compare);
+	return source.size() == expected.size() && std::equal(source.begin(), source.end(), expected.begin());
+}
+
+
+
 
 
 // Checks that max_elements_per_allocation() gives the largest block capacity whose elements and skipfield fit in each amount, or 0 if not even the smallest block fits:
@@ -1803,6 +1872,130 @@ int main()
 			sc_colony.sort();
 
 			failpass("Sort destroys its temporary copies test", sort_live_count == 100);
+		}
+
+		{
+			title2("Sort with erasures tests");
+
+			// The copy-to-an-array path (int, a type whose copy can throw, a non-trivially-copyable type) and the pointer-tuple path (std::string), with blocks without erasures, few erasures (word scan) and many erasures:
+			bool int_sorts = true, greater_sorts = true, custom_sorts = true, throwing_sorts = true, non_trivial_sorts = true, string_sorts = true, string_custom_sorts = true;
+
+			for (int pattern = 0; pattern != 4; ++pattern)
+			{
+				colony<int> i_colony(plf::limits(50, 100)), g_colony(plf::limits(50, 100)), c_colony;
+				colony<sort_throwing_copy> t_colony;
+				colony<sort_non_trivial> n_colony(plf::limits(64, 64));
+				colony<std::string> s_colony(plf::limits(50, 100)), sc_colony;
+
+				for (int counter = 0; counter != 2000; ++counter)
+				{
+					const int value = rand() % 1000;
+					char text[16];
+					sprintf(text, "%d", value);
+
+					i_colony.insert(value);
+					g_colony.insert(value);
+					c_colony.insert(value);
+					t_colony.insert(sort_throwing_copy(value));
+					n_colony.insert(sort_non_trivial(value));
+					s_colony.insert(std::string(text));
+					sc_colony.insert(std::string(text));
+				}
+
+				colony<int>::iterator g_current = g_colony.begin(), c_current = c_colony.begin();
+				colony<sort_throwing_copy>::iterator t_current = t_colony.begin();
+				colony<sort_non_trivial>::iterator n_current = n_colony.begin();
+				colony<std::string>::iterator s_current = s_colony.begin(), sc_current = sc_colony.begin();
+
+				for (colony<int>::iterator current = i_colony.begin(); current != i_colony.end();) // Pattern 0 no erasures, 1 one in 64, 2 one in 4, 3 sparse
+				{
+					const bool erase = (pattern == 1) ? (rand() & 63) == 0 : (pattern == 2) ? (rand() & 3) == 0 : (pattern == 3) ? (rand() & 7) != 0 : false;
+
+					if (erase)
+					{
+						current = i_colony.erase(current);
+						g_current = g_colony.erase(g_current);
+						c_current = c_colony.erase(c_current);
+						t_current = t_colony.erase(t_current);
+						n_current = n_colony.erase(n_current);
+						s_current = s_colony.erase(s_current);
+						sc_current = sc_colony.erase(sc_current);
+					}
+					else
+					{
+						++current;
+						++g_current;
+						++c_current;
+						++t_current;
+						++n_current;
+						++s_current;
+						++sc_current;
+					}
+				}
+
+				int_sorts = int_sorts && sort_matches_sorted_copy(i_colony, std::less<int>());
+				greater_sorts = greater_sorts && sort_matches_sorted_copy(g_colony, std::greater<int>());
+				custom_sorts = custom_sorts && sort_matches_sorted_copy(c_colony, sort_by_last_digit());
+				throwing_sorts = throwing_sorts && sort_matches_sorted_copy(t_colony, std::less<sort_throwing_copy>());
+				non_trivial_sorts = non_trivial_sorts && sort_matches_sorted_copy(n_colony, std::less<sort_non_trivial>());
+				string_sorts = string_sorts && sort_matches_sorted_copy(s_colony, std::less<std::string>());
+				string_custom_sorts = string_custom_sorts && sort_matches_sorted_copy(sc_colony, sort_by_last_digit());
+			}
+
+			failpass("Sort with erasures test", int_sorts);
+			failpass("Sort with erasures, greater-than test", greater_sorts);
+			failpass("Sort with erasures, custom comparator test", custom_sorts);
+			failpass("Sort with erasures, copy that may throw test", throwing_sorts);
+			failpass("Sort with erasures, non-trivially-copyable type test", non_trivial_sorts);
+			failpass("Sort with erasures, pointer sort test", string_sorts);
+			failpass("Sort with erasures, pointer sort custom comparator test", string_custom_sorts);
+		}
+
+		{
+			// A copy throwing part way through copying the elements into the sort array must leave the colony as it was, and destroy nothing twice. Copies already made into the sort array may not be destroyed, so the live count may be higher than the number of elements:
+			bool unchanged = true, no_double_destroy = true, sorts_after = true;
+
+			for (int pattern = 0; pattern != 3; ++pattern) // 0 no erasures, 1 one in 4 erased, 2 sparse
+			{
+				colony<sort_throws_on_copy> st_colony;
+
+				for (int counter = 0; counter != 240; ++counter) // Few enough for an unused block to hold the sort array (blocks of this type hold at most 255 elements)
+				{
+					st_colony.insert(sort_throws_on_copy((counter == 120) ? 500 : 501 + rand() % 499)); // Exactly one 500, in the middle
+				}
+
+				for (colony<sort_throws_on_copy>::iterator current = st_colony.begin(); current != st_colony.end();)
+				{
+					const bool erase = (current->number != 500) && ((pattern == 1) ? (rand() & 3) == 0 : (pattern == 2) ? (rand() & 7) != 0 : false);
+					current = erase ? st_colony.erase(current) : ++current;
+				}
+
+				st_colony.reserve(st_colony.capacity() + 255); // An unused block for the sort array, so the sort array, which is not deallocated when a copy throws, is not a memory leak
+				std::vector<sort_throws_on_copy> before(st_colony.begin(), st_colony.end());
+				const int live_before = sort_throwing_live_count;
+				bool threw = false;
+				sort_throwing_armed = true;
+
+				try
+				{
+					st_colony.sort();
+				}
+				catch (...)
+				{
+					threw = true;
+				}
+
+				sort_throwing_armed = false;
+
+				unchanged = unchanged && threw && st_colony.size() == before.size() && std::equal(st_colony.begin(), st_colony.end(), before.begin());
+				no_double_destroy = no_double_destroy && sort_throwing_live_count >= live_before && sort_throwing_live_count < live_before + static_cast<int>(before.size());
+
+				sorts_after = sorts_after && sort_matches_sorted_copy(st_colony, std::less<sort_throws_on_copy>());
+			}
+
+			failpass("Sort with erasures, copy throws test", unchanged);
+			failpass("Sort with erasures, copy throws, no double destruction test", no_double_destroy);
+			failpass("Sort with erasures, sort after a copy throws test", sorts_after);
 		}
 
 

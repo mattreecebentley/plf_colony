@@ -3871,6 +3871,91 @@ private:
 
 
 
+	// Used by sort() - copies, or moves if that cannot throw, each element visit() passes it into the sort array:
+	struct sort_array_constructor
+	{
+		allocator_type &allocator;
+		pointer destination;
+
+		sort_array_constructor(allocator_type &store_allocator, const pointer store_destination) PLF_NOEXCEPT:
+			allocator(store_allocator),
+			destination(store_destination)
+		{}
+
+		bool operator() (element_type &element)
+		{
+			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
+				if PLF_CONSTEXPR (!std::is_trivially_copy_constructible<element_type>::value && std::is_nothrow_move_constructible<element_type>::value)
+				{
+					PLF_CONSTRUCT(allocator_type, allocator, destination++, std::move(element));
+				}
+				else
+			#endif
+			{
+				PLF_CONSTRUCT(allocator_type, allocator, destination++, element);
+			}
+
+			return true;
+		}
+	};
+
+
+
+	// Used by sort() - copies, or moves if that cannot throw, the sorted elements back into each element visit() passes it:
+	struct sort_array_assigner
+	{
+		pointer source;
+
+		explicit sort_array_assigner(const pointer store_source) PLF_NOEXCEPT:
+			source(store_source)
+		{}
+
+		bool operator() (element_type &element)
+		{
+			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
+				if PLF_CONSTEXPR (!std::is_trivially_copy_assignable<element_type>::value && std::is_nothrow_move_assignable<element_type>::value)
+				{
+					element = std::move(*source++);
+				}
+				else
+			#endif
+			{
+				element = *source++;
+			}
+
+			return true;
+		}
+	};
+
+
+
+	// Used by sort() - constructs a tuple of the address and index of each element visit() passes it:
+	struct sort_tuple_constructor
+	{
+		tuple_allocator_type &tuple_allocator;
+		tuple_pointer_type tuple_pointer;
+		size_type index;
+
+		sort_tuple_constructor(tuple_allocator_type &store_allocator, const tuple_pointer_type store_tuple_pointer) PLF_NOEXCEPT:
+			tuple_allocator(store_allocator),
+			tuple_pointer(store_tuple_pointer),
+			index(0)
+		{}
+
+		bool operator() (element_type &element) PLF_NOEXCEPT
+		{
+			#ifdef PLF_VARIADICS_SUPPORT
+				PLF_CONSTRUCT(tuple_allocator_type, tuple_allocator, tuple_pointer++, &element, index++);
+			#else
+				PLF_CONSTRUCT(tuple_allocator_type, tuple_allocator, tuple_pointer++, item_index_tuple(&element, index++));
+			#endif
+
+			return true;
+		}
+	};
+
+
+
 
 	// Try and find space in the unused blocks or the back block instead of allocating for sort:
 	template <class the_type>
@@ -3919,29 +4004,20 @@ public:
 
 			const pointer end = sort_array + total_size;
 
-			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
-				if PLF_CONSTEXPR (!std::is_trivially_copy_constructible<element_type>::value && std::is_nothrow_move_constructible<element_type>::value)
+			#if defined(PLF_VOIDT_SUPPORT) && defined(PLF_TYPE_TRAITS_SUPPORT)
+				if PLF_CONSTEXPR (!((!std::is_trivially_copy_constructible<element_type>::value && std::is_nothrow_move_constructible<element_type>::value) || std::is_nothrow_copy_constructible<element_type>::value)) // A copy may throw - plf::uninitialized_copy uses std::uninitialized_copy if the allocator has no construct() (eg. std::allocator from C++20), which destroys the copies already made. Otherwise it is the same construction loop as visit() below
 				{
-					plf::uninitialized_move(begin_iterator, end_iterator, sort_array, static_cast<allocator_type &>(*this));
+					plf::uninitialized_copy(begin_iterator, end_iterator, sort_array, static_cast<allocator_type &>(*this));
 				}
 				else
 			#endif
 			{
-				plf::uninitialized_copy(begin_iterator, end_iterator, sort_array, static_cast<allocator_type &>(*this));
+				iterator::visit(begin_iterator, end_iterator, sort_array_constructor(*this, sort_array)); // visit() finds runs of non-erased elements faster than iterating
 			}
 
 			PLF_SORT_FUNCTION(sort_array, end, compare);
 
-			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
-				if PLF_CONSTEXPR (!std::is_trivially_copy_assignable<element_type>::value && std::is_nothrow_move_assignable<element_type>::value)
-				{
-					std::copy(plf::make_move_iterator(sort_array), plf::make_move_iterator(end), begin_iterator);
-				}
-				else
-			#endif
-			{
-				std::copy(sort_array, end, begin_iterator);
-			}
+			iterator::visit(begin_iterator, end_iterator, sort_array_assigner(sort_array));
 
 			#ifdef PLF_TYPE_TRAITS_SUPPORT
 				if (!std::is_trivially_destructible<element_type>::value)
@@ -3968,25 +4044,14 @@ public:
 				sort_array = PLF_ALLOCATE(tuple_allocator_type, tuple_allocator, total_size, end_iterator.skipfield_pointer);
 			}
 
-			tuple_pointer_type tuple_pointer = sort_array;
-
 			// Construct pointers to all elements in the sequence:
-			size_type index = 0;
-
-			for (iterator current_element = begin_iterator; current_element != end_iterator; ++current_element, ++tuple_pointer, ++index)
-			{
-				#ifdef PLF_VARIADICS_SUPPORT
-					PLF_CONSTRUCT(tuple_allocator_type, tuple_allocator, tuple_pointer, &*current_element, index);
-				#else
-					PLF_CONSTRUCT(tuple_allocator_type, tuple_allocator, tuple_pointer, item_index_tuple(&*current_element, index));
-				#endif
-			}
+			const tuple_pointer_type tuple_pointer = iterator::visit(begin_iterator, end_iterator, sort_tuple_constructor(tuple_allocator, sort_array)).second.tuple_pointer;
 
 			// Now, sort the pointers by the values they point to:
 			PLF_SORT_FUNCTION(sort_array, tuple_pointer, sort_dereferencer<comparison_function>(compare));
 
 			// Sort the actual elements via the tuple array:
-			index = 0;
+			size_type index = 0;
 
 			for (tuple_pointer_type current_tuple = sort_array; current_tuple != tuple_pointer; ++current_tuple, ++index)
 			{
