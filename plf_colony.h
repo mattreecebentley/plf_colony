@@ -2898,28 +2898,16 @@ public:
 
 	static PLF_CONSTFUNC size_type max_elements_per_allocation(const size_type allocation_amount) PLF_NOEXCEPT
 	{
-		// Get a rough approximation of the number of elements + skipfield units we can fit in the amount expressed:
-		PLF_CONSTFUNC size_type num_units = allocation_amount / (sizeof(aligned_element_struct) + sizeof(skipfield_type));
+		// The inverse of get_aligned_block_capacity(): a block's elements and skipfield (which has one more node than the block has elements) are allocated together, in whole multiples of sizeof(aligned_allocation_struct), so only those whole multiples of the amount can be used:
+		const size_type usable_amount = (allocation_amount / sizeof(aligned_allocation_struct)) * sizeof(aligned_allocation_struct);
+
+		if (usable_amount < sizeof(skipfield_type)) return 0;
+
+		size_type num_units = (usable_amount - sizeof(skipfield_type)) / (sizeof(aligned_element_struct) + sizeof(skipfield_type));
 		PLF_CONSTFUNC plf::limits hard_capacities = block_capacity_hard_limits();
 
 		// Truncate the amount to the implementation's hard block capacity max limit:
 		if (num_units > hard_capacities.max) num_units = hard_capacities.max;
-
-		// Adjust num_units downward based on (a) the additional skipfield node necessary per-block in this implementation and
-		// (b) any additional memory waste required in order to allocate the skipfield in multiples of the element type's alignof:
-		if ((	/* Explanation: elements and skipfield are allocated in a single allocation to save performance.
-				In order for the elements to be correctly aligned in memory, this single allocation is aligned to the alignof
-				the element type, so the first line below is the allocation amount in bytes required for the skipfield
-				when allocated in multiples of the element type's alignof. The + sizeof(skipfield_type) adds the additional skipfield node
-				as mentioned, and the (num_units + 1) minus 1 byte rounds up the integer division: */
-			(((((num_units + 1) * sizeof(aligned_allocation_struct)) - 1) + sizeof(skipfield_type)) / sizeof(aligned_allocation_struct))
-				/* the second line is the amount of memory in bytes necessary for the elements themselves: */
-			+ (num_units * sizeof(aligned_element_struct)))
-				/* then we compare against the desired allocation amount: */
-			> allocation_amount)
-		{
-			--num_units; // In this implementation it is not possible for the necessary adjustment to be greater than 1 element+skipfield sizeof
-		}
 
 		if (num_units < hard_capacities.min) num_units = 0;
 
