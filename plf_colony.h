@@ -1720,6 +1720,142 @@ private:
 
 
 
+	// Overloads of range_fill for colony iterators, eg. in the copy constructor, which copy a source group at a time:
+	void range_fill(iterator &it, const skipfield_type size)
+	{
+		range_fill_from_colony(it, size);
+	}
+
+
+
+	void range_fill(const_iterator &it, const skipfield_type size)
+	{
+		range_fill_from_colony(it, size);
+	}
+
+
+
+	#ifdef PLF_COLONY_SCAN_WORDS
+		struct fill_constructor // Used by range_copy_from_colony() - copies each element visit() passes it to the end of the colony, until the fill ends
+		{
+			colony &destination;
+			const aligned_pointer_type fill_end;
+
+			fill_constructor(colony &store_destination, const aligned_pointer_type store_fill_end) PLF_NOEXCEPT:
+				destination(store_destination),
+				fill_end(store_fill_end)
+			{}
+
+			bool operator() (const element_type &element) const
+			{
+				PLF_CONSTRUCT(allocator_type, static_cast<allocator_type &>(destination), pointer_cast<pointer>(destination.end_iterator.element_pointer), element);
+				return ++destination.end_iterator.element_pointer != fill_end;
+			}
+		};
+	#endif
+
+
+
+	template <class colony_iterator_type>
+	void range_fill_from_colony(colony_iterator_type &it, const skipfield_type size)
+	{
+		#ifdef PLF_TYPE_TRAITS_SUPPORT
+			if PLF_CONSTEXPR (!std::is_nothrow_copy_constructible<element_type>::value) // Elements whose copy can throw, and move-only elements, are copied (or moved) one at a time by range_fill, with its try/catch. With more than one copy site, gcc does not inline eg. std::string's copy constructor, so copying a block at a time is slower for them
+			{
+				range_fill<colony_iterator_type>(it, size);
+			}
+			else
+			{
+				range_copy_from_colony(it, end_iterator.element_pointer + size);
+				total_size += size;
+			}
+		#else // Whether the copy can throw is not known, so recover as range_fill does
+			#ifdef PLF_EXCEPTIONS_SUPPORT
+				try
+				{
+					range_copy_from_colony(it, end_iterator.element_pointer + size);
+				}
+				catch (...) // end_iterator.element_pointer is the location of the element whose construction threw, as in range_fill
+				{
+					recover_from_partial_fill();
+					throw;
+				}
+			#else
+				range_copy_from_colony(it, end_iterator.element_pointer + size);
+			#endif
+
+			total_size += size;
+		#endif
+	}
+
+
+
+	template <class colony_iterator_type>
+	void range_copy_from_colony(colony_iterator_type &it, const aligned_pointer_type fill_end)
+	{
+		colony_iterator_type current = it; // A local copy, which can be kept in registers, as this function may not be inlined
+
+		do
+		{
+			if (current.group_pointer->no_erasures()) // Copy the run of elements up to the end of current's group, or of the fill, as a plain array
+			{
+				const aligned_pointer_type run_end = (fill_end - end_iterator.element_pointer < current.group_pointer->past_back() - current.element_pointer) ? fill_end : end_iterator.element_pointer + (current.group_pointer->past_back() - current.element_pointer);
+				const_pointer source = pointer_cast<const_pointer>(current.element_pointer);
+				const size_type run_length = static_cast<size_type>(run_end - end_iterator.element_pointer);
+
+				for (; end_iterator.element_pointer != run_end; ++end_iterator.element_pointer, ++source)
+				{
+					PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, *source);
+				}
+
+				current.element_pointer += run_length - 1; // Then ++ moves current to the next element, as *current++ would have
+				current.skipfield_pointer += run_length - 1;
+				++current;
+			}
+			#ifdef PLF_COLONY_SCAN_WORDS
+				else if (static_cast<size_type>(current.group_pointer->size) * 16 >= static_cast<size_type>(current.group_pointer->capacity) * 15) // At most 1 in 16 elements erased: copy to the end of current's group, or of the fill, with visit(), which finds runs of non-erased elements several skipfield nodes at a time
+				{
+					const group_pointer_type source_group = current.group_pointer;
+					const colony_iterator_type group_end(source_group, source_group->past_back(), source_group->skipfield + source_group->capacity);
+					const colony_iterator_type stopped_at = colony_iterator_type::visit(current, group_end, fill_constructor(*this, fill_end)).first;
+
+					if (stopped_at == group_end)
+					{
+						current.group_pointer = source_group->next_group;
+						current.set_to_first_element_in_group();
+					}
+					else // The fill ended at stopped_at, which has been copied
+					{
+						current = stopped_at;
+						++current;
+					}
+				}
+			#endif
+			else // Copy via the skipfield to the end of current's group, or of the fill, then move to the next element as ++ does
+			{
+				const aligned_pointer_type group_end = current.group_pointer->past_back();
+
+				do
+				{
+					PLF_CONSTRUCT_ELEMENT(end_iterator.element_pointer, *pointer_cast<const_pointer>(current.element_pointer));
+					const skipfield_type skip = *(++current.skipfield_pointer);
+					current.element_pointer += static_cast<size_type>(skip) + 1u;
+					current.skipfield_pointer += skip;
+				} while (++end_iterator.element_pointer != fill_end && current.element_pointer != group_end);
+
+				if (current.element_pointer == group_end && current.group_pointer->next_group != NULL)
+				{
+					current.group_pointer = current.group_pointer->next_group;
+					current.set_to_first_element_in_group();
+				}
+			}
+		} while (end_iterator.element_pointer != fill_end);
+
+		it = current;
+	}
+
+
+
 	template <class iterator_type>
 	void range_fill_skipblock(iterator_type &it, const aligned_pointer_type location, const skipfield_pointer_type skipfield_pointer, const skipfield_type size)
 	{
