@@ -60,7 +60,7 @@
 
 #ifdef PLF_CPP20_SUPPORT
 	#include <concepts>
-	#include <compare> // std::strong_ordering
+	#include <compare> // std::strong_ordering, std::compare_three_way_result_t
 	#include <ranges>
 
 
@@ -3296,7 +3296,9 @@ public:
 
 
 	#ifdef PLF_CPP20_SUPPORT
-		friend constexpr std::strong_ordering operator <=> (const colony &lh, const colony &rh)
+		// A template, so the return type is only formed when <=> is used: colonies of element types without <=> must still compile
+		template <class compared_type = element_type>
+		friend constexpr std::compare_three_way_result_t<compared_type> operator <=> (const colony &lh, const colony &rh)
 		{
 			return std::lexicographical_compare_three_way(lh.begin(), lh.end(), rh.begin(), rh.end());
 		}

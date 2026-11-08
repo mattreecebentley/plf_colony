@@ -115,6 +115,18 @@ struct small_struct
 
 
 
+#ifdef PLF_CPP20_SUPPORT
+	struct weakly_ordered // Compares by key only, so equivalent values can differ
+	{
+		int key, extra;
+		std::weak_ordering operator <=> (const weakly_ordered &source) const { return key <=> source.key; }
+		bool operator == (const weakly_ordered &source) const { return key == source.key; }
+		bool operator != (const weakly_ordered &source) const { return key != source.key; }
+	};
+#endif
+
+
+
 struct exceptions_test
 {
 	int num;
@@ -620,6 +632,20 @@ int main()
 
 			#ifdef PLF_CPP20_SUPPORT
 				failpass("Spaceship operator test", (p_colony2 <=> p_colony3) != 0);
+
+				{ // The comparison category must be the element type's, so colonies of partially and weakly ordered types can be compared:
+					colony<double> d_colony1 = {1.0, 2.0}, d_colony2 = {1.0, 3.0}, nan_colony = {std::numeric_limits<double>::quiet_NaN()};
+					static_assert(std::is_same_v<decltype(d_colony1 <=> d_colony2), std::partial_ordering>);
+					failpass("Spaceship operator partial_ordering test", d_colony1 < d_colony2 && d_colony2 > d_colony1 && d_colony1 <= d_colony1 && (nan_colony <=> nan_colony) == std::partial_ordering::unordered);
+
+					colony<weakly_ordered> w_colony1 = {{1, 0}, {2, 0}}, w_colony2 = {{1, 5}, {2, 6}}, w_colony3 = {{1, 0}, {3, 0}};
+					static_assert(std::is_same_v<decltype(w_colony1 <=> w_colony2), std::weak_ordering>);
+					failpass("Spaceship operator weak_ordering test", (w_colony1 <=> w_colony2) == std::weak_ordering::equivalent && w_colony1 < w_colony3);
+
+					colony<int> i_colony1 = {1, 2}, i_colony2 = {1, 3};
+					static_assert(std::is_same_v<decltype(i_colony1 <=> i_colony2), std::strong_ordering>);
+					failpass("Spaceship operator strong_ordering test", i_colony1 < i_colony2 && i_colony2 >= i_colony1);
+				}
 			#endif
 
 			numtotal = 0;
