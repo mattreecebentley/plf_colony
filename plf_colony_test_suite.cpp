@@ -10,6 +10,7 @@
 #include <algorithm> // std::find
 #include <cstdio> // log redirection, printf
 #include <cstdlib> // abort
+#include <string> // for_each non-trivial type testing
 
 #ifdef PLF_MOVE_SEMANTICS_SUPPORT
 	#include <utility> // std::move
@@ -188,6 +189,58 @@ bool max_elements_per_allocation_correct()
 	return true;
 }
 
+// Function objects for the for_each tests. These are at namespace scope, as local types cannot be template arguments before C++11:
+struct address_recorder
+{
+	std::vector<int *> *addresses;
+	explicit address_recorder(std::vector<int *> &destination): addresses(&destination) {}
+	void operator () (int &element) { addresses->push_back(&element); }
+};
+
+struct const_address_recorder
+{
+	std::vector<const int *> *addresses;
+	explicit const_address_recorder(std::vector<const int *> &destination): addresses(&destination) {}
+	void operator () (const int &element) { addresses->push_back(&element); }
+};
+
+struct element_counter
+{
+	std::size_t count;
+	element_counter(): count(0) {}
+	void operator () (const int &) { ++count; }
+};
+
+struct stop_counter // Returns false for the element numbered stop, counting from start
+{
+	std::size_t current, stop;
+	stop_counter(const std::size_t start, const std::size_t stop_at): current(start), stop(stop_at) {}
+	bool operator () (const int &) { return current++ != stop; }
+};
+
+struct constness_checker // For a const colony, only the const overload must be called
+{
+	bool all_const;
+	constness_checker(): all_const(true) {}
+	void operator () (const int &) {}
+	void operator () (int &) { all_const = false; }
+};
+
+struct string_appender
+{
+	std::string *text;
+	explicit string_appender(std::string &destination): text(&destination) {}
+	void operator () (std::string &element) { *text += element; }
+};
+
+#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+	struct move_only_counter
+	{
+		std::unique_ptr<std::size_t> count;
+		move_only_counter(): count(new std::size_t(0)) {}
+		bool operator () (int &) { ++*count; return true; }
+	};
+#endif
 
 
 
@@ -375,6 +428,165 @@ int main()
 				}
 
 				failpass("Positive/negative distance overload fuzz-test", true);
+			}
+
+
+
+			for (int pass = 0; pass != 3; ++pass) // for_each and for_each_while must visit the same elements, in the same order, as iteration does. Pass 1 uses word-aligned blocks with erasures in every other block only, pass 2 a sparse colony with long skipblocks
+			{
+				colony<int> f_colony(plf::limits(static_cast<size_t>(100 + pass * 28), static_cast<size_t>(100 + pass * 28)));
+
+				for (int counter = 0; counter != 2000; ++counter)
+				{
+					f_colony.insert(counter);
+				}
+
+				for (colony<int>::iterator current = f_colony.begin(); current != f_colony.end();)
+				{
+					const bool erase_element = (pass == 2) ? (rand() & 7) != 0 : (rand() & 3) == 0 && (pass == 0 || (*current / 128) % 2 == 1);
+
+					if (erase_element)
+					{
+						current = f_colony.erase(current);
+					}
+					else
+					{
+						++current;
+					}
+				}
+
+				if (pass == 2)
+				{
+					for (int counter = 0; counter != 20 && f_colony.size() > 40; ++counter) // Range erasures, which join skipblocks
+					{
+						colony<int>::iterator first = f_colony.begin(), last;
+						advance(first, rand() % static_cast<int>(f_colony.size() - 20));
+						last = first;
+						advance(last, 1 + rand() % 8);
+						f_colony.erase(first, last);
+					}
+				}
+
+				std::vector<colony<int>::iterator> positions;
+				std::vector<int *> addresses;
+
+				for (colony<int>::iterator current = f_colony.begin(); current != f_colony.end(); ++current)
+				{
+					positions.push_back(current);
+					addresses.push_back(&*current);
+				}
+
+				positions.push_back(f_colony.end());
+
+				std::vector<int *> visited;
+				for_each(f_colony, address_recorder(visited));
+				failpass("for_each test", visited == addresses);
+
+				const colony<int> &const_f_colony = f_colony;
+				failpass("for_each const test", for_each(const_f_colony, element_counter()).count == f_colony.size() && for_each(const_f_colony, constness_checker()).all_const && for_each(f_colony.cbegin(), f_colony.cend(), constness_checker()).all_const);
+
+				colony<int> empty_colony;
+				failpass("for_each empty test", for_each(empty_colony, element_counter()).count == 0 && for_each_while(empty_colony, stop_counter(0, 1)).first == empty_colony.end());
+
+				bool ranges_match = true, while_matches = true;
+
+				for (int counter = 0; counter != 1000; ++counter)
+				{
+					std::size_t first = static_cast<std::size_t>(rand()) % positions.size(), last = static_cast<std::size_t>(rand()) % positions.size();
+					if (first > last) std::swap(first, last);
+
+					visited.clear();
+					for_each(positions[first], positions[last], address_recorder(visited));
+
+					if (visited != std::vector<int *>(addresses.begin() + static_cast<std::ptrdiff_t>(first), addresses.begin() + static_cast<std::ptrdiff_t>(last)))
+					{
+						ranges_match = false;
+					}
+
+					const std::size_t stop = first + static_cast<std::size_t>(rand()) % (last - first + 1); // stop == last means never stop
+
+					if (for_each_while(positions[first], positions[last], stop_counter(first, stop)).first != positions[stop])
+					{
+						while_matches = false;
+					}
+				}
+
+				failpass("for_each range test", ranges_match);
+				failpass("for_each_while range test", while_matches);
+
+				{ // Whole-colony for_each_while must stop at the element f first returns false for, for both non-const and const colonies
+					const std::size_t stop = f_colony.size() / 2;
+					const bool stopped_correctly = for_each_while(f_colony, stop_counter(0, stop)).first == positions[stop];
+					const colony<int>::const_iterator const_stopped_at = for_each_while(const_f_colony, stop_counter(0, stop)).first;
+					failpass("for_each_while whole colony stop test", stopped_correctly && const_stopped_at == colony<int>::const_iterator(positions[stop]));
+				}
+
+				{ // const_iterator ranges must visit the same elements as iterator ranges
+					bool const_ranges_match = true;
+
+					for (int counter = 0; counter != 100; ++counter)
+					{
+						std::size_t first = static_cast<std::size_t>(rand()) % positions.size(), last = static_cast<std::size_t>(rand()) % positions.size();
+						if (first > last) std::swap(first, last);
+
+						std::vector<const int *> const_visited;
+						for_each(colony<int>::const_iterator(positions[first]), colony<int>::const_iterator(positions[last]), const_address_recorder(const_visited));
+
+						if (!std::equal(const_visited.begin(), const_visited.end(), addresses.begin() + static_cast<std::ptrdiff_t>(first)) || const_visited.size() != last - first)
+						{
+							const_ranges_match = false;
+						}
+					}
+
+					failpass("for_each const_iterator range test", const_ranges_match);
+				}
+
+				#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+				{ // Move-only function objects must work, and come back with their state
+					const std::size_t while_count = *for_each_while(f_colony.begin(), f_colony.end(), move_only_counter()).second.count;
+					const std::size_t whole_count = *for_each(f_colony, move_only_counter()).count;
+					failpass("for_each move-only function test", while_count == f_colony.size() && whole_count == f_colony.size());
+				}
+				#endif
+			}
+
+			for (int pass = 0; pass != 2; ++pass) // Non-trivial element type, which also has a 16-bit skipfield. Pass 1 is sparse
+			{
+				colony<std::string> s_colony;
+				char text[16];
+
+				for (int counter = 0; counter != 1000; ++counter)
+				{
+					sprintf(text, "%d", counter);
+					s_colony.insert(std::string(text));
+				}
+
+				int counter = 0;
+
+				for (colony<std::string>::iterator current = s_colony.begin(); current != s_colony.end();)
+				{
+					const bool erase_element = (pass == 0) ? counter % 3 == 0 : (rand() & 7) != 0;
+					++counter;
+
+					if (erase_element)
+					{
+						current = s_colony.erase(current);
+					}
+					else
+					{
+						++current;
+					}
+				}
+
+				std::string iterated, visited;
+
+				for (colony<std::string>::iterator current = s_colony.begin(); current != s_colony.end(); ++current)
+				{
+					iterated += *current;
+				}
+
+				for_each(s_colony, string_appender(visited));
+				failpass("for_each non-trivial type test", visited == iterated && !visited.empty());
 			}
 
 

@@ -27,6 +27,7 @@
 
 #define PLF_INCLUDE_UNINITIALIZED_TOOLS
 #define PLF_INCLUDE_TOOLS
+#define PLF_INCLUDE_BIT_TOOLS // plf::countr_zero/countl_zero, for for_each
 #include "plf_tools.h"
 
 
@@ -44,8 +45,12 @@
 	#include <type_traits> // std::is_trivially_destructible, type_identity_t, etc
 #endif
 
-#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-	#include <utility> // std::move
+#include <utility> // std::pair, std::move
+
+
+// for_each loads 8 bytes of skipfield at a time where the byte order is known to be little-endian, as the order of the nodes within a loaded word depends on it:
+#if defined(PLF_64BIT_SUPPORT) && ((defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__) || defined(_MSC_VER))
+	#define PLF_COLONY_SCAN_WORDS
 #endif
 
 #ifdef PLF_INITIALIZER_LIST_SUPPORT
@@ -3208,6 +3213,55 @@ public:
 
 
 
+	// Apply f to every element of the colony, in order, until f returns false for for_each_while. See the iterator versions in colony_iterator. Found by argument-dependent lookup, so call these unqualified, as with advance:
+	template <class function_type>
+	friend std::pair<iterator, function_type> for_each_while(colony &container, function_type f)
+	{
+		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+			return for_each_while(container.begin(), container.end(), std::move(f));
+		#else
+			return for_each_while(container.begin(), container.end(), f);
+		#endif
+	}
+
+
+
+	template <class function_type>
+	friend std::pair<const_iterator, function_type> for_each_while(const colony &container, function_type f)
+	{
+		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+			return for_each_while(container.cbegin(), container.cend(), std::move(f));
+		#else
+			return for_each_while(container.cbegin(), container.cend(), f);
+		#endif
+	}
+
+
+
+	template <class function_type>
+	friend function_type for_each(colony &container, function_type f)
+	{
+		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+			return for_each(container.begin(), container.end(), std::move(f));
+		#else
+			return for_each(container.begin(), container.end(), f);
+		#endif
+	}
+
+
+
+	template <class function_type>
+	friend function_type for_each(const colony &container, function_type f)
+	{
+		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+			return for_each(container.cbegin(), container.cend(), std::move(f));
+		#else
+			return for_each(container.cbegin(), container.cend(), f);
+		#endif
+	}
+
+
+
 	friend bool operator == (const colony &lh, const colony &rh) PLF_NOEXCEPT
 	{
 		if (lh.total_size != rh.total_size) return false;
@@ -4263,6 +4317,30 @@ public:
 
 
 
+		// Applies f to the elements in [first, last), in order, until f returns false. Equivalent to: while (first != last && f(*first)) ++first; return std::make_pair(first, f);
+		// Faster than iterating, as runs of non-erased elements are found several skipfield nodes at a time. f must not insert into or erase from the colony.
+		template <class function_type>
+		friend std::pair<colony_iterator, function_type> for_each_while(const colony_iterator first, const colony_iterator last, function_type f)
+		{
+			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+				return visit(first, last, std::move(f));
+			#else
+				return visit(first, last, f);
+			#endif
+		}
+
+
+
+		// Applies f to every element in [first, last), in order. Equivalent to: while (first != last) f(*first++); return f;
+		template <class function_type>
+		friend function_type for_each(const colony_iterator first, const colony_iterator last, function_type f)
+		{
+			visit(first, last, for_each_function<function_type>(f));
+			return f;
+		}
+
+
+
 		colony_iterator() PLF_NOEXCEPT
 		#ifdef PLF_DEFAULT_SUPPORT
 			= default;
@@ -4555,6 +4633,124 @@ public:
 			element_pointer(element_p),
 			skipfield_pointer(skipfield_p)
 		{}
+
+
+
+		// Used by for_each, to call its function object by reference and always continue:
+		template <class function_type>
+		struct for_each_function
+		{
+			function_type &function;
+
+			explicit for_each_function(function_type &source) PLF_NOEXCEPT : function(source) {}
+
+			template <class visited_type>
+			bool operator () (visited_type &element)
+			{
+				function(element);
+				return true;
+			}
+		};
+
+
+
+		template <class function_type>
+		static std::pair<colony_iterator, function_type> visit_result(const colony_iterator it, function_type &f)
+		{
+			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+				return std::pair<colony_iterator, function_type>(it, std::move(f));
+			#else
+				return std::pair<colony_iterator, function_type>(it, f);
+			#endif
+		}
+
+
+
+		// Used by for_each and for_each_while. Groups without erasures are visited as plain arrays. Where PLF_COLONY_SCAN_WORDS is defined, in groups with at most
+		// 1/4 of their elements erased, 8 bytes of skipfield are loaded at a time and their zero (non-erased) nodes found with bit operations, so there is no branch
+		// per erased element. As erased nodes are always non-zero, a word with no erased nodes is visited as a plain array. The node after the last non-erased node
+		// in a word is either non-erased or the start node of a skipblock, which holds the skipblock's length, so adding that node's value skips the whole skipblock.
+		// Other groups are visited via the skipfield as operator ++ does.
+		template <class function_type>
+		static std::pair<colony_iterator, function_type> visit(const colony_iterator first, const colony_iterator last, function_type f)
+		{
+			if (first == last) return visit_result(last, f); // Also covers an empty colony, which has no groups
+
+			#ifdef PLF_COLONY_SCAN_WORDS
+				const std::size_t node_bits = sizeof(skipfield_type) * 8, nodes_per_word = sizeof(std::uint64_t) / sizeof(skipfield_type);
+				const std::uint64_t low_bits = (~std::uint64_t(0) / std::numeric_limits<skipfield_type>::max()) * (std::numeric_limits<skipfield_type>::max() >> 1); // 0x7F7F... or 0x7FFF...
+				const std::uint64_t top_bits = ~low_bits; // The top bit of every node
+			#endif
+
+			for (group_pointer_type current_group = first.group_pointer;; current_group = current_group->next_group)
+			{
+				assert(current_group != NULL); // ie. last is not reachable from first
+
+				const pointer elements = pointer_cast<pointer>(current_group->front()); // const-qualified for const_iterator, so a const colony's elements cannot be modified through f
+				const skipfield_type * const skipfield = current_group->skipfield;
+				const std::size_t end_index = static_cast<std::size_t>(((current_group == last.group_pointer) ? last.element_pointer : current_group->past_back()) - current_group->front());
+				std::size_t index = (current_group == first.group_pointer) ? static_cast<std::size_t>(first.element_pointer - current_group->front()) : *skipfield; // skipfield[0] is 0 or the length of a leading skipblock
+
+				if (current_group->no_erasures()) // Visit the group as a plain array
+				{
+					while (index != end_index && f(elements[index])) ++index;
+				}
+				else
+				{
+					#ifdef PLF_COLONY_SCAN_WORDS
+						const bool few_erasures = static_cast<std::size_t>(current_group->size) * 4 >= static_cast<std::size_t>(current_group->capacity) * 3;
+
+						while (few_erasures && index + nodes_per_word <= end_index) // index is always a non-erased element here
+						{
+							std::uint64_t word;
+							std::memcpy(static_cast<void *>(&word), static_cast<const void *>(skipfield + index), sizeof(word));
+							const std::uint64_t non_erased = ~(((word & low_bits) + low_bits) | word) & top_bits; // The top bit of each zero node
+
+							if (non_erased == top_bits) // No erased nodes in this word
+							{
+								for (const std::size_t word_end = index + nodes_per_word; index != word_end; ++index)
+								{
+									if (!f(elements[index])) goto stopped;
+								}
+							}
+							else
+							{
+								for (std::uint64_t remaining = non_erased; remaining != 0; remaining &= remaining - 1) // Visit each non-erased node, lowest first
+								{
+									const std::size_t element_index = index + plf::countr_zero(remaining) / node_bits;
+
+									if (!f(elements[element_index]))
+									{
+										index = element_index;
+										goto stopped;
+									}
+								}
+
+								index += (64 - plf::countl_zero(non_erased)) / node_bits; // One past the last non-erased node
+							}
+
+							index += skipfield[index]; // Skip the skipblock which starts there, if any
+						}
+					#endif
+
+					while (index < end_index && f(elements[index])) // The remaining nodes, via the skipfield, as operator ++ does
+					{
+						++index;
+						index += skipfield[index];
+					}
+				}
+
+				if (index < end_index)
+				{
+					#ifdef PLF_COLONY_SCAN_WORDS
+						stopped:
+					#endif
+					return visit_result(colony_iterator(current_group, current_group->front() + index, current_group->skipfield + index), f);
+				}
+
+				if (current_group == last.group_pointer) return visit_result(last, f);
+			}
+		}
 
 
 
@@ -5315,5 +5511,7 @@ typename plf::colony<element_type, allocator_type>::size_type erase(plf::colony<
 	#undef PLF_SORT_FUNCTION
 	#undef PLF_SORT_FUNCTION_DEFINED
 #endif
+
+#undef PLF_COLONY_SCAN_WORDS
 
 #endif // PLF_COLONY_H
