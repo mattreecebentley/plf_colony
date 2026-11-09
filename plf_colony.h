@@ -5425,6 +5425,24 @@ public:
 
 
 
+// Used by std::erase_if() overload below, to find the next element that matches the predicate with for_each_while:
+template<class element_type, class predicate_function>
+struct colony_not_predicate
+{
+	predicate_function &predicate;
+
+	explicit colony_not_predicate(predicate_function &store_predicate) PLF_NOEXCEPT :
+		predicate(store_predicate)
+	{}
+
+	bool operator() (const element_type &compare_value)
+	{
+		return !predicate(compare_value);
+	}
+};
+
+
+
 } // plf namespace
 
 
@@ -5448,32 +5466,39 @@ typename plf::colony<element_type, allocator_type>::size_type erase_if(plf::colo
 	typedef typename plf::colony<element_type, allocator_type> colony;
 	typedef typename colony::const_iterator 	const_iterator;
 	typedef typename colony::size_type 			size_type;
-	size_type count = 0;
+	size_type count = 0, non_matches = 0;
 	const const_iterator end = container.cend();
 
 	for (const_iterator current = container.cbegin(); current != end; ++current)
 	{
-		if (predicate(*current))
+		if (!predicate(*current))
 		{
-			const size_type original_count = ++count;
-			const_iterator last = current;
+			if (++non_matches != 32) continue;
 
-			while(++last != end && predicate(*last))
-			{
-				++count;
-			}
-
-			if (count != original_count)
-			{
-				current = container.erase(current, last); // optimised range-erase
-			}
-			else
-			{
-				current = container.erase(current);
-			}
-
-			if (last == end) break;
+			// Long gap between matches: find the next match with for_each_while, which skips non-matching elements faster than iterating. Short gaps are stepped over, as a call costs more than a few increments. The predicate has already been called for current, so the search starts after it. for_each_while is a friend of colony_iterator, found by argument-dependent lookup:
+			current = for_each_while(++current, end, plf::colony_not_predicate<element_type, predicate_function>(predicate)).first;
+			if (current == end) break;
 		}
+
+		non_matches = 0;
+		const size_type original_count = ++count;
+		const_iterator last = current;
+
+		while(++last != end && predicate(*last))
+		{
+			++count;
+		}
+
+		if (count != original_count)
+		{
+			current = container.erase(current, last); // optimised range-erase
+		}
+		else
+		{
+			current = container.erase(current);
+		}
+
+		if (last == end) break;
 	}
 
 	return count;

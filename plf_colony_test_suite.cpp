@@ -245,6 +245,162 @@ struct string_appender
 	void operator () (std::string &element) { *text += element; }
 };
 
+inline int erase_if_key(const int value) { return value; }
+inline int erase_if_key(const std::string &value) { return atoi(value.c_str()); }
+
+inline void erase_if_make(const int key, int &value) { value = key; }
+inline void erase_if_make(const int key, std::string &value) { char text[16]; sprintf(text, "%d", key); value = text; }
+
+struct erase_if_counting_predicate // Matches keys with key % modulus < matches_below, counting the calls
+{
+	std::size_t *calls;
+	int modulus, matches_below;
+
+	template <class element_type>
+	bool operator () (const element_type &value) const
+	{
+		++*calls;
+		return erase_if_key(value) % modulus < matches_below;
+	}
+};
+
+struct erase_if_every_nth // Stateful: the result depends on the number of calls so far, so erase_if must call the same object throughout, not a copy
+{
+	int calls, nth;
+	std::size_t *total_calls;
+
+	template <class element_type>
+	bool operator () (const element_type &)
+	{
+		++*total_calls;
+		return ++calls % nth == 0;
+	}
+};
+
+// With a stateful predicate matching every nth element (gaps longer than the 32 elements erase_if steps over), erase_if must erase exactly the nth, 2nth... elements in iteration order, and call the predicate once per element
+template <class element_type>
+bool erase_if_stateful_test(const int prior_erasure, const int nth)
+{
+	plf::colony<element_type> e_colony(plf::limits(128, 128));
+	element_type value;
+
+	for (int counter = 0; counter != 3000; ++counter)
+	{
+		erase_if_make(counter, value);
+		e_colony.insert(value);
+	}
+
+	for (typename plf::colony<element_type>::iterator current = e_colony.begin(); current != e_colony.end();)
+	{
+		const bool erase_element = (prior_erasure == 1) ? (rand() & 63) == 0 : (prior_erasure == 2) ? (rand() & 3) == 0 : false;
+
+		if (erase_element)
+		{
+			current = e_colony.erase(current);
+		}
+		else
+		{
+			++current;
+		}
+	}
+
+	std::vector<element_type> expected;
+	int position = 0;
+
+	for (typename plf::colony<element_type>::iterator current = e_colony.begin(); current != e_colony.end(); ++current)
+	{
+		if (++position % nth != 0) expected.push_back(*current);
+	}
+
+	const std::size_t original_size = e_colony.size();
+	std::size_t total_calls = 0;
+	erase_if_every_nth predicate = {0, nth, &total_calls};
+	const std::size_t erased = erase_if(e_colony, predicate);
+
+	return erased == original_size - expected.size() && e_colony.size() == expected.size() && std::equal(e_colony.begin(), e_colony.end(), expected.begin()) && total_calls == original_size;
+}
+
+// erase_if must erase the same elements as a filtered copy does, and call the predicate once per element. Patterns: single matches with short and long gaps, runs of matches, no matches, all matching. Prior erasures: none, few (the word scan in for_each_while), 1 in 4, in every other block only, and sparse with range erasures
+template <class element_type>
+void erase_if_pattern_test(bool &erase_if_matches, bool &predicate_called_once)
+{
+	const int patterns[][2] = {{2, 1}, {10, 1}, {33, 1}, {100, 1}, {1000, 3}, {100, 40}, {5000, 1}, {7, 0}, {3, 3}};
+
+	for (int prior_erasure = 0; prior_erasure != 5; ++prior_erasure)
+	{
+		for (std::size_t pattern = 0; pattern != sizeof(patterns) / sizeof(patterns[0]); ++pattern)
+		{
+			plf::colony<element_type> e_colony(plf::limits(128, 128));
+			element_type value;
+
+			for (int counter = 0; counter != 3000; ++counter)
+			{
+				erase_if_make((rand() & 1) ? counter : rand(), value);
+				e_colony.insert(value);
+			}
+
+			int index = 0;
+
+			for (typename plf::colony<element_type>::iterator current = e_colony.begin(); current != e_colony.end(); ++index)
+			{
+				bool erase_element;
+
+				switch (prior_erasure)
+				{
+					case 1: erase_element = (rand() & 63) == 0; break;
+					case 2: erase_element = (rand() & 3) == 0; break;
+					case 3: erase_element = (rand() & 3) == 0 && (index / 128) % 2 == 1; break;
+					case 4: erase_element = (rand() & 7) != 0; break;
+					default: erase_element = false;
+				}
+
+				if (erase_element)
+				{
+					current = e_colony.erase(current);
+				}
+				else
+				{
+					++current;
+				}
+			}
+
+			if (prior_erasure == 4)
+			{
+				for (int counter = 0; counter != 20 && e_colony.size() > 40; ++counter) // Range erasures, which join skipblocks
+				{
+					typename plf::colony<element_type>::iterator first = e_colony.begin(), last;
+					advance(first, rand() % static_cast<int>(e_colony.size() - 20));
+					last = first;
+					advance(last, 1 + rand() % 8);
+					e_colony.erase(first, last);
+				}
+			}
+
+			std::vector<element_type> expected;
+
+			for (typename plf::colony<element_type>::iterator current = e_colony.begin(); current != e_colony.end(); ++current)
+			{
+				if (erase_if_key(*current) % patterns[pattern][0] >= patterns[pattern][1]) expected.push_back(*current);
+			}
+
+			const std::size_t original_size = e_colony.size();
+			std::size_t calls = 0;
+			const erase_if_counting_predicate predicate = {&calls, patterns[pattern][0], patterns[pattern][1]};
+			const std::size_t erased = erase_if(e_colony, predicate);
+
+			if (erased != original_size - expected.size() || e_colony.size() != expected.size() || !std::equal(e_colony.begin(), e_colony.end(), expected.begin()))
+			{
+				erase_if_matches = false;
+			}
+
+			if (calls != original_size)
+			{
+				predicate_called_once = false;
+			}
+		}
+	}
+}
+
 #ifdef PLF_MOVE_SEMANTICS_SUPPORT
 	struct move_only_counter
 	{
@@ -2725,6 +2881,42 @@ int main()
 			#endif
 
 			failpass("erase_if test",	static_cast<int>(i_colony.size()) == 500);
+
+			bool erase_if_matches = true, predicate_called_once = true;
+			erase_if_pattern_test<int>(erase_if_matches, predicate_called_once);
+			failpass("erase_if pattern test", erase_if_matches);
+			failpass("erase_if predicate call count test", predicate_called_once);
+
+			erase_if_matches = predicate_called_once = true;
+			erase_if_pattern_test<std::string>(erase_if_matches, predicate_called_once); // Non-trivial element type, which also has a 16-bit skipfield
+			failpass("erase_if non-trivial type pattern test", erase_if_matches);
+			failpass("erase_if non-trivial type predicate call count test", predicate_called_once);
+
+			{
+				colony<int> empty_colony;
+				std::size_t calls = 0;
+				const erase_if_counting_predicate predicate = {&calls, 2, 1};
+				failpass("erase_if empty colony test", erase_if(empty_colony, predicate) == 0 && calls == 0 && empty_colony.empty());
+			}
+
+			{
+				bool stateful_matches = true;
+
+				for (int prior_erasure = 0; prior_erasure != 3; ++prior_erasure)
+				{
+					const int nths[] = {37, 100, 1000};
+
+					for (int index = 0; index != 3; ++index)
+					{
+						if (!erase_if_stateful_test<int>(prior_erasure, nths[index]) || !erase_if_stateful_test<std::string>(prior_erasure, nths[index]))
+						{
+							stateful_matches = false;
+						}
+					}
+				}
+
+				failpass("erase_if stateful predicate test", stateful_matches);
+			}
 
 		}
 
