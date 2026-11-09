@@ -411,6 +411,246 @@ void erase_if_pattern_test(bool &erase_if_matches, bool &predicate_called_once)
 #endif
 
 
+// Element type for the destruction tests. It counts live elements and destructions of objects which are not alive, and can throw from its copy constructor and copy assignment:
+int destruction_live_count = 0, destruction_bad_count = 0, destruction_throw_countdown = 0;
+
+template <int padding>
+struct live_counter // padding 1 gives an 8-bit skipfield, padding 24 a 16-bit skipfield
+{
+	int alive;
+	char data[padding];
+
+	live_counter(): alive(12345) { ++destruction_live_count; }
+	live_counter(const live_counter &): alive(12345) { check_throw(); ++destruction_live_count; } // check_throw() is called before counting, so that a throwing copy is not counted
+	live_counter & operator = (const live_counter &) { check_throw(); return *this; }
+
+	~live_counter()
+	{
+		if (alive != 12345) ++destruction_bad_count;
+		alive = 0;
+		--destruction_live_count;
+	}
+
+	static void check_throw()
+	{
+		if (destruction_throw_countdown != 0 && --destruction_throw_countdown == 0) throw 123;
+	}
+};
+
+
+
+// clear(), range erase, assign() to fewer elements (also with a throwing copy) and the destructor must destroy each element exactly once, in blocks with and without erasures, and in a back block which is also the first block. Pass 0 has no erasures, pass 1 erasures in every other block only, pass 2 is sparse, pass 3 has erasures in runs of 8:
+template <int padding>
+void destruction_tests()
+{
+	typedef live_counter<padding> element_type;
+	typedef plf::colony<element_type> colony_type;
+	bool clear_destroys = true, range_erase_destroys = true, assign_destroys = true, throwing_assign_destroys = true, fill_assign_destroys = true, destructor_destroys = true;
+
+	for (int pass = 0; pass != 4; ++pass)
+	{
+		for (int operation = 0; operation != 6; ++operation)
+		{
+			for (int repeat = 0; repeat != 10; ++repeat)
+			{
+				{
+					colony_type d_colony(plf::limits(64, 64));
+					const int total = (repeat % 2 == 0) ? 2000 : 1 + rand() % 150; // Also a single block or two, where the back block is the first block
+
+					for (int counter = 0; counter != total; ++counter)
+					{
+						d_colony.insert(element_type());
+					}
+
+					int index = 0;
+
+					for (typename colony_type::iterator current = d_colony.begin(); current != d_colony.end(); ++index)
+					{
+						bool erase;
+
+						switch (pass)
+						{
+							case 0: erase = false; break;
+							case 1: erase = (index / 64) % 2 == 1 && (rand() & 3) == 0; break;
+							case 2: erase = (rand() & 7) != 0; break;
+							default: erase = (index / 8) % 3 == 1; break;
+						}
+
+						if (erase)
+						{
+							current = d_colony.erase(current);
+						}
+						else
+						{
+							++current;
+						}
+					}
+
+					switch (operation)
+					{
+						case 0:
+							d_colony.clear();
+							clear_destroys = clear_destroys && destruction_live_count == 0;
+							break;
+						case 1:
+						{
+							for (int counter = 0; counter != 10 && d_colony.size() > 2; ++counter)
+							{
+								const int size = static_cast<int>(d_colony.size());
+								const int first_index = rand() % size, last_index = first_index + rand() % (size - first_index + 1);
+								typename colony_type::iterator first = d_colony.begin(), last = d_colony.begin();
+								advance(first, first_index);
+								advance(last, last_index);
+								d_colony.erase(first, last);
+								range_erase_destroys = range_erase_destroys && destruction_live_count == static_cast<int>(d_colony.size());
+							}
+
+							typename colony_type::iterator first = d_colony.begin();
+							advance(first, static_cast<int>(d_colony.size() / 2));
+							d_colony.erase(first, d_colony.end()); // Up to end()
+							range_erase_destroys = range_erase_destroys && destruction_live_count == static_cast<int>(d_colony.size());
+							break;
+						}
+						case 2:
+						{
+							const std::vector<element_type> fewer(d_colony.size() / 3 + static_cast<unsigned int>(rand() % 64));
+							d_colony.assign(fewer.begin(), fewer.end());
+							assign_destroys = assign_destroys && d_colony.size() == fewer.size() && destruction_live_count == static_cast<int>(d_colony.size() + fewer.size());
+							break;
+						}
+						case 3:
+						{
+							const std::vector<element_type> fewer(d_colony.size() / 2);
+
+							if (fewer.empty())
+							{
+								break;
+							}
+
+							destruction_throw_countdown = 1 + rand() % static_cast<int>(fewer.size()); // Throws while assigning to, or constructing in, the colony. The blocks all have 64 slots, and assign() fills them in order, including erased ones
+
+							if ((destruction_throw_countdown - 1) % 64 == 0 && destruction_throw_countdown != 1) // Avoids throwing at the front of a block other than the first, as range_assign() would then leave an empty back block, which is a separate issue
+							{
+								--destruction_throw_countdown;
+							}
+
+							try
+							{
+								d_colony.assign(fewer.begin(), fewer.end());
+								throwing_assign_destroys = false;
+							}
+							catch (...)
+							{
+							}
+
+							destruction_throw_countdown = 0;
+							throwing_assign_destroys = throwing_assign_destroys && destruction_live_count == static_cast<int>(d_colony.size() + fewer.size());
+							break;
+						}
+						case 4:
+						{
+							const element_type value;
+							d_colony.assign(d_colony.size() / 3 + static_cast<unsigned int>(rand() % 64), value);
+							fill_assign_destroys = fill_assign_destroys && destruction_live_count == static_cast<int>(d_colony.size()) + 1;
+							break;
+						}
+						default:
+							break;
+					}
+				}
+
+				if (operation == 5)
+				{
+					destructor_destroys = destructor_destroys && destruction_live_count == 0;
+				}
+
+				destruction_live_count = 0;
+			}
+		}
+	}
+
+	failpass("clear destruction test", clear_destroys);
+	failpass("range erase destruction test", range_erase_destroys);
+	failpass("assign destruction test", assign_destroys);
+	failpass("throwing assign destruction test", throwing_assign_destroys);
+	failpass("fill assign destruction test", fill_assign_destroys);
+	failpass("destructor destruction test", destructor_destroys);
+	failpass("no destruction of erased or destroyed elements test", destruction_bad_count == 0);
+}
+
+
+// A copy which throws at the front of a block other than the first, during fill or range insert or assign, leaves an empty back block. Destroying all elements with clear() or assign() afterwards must not destroy anything in that block (the destructor alone does not handle this yet, so it is not tested here):
+template <int padding>
+void empty_back_block_tests()
+{
+	typedef live_counter<padding> element_type;
+	typedef plf::colony<element_type> colony_type;
+	bool all_threw = true, clear_destroys = true, assign_destroys = true, destructor_destroys = true;
+	const int bad_count_before = destruction_bad_count;
+
+	for (int operation = 0; operation != 4; ++operation)
+	{
+		for (int follow_up = 0; follow_up != 2; ++follow_up)
+		{
+			{
+				const std::vector<element_type> source(20);
+				colony_type d_colony(plf::limits(8, 8));
+
+				if (operation == 3) // Range assign to fewer elements assigns to the existing elements, and constructs none
+				{
+					for (int counter = 0; counter != 32; ++counter)
+					{
+						d_colony.insert(element_type());
+					}
+				}
+
+				destruction_throw_countdown = 9; // The 9th copy is to the front of the second block
+				bool threw = false;
+
+				try
+				{
+					switch (operation)
+					{
+						case 0: d_colony.insert(20, source[0]); break;
+						case 1: d_colony.insert(source.begin(), source.end()); break;
+						case 2: d_colony.assign(20, source[0]); break;
+						default: d_colony.assign(source.begin(), source.end()); break;
+					}
+				}
+				catch (...)
+				{
+					threw = true;
+				}
+
+				destruction_throw_countdown = 0;
+				all_threw = all_threw && threw;
+
+				if (follow_up == 0)
+				{
+					d_colony.clear();
+					clear_destroys = clear_destroys && d_colony.empty() && destruction_live_count == static_cast<int>(source.size());
+				}
+				else
+				{
+					const std::vector<element_type> fewer(3);
+					d_colony.assign(fewer.begin(), fewer.end());
+					assign_destroys = assign_destroys && d_colony.size() == fewer.size() && destruction_live_count == static_cast<int>(source.size() + fewer.size() + d_colony.size());
+				}
+			}
+
+			destructor_destroys = destructor_destroys && destruction_live_count == 0;
+			destruction_live_count = 0;
+		}
+	}
+
+	failpass("empty back block exception test", all_threw);
+	failpass("empty back block clear test", clear_destroys);
+	failpass("empty back block assign test", assign_destroys);
+	failpass("empty back block destructor after clear or assign test", destructor_destroys);
+	failpass("empty back block no destruction of destroyed elements test", destruction_bad_count == bad_count_before);
+}
+
+
 
 int main()
 {
@@ -2918,6 +3158,14 @@ int main()
 				failpass("erase_if stateful predicate test", stateful_matches);
 			}
 
+		}
+
+		{
+			title2("Element destruction tests");
+			destruction_tests<1>();
+			destruction_tests<24>();
+			empty_back_block_tests<1>();
+			empty_back_block_tests<24>();
 		}
 
 		#ifdef PLF_CPP20_SUPPORT

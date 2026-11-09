@@ -978,16 +978,41 @@ private:
 			if PLF_CONSTEXPR (!std::is_trivially_destructible<element_type>::value)
 		#endif
 		{
-			while (it != end_iterator) destroy_element(it++.element_pointer);
+			if (it == end_iterator) return;
+
+			// The rest of it's group is destroyed via the skipfield, as range_assign() marks a group as having no erasures before calling this for the rest of that group:
+			if (it.group_pointer == end_iterator.group_pointer)
+			{
+				destroy_via_skipfield(it, end_iterator.element_pointer);
+				return;
+			}
+
+			destroy_via_skipfield(it, it.group_pointer->past_back());
+
+			// The remaining groups are destroyed a group at a time, so that groups without erasures are destroyed as plain arrays:
+			for (it.group_pointer = it.group_pointer->next_group; it.group_pointer != end_iterator.group_pointer; it.group_pointer = it.group_pointer->next_group)
+			{
+				it.set_to_first_element_in_group();
+				destroy_group(it, it.group_pointer->past_back());
+			}
+
+			it.set_to_first_element_in_group();
+
+			// The back group can be empty if an exception was thrown at its front during a fill or assign (see recover_from_partial_fill() and finish_range_assign()), and destroy_group() destroys at least one element:
+			if (it.element_pointer != end_iterator.element_pointer)
+			{
+				destroy_group(it, end_iterator.element_pointer);
+			}
 		}
 	}
 
 
 
+	// Destroys the non-erased elements in [current, end) of current's group, via the skipfield. The range must not be empty:
 	#ifdef PLF_CPP_20_SUPPORT
-		void destroy_group([[maybe_unused]] const_iterator current, [[maybe_unused]] const aligned_pointer_type end) PLF_NOEXCEPT
+		void destroy_via_skipfield([[maybe_unused]] const_iterator current, [[maybe_unused]] const aligned_pointer_type end) PLF_NOEXCEPT
 	#else
-		void destroy_group(const_iterator current, const aligned_pointer_type end) PLF_NOEXCEPT
+		void destroy_via_skipfield(const_iterator current, const aligned_pointer_type end) PLF_NOEXCEPT
 	#endif
 	{
 		#ifdef PLF_TYPE_TRAITS_SUPPORT
@@ -1000,6 +1025,33 @@ private:
 				current.element_pointer += static_cast<size_type>(*++current.skipfield_pointer) + 1u;
 				current.skipfield_pointer += *current.skipfield_pointer;
 			} while(current.element_pointer != end);
+		}
+	}
+
+
+
+	// Destroys the non-erased elements in [current, end) of current's group. The range must not be empty. A group without erasures is destroyed as a plain array:
+	#ifdef PLF_CPP_20_SUPPORT
+		void destroy_group([[maybe_unused]] const_iterator current, [[maybe_unused]] const aligned_pointer_type end) PLF_NOEXCEPT
+	#else
+		void destroy_group(const_iterator current, const aligned_pointer_type end) PLF_NOEXCEPT
+	#endif
+	{
+		#ifdef PLF_TYPE_TRAITS_SUPPORT
+			if PLF_CONSTEXPR (!std::is_trivially_destructible<element_type>::value)
+		#endif
+		{
+			if (current.group_pointer->no_erasures())
+			{
+				do // Avoid checking skipfield as there are no erased elements
+				{
+					destroy_element(current.element_pointer);
+				} while (++current.element_pointer != end);
+			}
+			else
+			{
+				destroy_via_skipfield(current, end);
+			}
 		}
 	}
 
