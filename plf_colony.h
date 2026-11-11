@@ -4581,16 +4581,17 @@ public:
 				if PLF_CONSTEVAL // As the visit function uses memcpy
 				{
 					while (first != last && f(*first)) ++first;
-					return std::make_pair<it_type, function_type>(std::move(first), std::move(f));
+					return std::make_pair<colony_iterator, function_type>(std::move(first), std::move(f));
 				}
 				else
 			#endif
-
-			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-				return visit(first, last, std::move(f));
-			#else
-				return visit(first, last, f);
-			#endif
+			{
+				#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+					return visit(first, last, std::move(f));
+				#else
+					return visit(first, last, f);
+				#endif
+			}
 		}
 
 
