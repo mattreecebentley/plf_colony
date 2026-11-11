@@ -955,7 +955,7 @@ private:
 
 
 	PLF_CONSTFUNC void destroy_element(
-	#ifdef PLF_CPP_20_SUPPORT
+	#ifdef PLF_CPP20_SUPPORT
 		[[maybe_unused]]
 	#endif
 		const aligned_pointer_type element) PLF_NOEXCEPT
@@ -969,7 +969,7 @@ private:
 
 
 	void destroy_remainder(
-	#ifdef PLF_CPP_20_SUPPORT
+	#ifdef PLF_CPP20_SUPPORT
 		[[maybe_unused]]
 	#endif
 		const_iterator it) PLF_NOEXCEPT
@@ -1009,7 +1009,7 @@ private:
 
 
 	// Destroys the non-erased elements in [current, end) of current's group, via the skipfield. The range must not be empty:
-	#ifdef PLF_CPP_20_SUPPORT
+	#ifdef PLF_CPP20_SUPPORT
 		void destroy_via_skipfield([[maybe_unused]] const_iterator current, [[maybe_unused]] const aligned_pointer_type end) PLF_NOEXCEPT
 	#else
 		void destroy_via_skipfield(const_iterator current, const aligned_pointer_type end) PLF_NOEXCEPT
@@ -1031,7 +1031,7 @@ private:
 
 
 	// Destroys the non-erased elements in [current, end) of current's group. The range must not be empty. A group without erasures is destroyed as a plain array:
-	#ifdef PLF_CPP_20_SUPPORT
+	#ifdef PLF_CPP20_SUPPORT
 		void destroy_group([[maybe_unused]] const_iterator current, [[maybe_unused]] const aligned_pointer_type end) PLF_NOEXCEPT
 	#else
 		void destroy_group(const_iterator current, const aligned_pointer_type end) PLF_NOEXCEPT
