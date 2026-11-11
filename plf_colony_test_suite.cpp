@@ -652,6 +652,400 @@ void empty_back_block_tests()
 
 
 
+// For the copying from a colony tests:
+
+int copy_throws_live_count = 0; // number of copy_throws objects constructed and not yet destroyed
+
+struct copy_throws // the copy constructor and copy assignment throw when copying the element numbered throw_on
+{
+	int number;
+	static int throw_on;
+
+	copy_throws(const int num): number(num) { ++copy_throws_live_count; }
+	copy_throws(const copy_throws &source): number(source.number) { if (number == throw_on) throw 123; ++copy_throws_live_count; }
+	copy_throws & operator = (const copy_throws &source) { if (source.number == throw_on) throw 123; number = source.number; return *this; }
+	~copy_throws() { --copy_throws_live_count; }
+	bool operator == (const copy_throws &source) const { return number == source.number; }
+	bool operator < (const copy_throws &source) const { return number < source.number; }
+};
+
+int copy_throws::throw_on = -2; // -2 for none, as -1 is used for destination elements
+
+
+
+template <class element_type>
+struct copy_test_value // Makes the element numbered number
+{
+	static element_type make(const int number) { return element_type(number); }
+	static int number(const element_type &element) { return static_cast<int>(element); }
+};
+
+template <>
+struct copy_test_value<std::string> // Long enough not to fit in the small string buffer, so that leaks and double destruction show up under the address sanitizer
+{
+	static std::string make(int number)
+	{
+		std::string text("copy test string number ");
+		const std::size_t digits_start = text.size();
+
+		do
+		{
+			text.insert(text.begin() + static_cast<std::ptrdiff_t>(digits_start), static_cast<char>('0' + number % 10));
+		} while ((number /= 10) != 0);
+
+		return text;
+	}
+
+	static int number(const std::string &element) { return std::atoi(element.c_str() + 24); }
+};
+
+template <>
+struct copy_test_value<small_struct> // Trivially copyable, with a 16-bit skipfield
+{
+	static small_struct make(const int number) { return small_struct(static_cast<unsigned int>(number)); }
+	static int number(const small_struct &element) { return element.number; }
+};
+
+template <>
+struct copy_test_value<copy_throws>
+{
+	static copy_throws make(const int number) { return copy_throws(number); }
+	static int number(const copy_throws &element) { return element.number; }
+};
+
+
+
+// Fills source with 3000 elements numbered from 0, then erases with one of these patterns: 0 no erasures, 1 erasures in every other block only, 2 one in 32 erased (few erasures per block), 3 one in 4, 4 sparse, 5 erasures in runs of 50
+template <class colony_type>
+void fill_and_erase(colony_type &source, const int pattern)
+{
+	typedef typename colony_type::value_type element_type;
+
+	for (int counter = 0; counter != 3000; ++counter)
+	{
+		source.insert(copy_test_value<element_type>::make(counter));
+	}
+
+	int index = 0;
+	bool erase_run = false;
+
+	for (typename colony_type::iterator current = source.begin(); current != source.end(); ++index)
+	{
+		bool erase = false;
+
+		switch (pattern)
+		{
+			case 1: erase = (index / 128) % 2 == 1 && (rand() & 3) == 0; break;
+			case 2: erase = (rand() & 31) == 0; break;
+			case 3: erase = (rand() & 3) == 0; break;
+			case 4: erase = (rand() & 7) != 0; break;
+			case 5: if (index % 50 == 0) erase_run = (rand() & 3) == 0; erase = erase_run; break;
+			default: break;
+		}
+
+		if (erase)
+		{
+			current = source.erase(current);
+		}
+		else
+		{
+			++current;
+		}
+	}
+}
+
+
+
+// Destinations for range insert and assign: blocks of other sizes than the source's, so that fills start and end part way through source blocks, and erased slots, so that some of the insert fills them
+template <class colony_type>
+void make_destination(colony_type &destination)
+{
+	typedef typename colony_type::value_type element_type;
+
+	for (int counter = rand() % 100; counter != 0; --counter)
+	{
+		destination.insert(copy_test_value<element_type>::make(-1));
+	}
+
+	for (typename colony_type::iterator current = destination.begin(); current != destination.end();)
+	{
+		if ((rand() & 3) == 0)
+		{
+			current = destination.erase(current);
+		}
+		else
+		{
+			++current;
+		}
+	}
+}
+
+
+
+template <class colony_type>
+std::vector<int> element_numbers(const colony_type &source)
+{
+	std::vector<int> numbers;
+
+	for (typename colony_type::const_iterator current = source.begin(); current != source.end(); ++current)
+	{
+		numbers.push_back(copy_test_value<typename colony_type::value_type>::number(*current));
+	}
+
+	return numbers;
+}
+
+
+
+template <class colony_type>
+bool size_matches(const colony_type &source)
+{
+	return source.size() == static_cast<typename colony_type::size_type>(std::distance(source.begin(), source.end())) && source.empty() == (source.size() == 0);
+}
+
+
+
+struct copy_test_results
+{
+	bool copies, allocator_copies, inserts, range_constructions, assigns, empty_assigns;
+	copy_test_results(): copies(true), allocator_copies(true), inserts(true), range_constructions(true), assigns(true), empty_assigns(true) {}
+};
+
+
+
+// The copy constructor, and range insert, range construction and assign from colony iterators, must copy the same elements, in the same order, as iterating does:
+template <class element_type>
+void copy_from_colony_test(const int pattern, const int limits, const int ranges, copy_test_results &results)
+{
+	typedef plf::colony<element_type> colony_type;
+	colony_type source;
+
+	if (limits == 1)
+	{
+		source.reshape(plf::limits(50, 70));
+	}
+
+	fill_and_erase(source, pattern);
+
+	const colony_type &const_source = source;
+	const std::vector<int> expected = element_numbers(const_source);
+
+	const colony_type copy(const_source);
+	results.copies = results.copies && size_matches(copy) && element_numbers(copy) == expected;
+
+	const colony_type allocator_copy(const_source, const_source.get_allocator());
+	results.allocator_copies = results.allocator_copies && size_matches(allocator_copy) && element_numbers(allocator_copy) == expected;
+
+	for (int counter = 0; counter != ranges; ++counter)
+	{
+		const int size = static_cast<int>(expected.size());
+		const int first = rand() % (size + 1), last = first + rand() % (size - first + 1);
+		const std::vector<int> expected_range(expected.begin() + first, expected.begin() + last);
+		colony_type destination(plf::limits(static_cast<std::size_t>(10 + rand() % 200), 255));
+		colony_type range_constructed, empty_destination;
+		make_destination(destination);
+		std::vector<int> expected_after = element_numbers(destination);
+		expected_after.insert(expected_after.end(), expected_range.begin(), expected_range.end());
+
+		if ((counter & 1) == 0) // const_iterators
+		{
+			const typename colony_type::const_iterator first_it = next(const_source.cbegin(), first), last_it = next(const_source.cbegin(), last);
+			destination.insert(first_it, last_it);
+			colony_type(first_it, last_it).swap(range_constructed);
+			empty_destination.assign(first_it, last_it);
+		}
+		else // iterators
+		{
+			const typename colony_type::iterator first_it = next(source.begin(), first), last_it = next(source.begin(), last);
+			destination.insert(first_it, last_it);
+			colony_type(first_it, last_it).swap(range_constructed);
+			empty_destination.assign(first_it, last_it);
+		}
+
+		std::vector<int> after = element_numbers(destination);
+		std::sort(after.begin(), after.end());
+		std::sort(expected_after.begin(), expected_after.end());
+		results.inserts = results.inserts && size_matches(destination) && after == expected_after;
+		results.range_constructions = results.range_constructions && size_matches(range_constructed) && element_numbers(range_constructed) == expected_range;
+		results.empty_assigns = results.empty_assigns && size_matches(empty_destination) && element_numbers(empty_destination) == expected_range;
+
+		destination.assign(next(const_source.cbegin(), first), next(const_source.cbegin(), last));
+		results.assigns = results.assigns && size_matches(destination) && element_numbers(destination) == expected_range;
+	}
+}
+
+
+
+// Fills which end exactly on the first or the last element of a source block, and start on either: copies [begin, p], [p, end) and [p, p] for each such element p, by range construction, assign into an empty colony and range insert.
+// Patterns: 0 no erasures (plain arrays), 1 one element erased in the middle of each block (the visit() path), 2 every third element erased except the first and last of each block (the skipfield path):
+bool block_boundary_fill_test(const int pattern)
+{
+	plf::colony<int> source(plf::limits(50, 50));
+
+	for (int counter = 0; counter != 500; ++counter)
+	{
+		source.insert(counter);
+	}
+
+	for (plf::colony<int>::iterator current = source.begin(); current != source.end();)
+	{
+		const int position = *current % 50;
+
+		if ((pattern == 1 && position == 25) || (pattern == 2 && position != 0 && position != 49 && position % 3 == 0))
+		{
+			current = source.erase(current);
+		}
+		else
+		{
+			++current;
+		}
+	}
+
+	const std::vector<int> expected(source.begin(), source.end());
+	bool passed = true;
+	int index = 0;
+
+	for (plf::colony<int>::const_iterator current = source.cbegin(); current != source.cend(); ++current, ++index)
+	{
+		if (*current % 50 != 0 && *current % 50 != 49) continue;
+
+		const plf::colony<int>::const_iterator after = next(current, 1);
+		const plf::colony<int>::const_iterator firsts[3] = {source.cbegin(), current, current}, lasts[3] = {after, source.cend(), after};
+		const int first_indexes[3] = {0, index, index}, last_indexes[3] = {index + 1, static_cast<int>(expected.size()), index + 1};
+
+		for (int range = 0; range != 3; ++range)
+		{
+			const std::vector<int> expected_range(expected.begin() + first_indexes[range], expected.begin() + last_indexes[range]);
+			const plf::colony<int> range_constructed(firsts[range], lasts[range]);
+			plf::colony<int> empty_destination, destination(plf::limits(10, 10));
+			empty_destination.assign(firsts[range], lasts[range]);
+
+			for (int counter = 0; counter != 7; ++counter)
+			{
+				destination.insert(-1);
+			}
+
+			destination.insert(firsts[range], lasts[range]);
+			std::vector<int> expected_after(7, -1), after = element_numbers(destination);
+			expected_after.insert(expected_after.end(), expected_range.begin(), expected_range.end());
+			std::sort(after.begin(), after.end());
+			std::sort(expected_after.begin(), expected_after.end());
+
+			passed = passed && size_matches(range_constructed) && element_numbers(range_constructed) == expected_range && size_matches(empty_destination) && element_numbers(empty_destination) == expected_range && size_matches(destination) && after == expected_after;
+		}
+	}
+
+	return passed;
+}
+
+
+
+// After a copy has thrown, the colony must still work: erases its first element, inserts five more, and checks the result against expected (its elements before this):
+template <class colony_type>
+bool still_works(colony_type &destination, std::vector<int> expected)
+{
+	if (!destination.empty())
+	{
+		expected.erase(std::find(expected.begin(), expected.end(), copy_test_value<typename colony_type::value_type>::number(*destination.begin())));
+		destination.erase(destination.begin());
+	}
+
+	for (int counter = 0; counter != 5; ++counter)
+	{
+		destination.insert(copy_test_value<typename colony_type::value_type>::make(-3));
+		expected.push_back(-3);
+	}
+
+	std::vector<int> numbers = element_numbers(destination);
+	std::sort(numbers.begin(), numbers.end());
+	std::sort(expected.begin(), expected.end());
+	return size_matches(destination) && numbers == expected;
+}
+
+
+
+// When copying an element throws part-way through a range insert into a colony of full blocks, or an assign into an empty colony, the elements copied before it must remain, with the right size(), and none may be leaked or destroyed twice.
+// The element which throws is in the first block the fill uses, as upstream does not recover correctly from an exception on the first element of a later block (an empty back block is left, and destroying the colony reads past it),
+// nor while filling the rest of a partly-full back block (size() is too large), so the destination's blocks are full:
+bool copy_from_colony_throw_test(const int pattern, const int limits)
+{
+	typedef plf::colony<copy_throws> colony_type;
+	bool passed = true;
+
+	{
+		colony_type source;
+
+		if (limits == 1)
+		{
+			source.reshape(plf::limits(50, 70));
+		}
+
+		fill_and_erase(source, pattern);
+		const std::vector<int> expected = element_numbers(source);
+		const int size = static_cast<int>(expected.size());
+
+		for (int counter = 0; counter != 4 && size > 1; ++counter)
+		{
+			const int first = rand() % (size - 1), throw_index = std::min(first + 1 + rand() % 254, size - 1), last = throw_index + 1 + rand() % (size - throw_index);
+			const std::vector<int> expected_range(expected.begin() + first, expected.begin() + throw_index); // The elements before the one which throws
+			const colony_type::const_iterator first_it = next(source.cbegin(), first), last_it = next(source.cbegin(), last);
+			bool threw = false;
+
+			{
+				colony_type destination(plf::limits(255, 255));
+
+				for (int counter2 = 255 * (rand() % 3); counter2 != 0; --counter2)
+				{
+					destination.insert(copy_throws(-1));
+				}
+
+				std::vector<int> expected_after = element_numbers(destination);
+				expected_after.insert(expected_after.end(), expected_range.begin(), expected_range.end());
+
+				copy_throws::throw_on = expected[static_cast<std::size_t>(throw_index)];
+
+				try
+				{
+					destination.insert(first_it, last_it);
+				}
+				catch (...)
+				{
+					threw = true;
+				}
+
+				copy_throws::throw_on = -2;
+				passed = passed && threw && size_matches(destination) && element_numbers(destination) == expected_after;
+				passed = passed && still_works(destination, expected_after);
+			}
+
+			{
+				colony_type empty_destination(plf::limits(255, 255));
+				copy_throws::throw_on = expected[static_cast<std::size_t>(throw_index)];
+				threw = false;
+
+				try
+				{
+					empty_destination.assign(first_it, last_it);
+				}
+				catch (...)
+				{
+					threw = true;
+				}
+
+				copy_throws::throw_on = -2;
+				passed = passed && threw && size_matches(empty_destination) && element_numbers(empty_destination) == expected_range;
+				passed = passed && still_works(empty_destination, expected_range);
+			}
+
+			passed = passed && copy_throws_live_count == static_cast<int>(source.size()); // The destinations have been destroyed
+		}
+	}
+
+	return passed && copy_throws_live_count == 0;
+}
+
+
+
 int main()
 {
 	freopen("error.log","w", stderr); // For catching assertion failure info when run outside of a command line prompt
@@ -3166,6 +3560,45 @@ int main()
 			destruction_tests<24>();
 			empty_back_block_tests<1>();
 			empty_back_block_tests<24>();
+		}
+
+		{
+			title2("Copying from a colony tests");
+
+			copy_test_results int_results, struct_results, string_results, throwing_type_results;
+			bool exceptions_handled = true;
+
+			for (int pattern = 0; pattern != 6; ++pattern)
+			{
+				for (int limits = 0; limits != 2; ++limits)
+				{
+					copy_from_colony_test<int>(pattern, limits, 10, int_results);
+					copy_from_colony_test<small_struct>(pattern, limits, 4, struct_results);
+					copy_from_colony_test<std::string>(pattern, limits, 2, string_results);
+					copy_from_colony_test<copy_throws>(pattern, limits, 2, throwing_type_results);
+					exceptions_handled = exceptions_handled && copy_from_colony_throw_test(pattern, limits);
+				}
+			}
+
+			failpass("Copy constructor from colony test", int_results.copies && struct_results.copies && string_results.copies && throwing_type_results.copies);
+			failpass("Allocator-extended copy constructor from colony test", int_results.allocator_copies && struct_results.allocator_copies && string_results.allocator_copies && throwing_type_results.allocator_copies);
+			failpass("Range insert from colony iterators test", int_results.inserts && struct_results.inserts && string_results.inserts && throwing_type_results.inserts);
+			failpass("Range construction from colony iterators test", int_results.range_constructions && struct_results.range_constructions && string_results.range_constructions && throwing_type_results.range_constructions);
+			failpass("Assign from colony iterators test", int_results.assigns && struct_results.assigns && string_results.assigns && throwing_type_results.assigns);
+			failpass("Assign from colony iterators to empty colony test", int_results.empty_assigns && struct_results.empty_assigns && string_results.empty_assigns && throwing_type_results.empty_assigns);
+			failpass("Copying from a colony exceptions test", exceptions_handled && copy_throws_live_count == 0);
+			failpass("Copying from a colony block boundary test", block_boundary_fill_test(0) && block_boundary_fill_test(1) && block_boundary_fill_test(2));
+
+			{
+				const colony<int> empty_source;
+				colony<int> erased_source(500, 1);
+				erased_source.erase(erased_source.begin(), erased_source.end());
+				const colony<int> empty_copy(empty_source), erased_copy(erased_source), allocator_empty_copy(empty_source, empty_source.get_allocator());
+				colony<int> destination(10, 2);
+				destination.insert(empty_source.begin(), empty_source.end());
+				destination.insert(erased_source.begin(), erased_source.end());
+				failpass("Copying from an empty colony test", empty_copy.empty() && erased_copy.empty() && allocator_empty_copy.empty() && empty_copy.begin() == empty_copy.end() && destination.size() == 10);
+			}
 		}
 
 		#ifdef PLF_CPP20_SUPPORT
