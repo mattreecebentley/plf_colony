@@ -2818,6 +2818,20 @@ int main()
 
 			failpass("Fill construction test", i_colony3.size() == 5000);
 
+			{
+				// A string literal value is an array, so it must not be taken for the iterator type of a range overload:
+				colony<std::string> s_colony(3, "a");
+				colony<std::string> s_colony2(3, "b", plf::limits(3, 3));
+				colony<const char *> p_colony(4, "c");
+				const char *input[2] = {"d", "e"};
+				colony<std::string> r_colony(input, input + 2);
+
+				failpass("Fill construction from string literal test", s_colony.size() == 3 && std::count(s_colony.begin(), s_colony.end(), "a") == 3 && s_colony2.size() == 3 && p_colony.size() == 4 && r_colony.size() == 2 && *r_colony.begin() == "d");
+
+				s_colony.assign(4, "f");
+				failpass("Fill assign from string literal test", s_colony.size() == 4 && std::count(s_colony.begin(), s_colony.end(), "f") == 4);
+			}
+
 			i_colony2.insert(500000, 5);
 
 			failpass("Fill insertion test", i_colony2.size() == 500003);

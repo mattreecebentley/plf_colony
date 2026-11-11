@@ -702,7 +702,7 @@ public:
 	// Range constructors:
 
 	template<typename iterator_type>
-	colony(const typename plf::enable_if<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type &first, const iterator_type &last, const plf::limits block_limits, const allocator_type &alloc = allocator_type()):
+	colony(const typename plf::enable_if<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type first, const iterator_type last, const plf::limits block_limits, const allocator_type &alloc = allocator_type()):
 		allocator_type(alloc),
 		erasure_groups_head(NULL),
 		unused_groups_head(NULL),
@@ -722,7 +722,7 @@ public:
 
 
 	template<typename iterator_type>
-	colony(const typename plf::enable_if<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type &first, const iterator_type &last, const allocator_type &alloc = allocator_type()):
+	colony(const typename plf::enable_if<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type first, const iterator_type last, const allocator_type &alloc = allocator_type()):
 		allocator_type(alloc),
 		erasure_groups_head(NULL),
 		unused_groups_head(NULL),
@@ -2962,7 +2962,7 @@ public:
 	// Range assign:
 
 	template <class iterator_type>
-	void assign(const typename plf::enable_if<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type &first, const iterator_type &last)
+	void assign(const typename plf::enable_if<!std::numeric_limits<iterator_type>::is_integer, iterator_type>::type first, const iterator_type last)
 	{
 		range_assign(first, static_cast<size_type>(std::distance(first, last)));
 	}
