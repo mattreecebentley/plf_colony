@@ -4070,21 +4070,30 @@ private:
 			destination(store_destination)
 		{}
 
-		bool operator() (element_type &element)
-		{
-			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
-				if PLF_CONSTEXPR (!std::is_trivially_copy_constructible<element_type>::value && std::is_nothrow_move_constructible<element_type>::value)
-				{
-					PLF_CONSTRUCT(allocator_type, allocator, destination++, std::move(element));
-				}
-				else
-			#endif
+		#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
+			// Overloads rather than if constexpr, so that only the selected one is instantiated in C++11/14 too (a move-only type has no copy constructor):
+			void construct(element_type &element, std::true_type)
+			{
+				PLF_CONSTRUCT(allocator_type, allocator, destination++, std::move(element));
+			}
+
+			void construct(element_type &element, std::false_type)
 			{
 				PLF_CONSTRUCT(allocator_type, allocator, destination++, element);
 			}
 
-			return true;
-		}
+			bool operator() (element_type &element)
+			{
+				construct(element, std::integral_constant<bool, !std::is_trivially_copy_constructible<element_type>::value && std::is_nothrow_move_constructible<element_type>::value>());
+				return true;
+			}
+		#else
+			bool operator() (element_type &element)
+			{
+				PLF_CONSTRUCT(allocator_type, allocator, destination++, element);
+				return true;
+			}
+		#endif
 	};
 
 
@@ -4098,21 +4107,30 @@ private:
 			source(store_source)
 		{}
 
-		bool operator() (element_type &element)
-		{
-			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
-				if PLF_CONSTEXPR (!std::is_trivially_copy_assignable<element_type>::value && std::is_nothrow_move_assignable<element_type>::value)
-				{
-					element = std::move(*source++);
-				}
-				else
-			#endif
+		#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
+			// Overloads rather than if constexpr, so that only the selected one is instantiated in C++11/14 too (a move-only type has no copy assignment):
+			void assign(element_type &element, std::true_type)
+			{
+				element = std::move(*source++);
+			}
+
+			void assign(element_type &element, std::false_type)
 			{
 				element = *source++;
 			}
 
-			return true;
-		}
+			bool operator() (element_type &element)
+			{
+				assign(element, std::integral_constant<bool, !std::is_trivially_copy_assignable<element_type>::value && std::is_nothrow_move_assignable<element_type>::value>());
+				return true;
+			}
+		#else
+			bool operator() (element_type &element)
+			{
+				element = *source++;
+				return true;
+			}
+		#endif
 	};
 
 
