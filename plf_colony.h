@@ -4572,11 +4572,20 @@ public:
 
 
 
-		// Applies f to the elements in [first, last), in order, until f returns false. Equivalent to: while (first != last && f(*first)) ++first; return std::make_pair(first, f);
+		// Applies f to the elements in [first, last), in order, until f returns false.
 		// Faster than iterating, as runs of non-erased elements are found several skipfield nodes at a time. f must not insert into or erase from the colony.
 		template <class function_type>
-		friend std::pair<colony_iterator, function_type> for_each_while(const colony_iterator first, const colony_iterator last, function_type f)
+		friend std::pair<colony_iterator, function_type> for_each_while(colony_iterator first, const colony_iterator last, function_type f)
 		{
+			#ifdef PLF_CPP20_SUPPORT
+				if PLF_CONSTEVAL // As the visit function uses memcpy
+				{
+					while (first != last && f(*first)) ++first;
+					return std::make_pair<it_type, function_type>(std::move(first), std::move(f));
+				}
+				else
+			#endif
+
 			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
 				return visit(first, last, std::move(f));
 			#else
@@ -4586,12 +4595,22 @@ public:
 
 
 
-		// Applies f to every element in [first, last), in order. Equivalent to: while (first != last) f(*first++); return f;
+		// Applies f to every element in [first, last), in order.
 		template <class function_type>
-		friend function_type for_each(const colony_iterator first, const colony_iterator last, function_type f)
+		friend function_type for_each(colony_iterator first, const colony_iterator last, function_type f)
 		{
-			visit(first, last, for_each_function<function_type>(f));
-			return f;
+			#ifdef PLF_CPP20_SUPPORT
+				if PLF_CONSTEVAL
+				{
+					while (first != last) f(*first++);
+					return f;
+				}
+				else
+			#endif
+			{
+				visit(first, last, for_each_function<function_type>(f));
+				return f;
+			}
 		}
 
 

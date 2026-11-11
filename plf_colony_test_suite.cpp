@@ -995,12 +995,12 @@ bool block_boundary_fill_test(const int pattern)
 			}
 
 			destination.insert(firsts[range], lasts[range]);
-			std::vector<int> expected_after(7, -1), after = element_numbers(destination);
+			std::vector<int> expected_after(7, -1), after2 = element_numbers(destination);
 			expected_after.insert(expected_after.end(), expected_range.begin(), expected_range.end());
-			std::sort(after.begin(), after.end());
+			std::sort(after2.begin(), after2.end());
 			std::sort(expected_after.begin(), expected_after.end());
 
-			passed = passed && size_matches(range_constructed) && element_numbers(range_constructed) == expected_range && size_matches(empty_destination) && element_numbers(empty_destination) == expected_range && size_matches(destination) && after == expected_after;
+			passed = size_matches(range_constructed) && element_numbers(range_constructed) == expected_range && size_matches(empty_destination) && element_numbers(empty_destination) == expected_range && size_matches(destination) && after2 == expected_after;
 		}
 	}
 
