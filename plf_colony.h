@@ -361,7 +361,7 @@ private:
 	void blank() PLF_NOEXCEPT
 	{
 		#ifdef PLF_IS_ALWAYS_EQUAL_SUPPORT // allocator_traits always available when is_always_equal is available
-			if PLF_CONSTEXPR (std::is_standard_layout<colony>::value && std::allocator_traits<allocator_type>::is_always_equal::value && std::is_trivially_destructible<group_pointer_type>::value)
+			if PLF_CONSTEXPR_NOT_CONSTEVAL(std::is_standard_layout<colony>::value && std::allocator_traits<allocator_type>::is_always_equal::value && std::is_trivially_destructible<group_pointer_type>::value)
 			{ // If all pointer types are trivial, we can just nuke the member variables from orbit with memset (NULL is always 0):
 				std::memset(static_cast<void *>(this), 0, offsetof(colony, min_block_capacity));
 			}
@@ -1450,7 +1450,7 @@ private:
 			if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value &&
 				((sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value) || sizeof(aligned_element_struct) == sizeof(element_type)))
 			{
-				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value)
+				if PLF_CONSTEXPR_NOT_CONSTEVAL(sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value)
 				{
 					aligned_element_struct aligned_copy;
 					std::memcpy(static_cast<void *>(&aligned_copy), static_cast<const void *>(&element), sizeof(element_type));
@@ -1535,7 +1535,7 @@ private:
 			if PLF_CONSTEXPR (std::is_nothrow_copy_constructible<element_type>::value &&
 				((sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value) || sizeof(aligned_element_struct) == sizeof(element_type)))
 			{
-				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value)
+				if PLF_CONSTEXPR_NOT_CONSTEVAL(sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value)
 				{
 					aligned_element_struct aligned_copy;
 					std::memcpy(static_cast<void *>(&aligned_copy), static_cast<const void *>(&element), sizeof(element_type));
@@ -3313,7 +3313,7 @@ public:
 		void move_assign(colony &&source) PLF_NOEXCEPT
 		{
 			#ifdef PLF_IS_ALWAYS_EQUAL_SUPPORT
-				if PLF_CONSTEXPR ((std::is_trivially_copyable<allocator_type>::value || std::allocator_traits<allocator_type>::is_always_equal::value) && std::is_trivially_copyable<group_pointer_type>::value)
+				if PLF_CONSTEXPR_NOT_CONSTEVAL((std::is_trivially_copyable<allocator_type>::value || std::allocator_traits<allocator_type>::is_always_equal::value) && std::is_trivially_copyable<group_pointer_type>::value)
 				{
 					std::memcpy(static_cast<void *>(this), static_cast<void *>(&source), sizeof(colony));
 				}
@@ -4070,30 +4070,21 @@ private:
 			destination(store_destination)
 		{}
 
-		#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
-			// Overloads rather than if constexpr, so that only the selected one is instantiated in C++11/14 too (a move-only type has no copy constructor):
-			void construct(element_type &element, std::true_type)
-			{
-				PLF_CONSTRUCT(allocator_type, allocator, destination++, std::move(element));
-			}
-
-			void construct(element_type &element, std::false_type)
-			{
-				PLF_CONSTRUCT(allocator_type, allocator, destination++, element);
-			}
-
-			bool operator() (element_type &element)
-			{
-				construct(element, std::integral_constant<bool, !std::is_trivially_copy_constructible<element_type>::value && std::is_nothrow_move_constructible<element_type>::value>());
-				return true;
-			}
-		#else
-			bool operator() (element_type &element)
+		bool operator() (element_type &element)
+		{
+			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
+				if PLF_CONSTEXPR (!std::is_trivially_copy_constructible<element_type>::value && std::is_nothrow_move_constructible<element_type>::value)
+				{
+					PLF_CONSTRUCT(allocator_type, allocator, destination++, std::move(element));
+				}
+				else
+			#endif
 			{
 				PLF_CONSTRUCT(allocator_type, allocator, destination++, element);
-				return true;
 			}
-		#endif
+
+			return true;
+		}
 	};
 
 
@@ -4107,30 +4098,21 @@ private:
 			source(store_source)
 		{}
 
-		#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
-			// Overloads rather than if constexpr, so that only the selected one is instantiated in C++11/14 too (a move-only type has no copy assignment):
-			void assign(element_type &element, std::true_type)
-			{
-				element = std::move(*source++);
-			}
-
-			void assign(element_type &element, std::false_type)
-			{
-				element = *source++;
-			}
-
-			bool operator() (element_type &element)
-			{
-				assign(element, std::integral_constant<bool, !std::is_trivially_copy_assignable<element_type>::value && std::is_nothrow_move_assignable<element_type>::value>());
-				return true;
-			}
-		#else
-			bool operator() (element_type &element)
+		bool operator() (element_type &element)
+		{
+			#if defined(PLF_TYPE_TRAITS_SUPPORT) && defined(PLF_MOVE_SEMANTICS_SUPPORT)
+				if PLF_CONSTEXPR (!std::is_trivially_copy_assignable<element_type>::value && std::is_nothrow_move_assignable<element_type>::value)
+				{
+					element = std::move(*source++);
+				}
+				else
+			#endif
 			{
 				element = *source++;
-				return true;
 			}
-		#endif
+
+			return true;
+		}
 	};
 
 
@@ -4357,7 +4339,7 @@ public:
 		assert(&source != this);
 
 		#ifdef PLF_IS_ALWAYS_EQUAL_SUPPORT
-			if PLF_CONSTEXPR (std::allocator_traits<allocator_type>::is_always_equal::value && std::is_trivially_copyable<group_pointer_type>::value) // if all pointer types are trivial we can just copy using memcpy - avoids constructors/destructors etc and is faster
+			if PLF_CONSTEXPR_NOT_CONSTEVAL(std::allocator_traits<allocator_type>::is_always_equal::value && std::is_trivially_copyable<group_pointer_type>::value) // if all pointer types are trivial we can just copy using memcpy - avoids constructors/destructors etc and is faster
 			{
 				char temp[sizeof(colony)];
 				std::memcpy(static_cast<void *>(&temp), static_cast<void *>(this), sizeof(colony));
@@ -4595,21 +4577,11 @@ public:
 		template <class function_type>
 		friend std::pair<colony_iterator, function_type> for_each_while(colony_iterator first, const colony_iterator last, function_type f)
 		{
-			#ifdef PLF_CPP20_SUPPORT
-				if PLF_CONSTEVAL // As the visit function uses memcpy
-				{
-					while (first != last && f(*first)) ++first;
-					return std::make_pair<colony_iterator, function_type>(std::move(first), std::move(f));
-				}
-				else
+			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+				return visit(first, last, std::move(f));
+			#else
+				return visit(first, last, f);
 			#endif
-			{
-				#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-					return visit(first, last, std::move(f));
-				#else
-					return visit(first, last, f);
-				#endif
-			}
 		}
 
 
