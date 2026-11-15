@@ -471,6 +471,11 @@ void erase_if_pattern_test(bool &erase_if_matches, bool &predicate_called_once)
 }
 
 #ifdef PLF_MOVE_SEMANTICS_SUPPORT
+	struct unique_ptr_pointee_less
+	{
+		bool operator () (const std::unique_ptr<int> &left, const std::unique_ptr<int> &right) const { return *left < *right; }
+	};
+
 	struct move_only_counter
 	{
 		std::unique_ptr<std::size_t> count;
@@ -2663,6 +2668,36 @@ int main()
 
 			failpass("Sort destroys its temporary copies test", sort_live_count == 100);
 		}
+
+		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+		{
+			// A move-only element type takes the copy-to-an-array path, which must not need a copy constructor or copy assignment - in C++11/14 as well, where if constexpr is not available:
+			colony<std::unique_ptr<int> > up_colony;
+
+			for (int counter = 0; counter != 100; ++counter)
+			{
+				up_colony.insert(std::unique_ptr<int>(new int((counter * 37) % 100)));
+			}
+
+			up_colony.sort(unique_ptr_pointee_less());
+
+			bool up_sorted = true;
+			int up_previous = -1;
+
+			for (colony<std::unique_ptr<int> >::iterator current = up_colony.begin(); current != up_colony.end(); ++current)
+			{
+				if (*current == NULL || **current < up_previous)
+				{
+					up_sorted = false;
+					break;
+				}
+
+				up_previous = **current;
+			}
+
+			failpass("Sort move-only type test", up_sorted && up_colony.size() == 100);
+		}
+		#endif
 
 		{
 			title2("Sort with erasures tests");
