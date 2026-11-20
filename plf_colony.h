@@ -251,7 +251,7 @@ private:
 				group_number((previous == NULL) ? 0 : previous->group_number + 1u)
 			{
 				skipfield = pointer_cast<skipfield_pointer_type>(front() + elements_per_group);
-				std::memset(plf::void_cast(skipfield), 0, sizeof(skipfield_type) * (static_cast<size_type>(elements_per_group) + 1u));
+				std::memset(PLF_TO_ADDRESS(skipfield), 0, sizeof(skipfield_type) * (static_cast<size_type>(elements_per_group) + 1u));
 			}
 		#else
 			// This is a hack around the fact that allocator_type::construct only supports copy construction in C++03 and copy elision does not occur on the vast majority of compilers in this circumstance. So to avoid running out of memory (and losing performance) from allocating the same block twice, we 'move' in the 'copy' constructor.
@@ -276,7 +276,7 @@ private:
 				erasures_list_previous_group(NULL),
 				group_number((source.previous_group == NULL) ? 0 : source.previous_group->group_number + 1u)
 			{
-				std::memset(plf::void_cast(skipfield), 0, sizeof(skipfield_type) * (static_cast<size_type>(capacity) + 1u));
+				std::memset(PLF_TO_ADDRESS(skipfield), 0, sizeof(skipfield_type) * (static_cast<size_type>(capacity) + 1u));
 			}
 		#endif
 
@@ -292,7 +292,7 @@ private:
 			erasures_list_previous_group = NULL;
 			group_number = group_num;
 
-			std::memset(plf::void_cast(skipfield), 0, sizeof(skipfield_type) * static_cast<size_type>(capacity)); // capacity + 1 is not necessary here as the final skipfield node is never written to after initialization
+			std::memset(PLF_TO_ADDRESS(skipfield), 0, sizeof(skipfield_type) * static_cast<size_type>(capacity)); // capacity + 1 is not necessary here as the final skipfield node is never written to after initialization
 		}
 
 
@@ -1453,7 +1453,7 @@ private:
 				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value)
 				{
 					aligned_element_struct aligned_copy;
-					std::memcpy(static_cast<void *>(&aligned_copy), static_cast<const void *>(&element), sizeof(element_type));
+					std::memcpy(&aligned_copy, &element, sizeof(element_type));
 					plf::uninitialized_fill_n(end_iterator.element_pointer, size, aligned_copy, static_cast<allocator_type &>(*this));
 				}
 				else
@@ -1510,7 +1510,7 @@ private:
 				// Update skipblock:
 				const skipfield_type new_start_node_value = *skipfield_pointer - elements_constructed_before_exception;
 				const skipfield_pointer_type new_start_node = skipfield_pointer + elements_constructed_before_exception;
-				std::memset(plf::void_cast(skipfield_pointer), 0, elements_constructed_before_exception * sizeof(skipfield_type)); // Reset skipfield for elements written before exception
+				std::memset(PLF_TO_ADDRESS(skipfield_pointer), 0, elements_constructed_before_exception * sizeof(skipfield_type)); // Reset skipfield for elements written before exception
 				*new_start_node = *(new_start_node + new_start_node_value - 1) = new_start_node_value; // Create new skipblock for unused elements
 
 				// Update free list of erased elements:
@@ -1538,7 +1538,7 @@ private:
 				if PLF_CONSTEXPR (sizeof(aligned_element_struct) != sizeof(element_type) && std::is_trivially_copyable<element_type>::value)
 				{
 					aligned_element_struct aligned_copy;
-					std::memcpy(static_cast<void *>(&aligned_copy), static_cast<const void *>(&element), sizeof(element_type));
+					std::memcpy(&aligned_copy, &element, sizeof(element_type));
 					plf::uninitialized_fill_n(location, size, aligned_copy, static_cast<allocator_type &>(*this));
 				}
 				else
@@ -1572,7 +1572,7 @@ private:
 			}
 		}
 
-		std::memset(plf::void_cast(skipfield_pointer), 0, size * sizeof(skipfield_type)); // reset skipfield nodes within skipblock to 0
+		std::memset(PLF_TO_ADDRESS(skipfield_pointer), 0, size * sizeof(skipfield_type)); // reset skipfield nodes within skipblock to 0
 		erasure_groups_head->size += size;
 		total_size += size;
 	}
@@ -1962,7 +1962,7 @@ private:
 			}
 		}
 
-		std::memset(plf::void_cast(skipfield_pointer), 0, size * sizeof(skipfield_type)); // reset skipfield nodes within skipblock to 0
+		std::memset(PLF_TO_ADDRESS(skipfield_pointer), 0, size * sizeof(skipfield_type)); // reset skipfield nodes within skipblock to 0
 		erasure_groups_head->size += size;
 		total_size += size;
 	}
@@ -2525,7 +2525,7 @@ private:
 
 			if (distance_to_end > 2) // if the skipblock is longer than 2 nodes, fill in the middle nodes with non-zero values so that get_iterator() and is_active() will work
 			{
-				std::memset(plf::void_cast(start.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_end - 2));
+				std::memset(PLF_TO_ADDRESS(start.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_end - 2));
 			}
 		}
 		else
@@ -2535,7 +2535,7 @@ private:
 
 			if (distance_to_end > 1) // the start node is now a middle node of the joined skipblock, so fill it and any following middle nodes with non-zero values so that get_iterator() and is_active() will work
 			{
-				std::memset(plf::void_cast(start.skipfield_pointer), 1, sizeof(skipfield_type) * (distance_to_end - 1));
+				std::memset(PLF_TO_ADDRESS(start.skipfield_pointer), 1, sizeof(skipfield_type) * (distance_to_end - 1));
 			}
 		}
 
@@ -2753,7 +2753,7 @@ private:
 
 	void reset_group_range_assign(iterator &it) PLF_NOEXCEPT
 	{
-		std::memset(plf::void_cast(it.group_pointer->skipfield), 0, it.group_pointer->capacity * sizeof(skipfield_type));
+		std::memset(PLF_TO_ADDRESS(it.group_pointer->skipfield), 0, it.group_pointer->capacity * sizeof(skipfield_type));
 		it.group_pointer->size = static_cast<skipfield_type>(it.element_pointer - it.group_pointer->front());
 	}
 
@@ -3401,15 +3401,19 @@ public:
 
 
 
+	#ifdef PLF_MOVE_SEMANTICS_SUPPORT
+		#define PLF_MOVE_IF_CAN(object) std::move(object)
+	#else
+		#define PLF_MOVE_IF_CAN(object) object
+	#endif
+
+
+
 	// Apply f to every element of the colony, in order, until f returns false for for_each_while. See the iterator versions in colony_iterator. Found by argument-dependent lookup, so call these unqualified, as with advance:
 	template <class function_type>
 	friend std::pair<iterator, function_type> for_each_while(colony &container, function_type f)
 	{
-		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-			return for_each_while(container.begin(), container.end(), std::move(f));
-		#else
-			return for_each_while(container.begin(), container.end(), f);
-		#endif
+		return for_each_while(container.begin(), container.end(), PLF_MOVE_IF_CAN(f));
 	}
 
 
@@ -3417,11 +3421,7 @@ public:
 	template <class function_type>
 	friend std::pair<const_iterator, function_type> for_each_while(const colony &container, function_type f)
 	{
-		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-			return for_each_while(container.cbegin(), container.cend(), std::move(f));
-		#else
-			return for_each_while(container.cbegin(), container.cend(), f);
-		#endif
+		return for_each_while(container.cbegin(), container.cend(), PLF_MOVE_IF_CAN(f));
 	}
 
 
@@ -3429,11 +3429,7 @@ public:
 	template <class function_type>
 	friend function_type for_each(colony &container, function_type f)
 	{
-		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-			return for_each(container.begin(), container.end(), std::move(f));
-		#else
-			return for_each(container.begin(), container.end(), f);
-		#endif
+		return for_each(container.begin(), container.end(), PLF_MOVE_IF_CAN(f));
 	}
 
 
@@ -3441,11 +3437,7 @@ public:
 	template <class function_type>
 	friend function_type for_each(const colony &container, function_type f)
 	{
-		#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-			return for_each(container.cbegin(), container.cend(), std::move(f));
-		#else
-			return for_each(container.cbegin(), container.cend(), f);
-		#endif
+		return for_each(container.cbegin(), container.cend(), PLF_MOVE_IF_CAN(f));
 	}
 
 
@@ -3909,7 +3901,7 @@ public:
 
 					if (distance_to_end > 2) // make erased middle nodes non-zero for get_iterator and is_active
 					{
-						std::memset(plf::void_cast(end_iterator.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_end - 2));
+						std::memset(PLF_TO_ADDRESS(end_iterator.skipfield_pointer + 1), 1, sizeof(skipfield_type) * (distance_to_end - 2));
 					}
 
 					const skipfield_type index = static_cast<skipfield_type>(end_iterator.element_pointer - end_iterator.group_pointer->front());
@@ -3932,7 +3924,7 @@ public:
 
 					if (distance_to_end > 1) // make erased middle nodes non-zero for get_iterator and is_active
 					{
-						std::memset(plf::void_cast(end_iterator.skipfield_pointer), 1, sizeof(skipfield_type) * (distance_to_end - 1));
+						std::memset(PLF_TO_ADDRESS(end_iterator.skipfield_pointer), 1, sizeof(skipfield_type) * (distance_to_end - 1));
 					}
 				}
 			}
@@ -4263,31 +4255,19 @@ public:
 			{
 				if (current_tuple->original_index != index)
 				{
-					#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-						element_type end_value = std::move(*(current_tuple->original_location));
-					#else
-						element_type end_value = *(current_tuple->original_location);
-					#endif
+					element_type end_value = PLF_MOVE_IF_CAN(*(current_tuple->original_location));
 					size_type destination_index = index;
 					size_type source_index = current_tuple->original_index;
 
 					do
 					{
-						#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-							*(sort_array[destination_index].original_location) = std::move(*(sort_array[source_index].original_location));
-						#else
-							*(sort_array[destination_index].original_location) = *(sort_array[source_index].original_location);
-						#endif
+						*(sort_array[destination_index].original_location) = PLF_MOVE_IF_CAN(*(sort_array[source_index].original_location));
 						destination_index = source_index;
 						source_index = sort_array[destination_index].original_index;
 						sort_array[destination_index].original_index = destination_index;
 					} while (source_index != index);
 
-					#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-						*(sort_array[destination_index].original_location) = std::move(end_value);
-					#else
-						*(sort_array[destination_index].original_location) = end_value;
-					#endif
+					*(sort_array[destination_index].original_location) = PLF_MOVE_IF_CAN(end_value);
 				}
 			}
 
@@ -4590,46 +4570,22 @@ public:
 
 
 
-		// Applies f to the elements in [first, last), in order, until f returns false.
+		// Applies f to the elements in [first, last), in order, until f returns false. Equivalent to: 'while (first != last && f(*first)) ++first; return std::make_pair<colony_iterator, function_type>(std::move(first), std::move(f));'
 		// Faster than iterating, as runs of non-erased elements are found several skipfield nodes at a time. f must not insert into or erase from the colony.
 		template <class function_type>
 		friend std::pair<colony_iterator, function_type> for_each_while(colony_iterator first, const colony_iterator last, function_type f)
 		{
-			#ifdef PLF_CPP20_SUPPORT
-				if PLF_CONSTEVAL // As the visit function uses memcpy
-				{
-					while (first != last && f(*first)) ++first;
-					return std::make_pair<colony_iterator, function_type>(std::move(first), std::move(f));
-				}
-				else
-			#endif
-			{
-				#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-					return visit(first, last, std::move(f));
-				#else
-					return visit(first, last, f);
-				#endif
-			}
+			return visit(first, last, PLF_MOVE_IF_CAN(f));
 		}
 
 
 
-		// Applies f to every element in [first, last), in order.
+		// Applies f to every element in [first, last), in order. Equivalent to: 'while (first != last) f(*first++); return f;'
 		template <class function_type>
 		friend function_type for_each(colony_iterator first, const colony_iterator last, function_type f)
 		{
-			#ifdef PLF_CPP20_SUPPORT
-				if PLF_CONSTEVAL
-				{
-					while (first != last) f(*first++);
-					return f;
-				}
-				else
-			#endif
-			{
-				visit(first, last, for_each_function<function_type>(f));
-				return f;
-			}
+			visit(first, last, for_each_function<function_type>(f));
+			return f;
 		}
 
 
@@ -4950,11 +4906,15 @@ public:
 		template <class function_type>
 		static std::pair<colony_iterator, function_type> visit_result(const colony_iterator it, function_type &f)
 		{
-			#ifdef PLF_MOVE_SEMANTICS_SUPPORT
-				return std::pair<colony_iterator, function_type>(it, std::move(f));
-			#else
-				return std::pair<colony_iterator, function_type>(it, f);
-			#endif
+			return std::pair<colony_iterator, function_type>(it, PLF_MOVE_IF_CAN(f));
+		}
+
+
+
+  		template <class function_type>
+		static std::pair<colony_iterator, function_type> visit_result2(const group_pointer_type current_group, const std::size_t index, function_type &f)
+		{
+			return std::pair<colony_iterator, function_type>(colony_iterator(current_group, current_group->front() + index, current_group->skipfield + index), PLF_MOVE_IF_CAN(f));
 		}
 
 
@@ -4967,7 +4927,15 @@ public:
 		template <class function_type>
 		static std::pair<colony_iterator, function_type> visit(const colony_iterator first, const colony_iterator last, function_type f)
 		{
-			if (first == last) return visit_result(last, f); // Also covers an empty colony, which has no groups
+			if (first == last) 
+			#ifdef PLF_CPP20_SUPPORT
+				[[unlikely]]
+			#endif
+			{
+				return visit_result(last, f); // Also covers an empty colony, which has no groups
+			}
+			
+			assert (first < last);
 
 			#ifdef PLF_COLONY_SCAN_WORDS
 				const std::size_t node_bits = sizeof(skipfield_type) * 8, nodes_per_word = sizeof(std::uint64_t) / sizeof(skipfield_type);
@@ -4977,8 +4945,6 @@ public:
 
 			for (group_pointer_type current_group = first.group_pointer;; current_group = current_group->next_group)
 			{
-				assert(current_group != NULL); // ie. last is not reachable from first
-
 				const pointer elements = pointer_cast<pointer>(current_group->front()); // const-qualified for const_iterator, so a const colony's elements cannot be modified through f
 				const skipfield_type * const skipfield = current_group->skipfield;
 				const std::size_t end_index = static_cast<std::size_t>(((current_group == last.group_pointer) ? last.element_pointer : current_group->past_back()) - current_group->front());
@@ -4996,14 +4962,14 @@ public:
 						while (few_erasures && index + nodes_per_word <= end_index) // index is always a non-erased element here
 						{
 							std::uint64_t word;
-							std::memcpy(static_cast<void *>(&word), static_cast<const void *>(skipfield + index), sizeof(word));
+							std::memcpy(&word, skipfield + index, sizeof(word));
 							const std::uint64_t non_erased = ~(((word & low_bits) + low_bits) | word) & top_bits; // The top bit of each zero node
 
 							if (non_erased == top_bits) // No erased nodes in this word
 							{
 								for (const std::size_t word_end = index + nodes_per_word; index != word_end; ++index)
 								{
-									if (!f(elements[index])) goto stopped;
+									if (!f(elements[index])) return visit_result2(current_group, index, f);
 								}
 							}
 							else
@@ -5011,12 +4977,7 @@ public:
 								for (std::uint64_t remaining = non_erased; remaining != 0; remaining &= remaining - 1) // Visit each non-erased node, lowest first
 								{
 									const std::size_t element_index = index + plf::countr_zero(remaining) / node_bits;
-
-									if (!f(elements[element_index]))
-									{
-										index = element_index;
-										goto stopped;
-									}
+									if (!f(elements[element_index])) return visit_result2(current_group, element_index, f);
 								}
 
 								index += (64 - plf::countl_zero(non_erased)) / node_bits; // One past the last non-erased node
@@ -5033,14 +4994,7 @@ public:
 					}
 				}
 
-				if (index < end_index)
-				{
-					#ifdef PLF_COLONY_SCAN_WORDS
-						stopped:
-					#endif
-					return visit_result(colony_iterator(current_group, current_group->front() + index, current_group->skipfield + index), f);
-				}
-
+				if (index < end_index) return visit_result2(current_group, index, f);
 				if (current_group == last.group_pointer) return visit_result(last, f);
 			}
 		}
@@ -5831,5 +5785,6 @@ typename plf::colony<element_type, allocator_type>::size_type erase(plf::colony<
 #endif
 
 #undef PLF_COLONY_SCAN_WORDS
+#undef PLF_MOVE_IF_CAN
 
 #endif // PLF_COLONY_H
