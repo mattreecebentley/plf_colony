@@ -618,6 +618,11 @@
 				const uint_least64_t zeros = 0x0101010101010101ULL * static_cast<unsigned char>(zero), difference = static_cast<unsigned char>(zero ^ one);
 				const std::size_t type_bitwidth = sizeof(storage_type) * 8;
 
+				#ifdef _MSC_VER // MSVC complains about value being shifted by 8 if storage_type is char in inner loop, even though the loop will never get to a second iteration
+					#pragma warning ( push )
+					#pragma warning ( disable : 4333 ) 
+				#endif	
+
 				for (std::size_t index = 0, end = ((total_size + type_bitwidth - 1) / type_bitwidth); index != end; ++index)
 				{
 					if (buffer[index] == 0) continue; // The string is already filled with zero characters
@@ -650,6 +655,10 @@
 						output[most_significant_first ? total_size - (bit_index + subindex + 1) : bit_index + subindex] = (value & 1) ? one : zero;
 					}
 				}
+
+				#ifdef _MSC_VER
+					#pragma warning ( pop )
+				#endif	
 			}
 		#endif
 
