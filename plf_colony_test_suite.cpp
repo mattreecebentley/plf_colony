@@ -1120,6 +1120,8 @@ bool copy_from_colony_throw_test(const int pattern, const int limits)
 
 
 
+
+
 int main()
 {
 	freopen("error.log","w", stderr); // For catching assertion failure info when run outside of a command line prompt
@@ -1180,6 +1182,37 @@ int main()
 
 
 			p_colony.clear();
+
+
+			{
+				colony<int> i_colony;
+
+				int total = 0, total2 = 0;
+				const int comp_value = rand() % 2048;
+
+				for (unsigned int counter = 0; counter != 10000; ++counter)
+				{
+					const int num = rand() % 2048;
+					total += (num >= comp_value) ? num : 0;
+					total2 += num;
+					i_colony.insert(num);
+				}
+
+				failpass("accumulate overload working", total2 == accumulate(i_colony.begin(), i_colony.end(), 0));
+
+				struct less_than_this
+				{
+					const int comparitor;
+					explicit less_than_this(const unsigned int comp) : comparitor(comp) {}
+					bool operator()(int num) { return num < comparitor; }
+				};
+
+				less_than_this less_than_num(comp_value);
+				erase_if(i_colony, less_than_num);
+
+				failpass("erase_if overload working", total == accumulate(i_colony.begin(), i_colony.end(), 0));
+			}
+
 
 			failpass("Begin = End after clear", p_colony.begin() == p_colony.end());
 

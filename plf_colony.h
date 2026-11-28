@@ -4590,6 +4590,20 @@ public:
 
 
 
+		friend value_type accumulate(colony_iterator first, const colony_iterator last, const value_type initial_value)
+		{
+			struct sum_functor
+			{
+				 value_type value;
+				 explicit sum_functor(const value_type initial): value(initial) {}
+				 void operator()(const value_type n) { value += n; }
+			};
+
+			return for_each(first, last, sum_functor(initial_value)).value;
+		}
+
+
+
 		colony_iterator() PLF_NOEXCEPT
 		#ifdef PLF_DEFAULT_SUPPORT
 			= default;
@@ -4927,14 +4941,14 @@ public:
 		template <class function_type>
 		static std::pair<colony_iterator, function_type> visit(const colony_iterator first, const colony_iterator last, function_type f)
 		{
-			if (first == last) 
+			if (first == last)
 			#ifdef PLF_CPP20_SUPPORT
 				[[unlikely]]
 			#endif
 			{
 				return visit_result(last, f); // Also covers an empty colony, which has no groups
 			}
-			
+
 			assert (first < last);
 
 			#ifdef PLF_COLONY_SCAN_WORDS
